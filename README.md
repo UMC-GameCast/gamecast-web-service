@@ -1,6 +1,6 @@
-# gamecast-web-service
+# 🛠️ gamecast-web-service
 
-# 🛠️ Paper-summarizer Frontend Repository
+
 
 ---
 ## 🚀목차
