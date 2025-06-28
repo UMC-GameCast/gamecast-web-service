@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 전체 화면 설정 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+#root {
+  height: 100%;
+  width: 100%;
+}
+
+@layer components {
+  .all-\[unset\] {
+    all: unset;
+  }
+}
+
+:root {
+  --default-font-family: "Pretendard", Helvetica;
+  --default-font-size: 19px;
+  --default-font-style: normal;
+  --default-font-weight: 500;
+  --default-letter-spacing: -0.20900000452995302px;
+  --default-line-height: 200%;
+  --variable-collection-bg: rgba(0, 0, 0, 0.2);
+  --variable-collection-color: rgba(255, 0, 0, 1);
+}
