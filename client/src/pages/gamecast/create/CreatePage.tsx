@@ -1,10 +1,11 @@
+// 필요한 컴포넌트들을 import
 import { Navigation } from "../../../components/gamecast/common/Navigation";
 import { Footer } from "../../../components/gamecast/common/Footer";
-import { ParticipationCodeCard } from "../../../components/gamecast/participate/ParticipationCodeCard";
+import { CreateRoomCard } from "../../../components/gamecast/create/CreateRoomCard";
 import { BackButton1 } from "../../../components/gamecast/common/BackButton1";
 
 /**
- * ParticipatePage Props 인터페이스
+ * CreatePage Props 인터페이스
  * 페이지 전환을 위한 setPage 함수를 받습니다
  */
 interface Props {
@@ -12,16 +13,16 @@ interface Props {
 }
 
 /**
- * 게임 참가 페이지 컴포넌트
- * 사용자가 게임에 참가하기 위해 초대 코드를 입력하는 페이지입니다
+ * 게임 방 생성 페이지 컴포넌트
+ * 사용자가 새로운 게임 방을 생성하는 페이지입니다
  * 
  * @param setPage - 페이지 전환을 위한 함수
- * @returns 참가 페이지 JSX 엘리먼트
+ * @returns 방 생성 페이지 JSX 엘리먼트
  */
-export const ParticipatePage = ({ setPage }: Props) => {
+export const CreatePage = ({ setPage }: Props) => {
   
-  // 방 참여 성공 핸들러
-  const handleJoinSuccess = () => {
+  // 방 생성 성공 핸들러
+  const handleCreateSuccess = () => {
     setPage("room");
   };
 
@@ -58,8 +59,8 @@ export const ParticipatePage = ({ setPage }: Props) => {
         - relative z-10: 배경 이미지보다 앞에 표시
       */}
       <main className="flex-1 flex items-center justify-center relative z-10">
-        {/* 참가 코드 입력 카드 */}
-        <ParticipationCodeCard onJoinSuccess={handleJoinSuccess} />
+        {/* 방 생성 카드 */}
+        <CreateRoomCard onCreateSuccess={handleCreateSuccess} />
       </main>
       
       {/* 하단 푸터 영역 */}
