@@ -44,14 +44,9 @@ export const CreateRoomCard = ({ onCreateSuccess }: Props) => {
       return "방 이름을 입력해주세요.";
     }
     
-    // 3. 너무 짧은 경우 체크
-    if (roomName.trim().length < 2) {
-      return "방 이름은 최소 2글자 이상이어야 합니다.";
-    }
-    
-    // 4. 너무 긴 경우 체크
-    if (roomName.trim().length > 15) {
-      return "방 이름은 최대 15글자까지 가능합니다.";
+    // 3. 너무 긴 경우 체크
+    if (roomName.trim().length > 8) {
+      return "방 이름은 최대 8글자까지 가능합니다.";
     }
     
     console.log("✅ CreateRoom validation passed");
@@ -126,12 +121,10 @@ export const CreateRoomCard = ({ onCreateSuccess }: Props) => {
   // 방 이름 입력 핸들러
   const handleRoomNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    if (value.length <= 15) { // 방 이름 15자리 제한
-      setRoomName(value);
-      if (error) {
-        console.log("🟢 CreateRoom error cleared by input change");
-        setError(""); // 입력 시 에러 메시지 초기화
-      }
+    setRoomName(value);
+    if (error) {
+      console.log("🟢 CreateRoom error cleared by input change");
+      setError(""); // 입력 시 에러 메시지 초기화
     }
   };
 
@@ -161,10 +154,13 @@ export const CreateRoomCard = ({ onCreateSuccess }: Props) => {
                 type="text"
                 value={roomName}
                 onChange={handleRoomNameChange}
-                maxLength={15}
                 placeholder="방 이름 입력"
                 className="absolute left-[143px] top-0 w-[120px] h-[19px] bg-transparent text-[#e8e6fd] placeholder-[#86868b] font-normal text-[12.6px] leading-[18.8px] tracking-[-0.24px] outline-none border-none text-center"
               />
+              {/* 글자 수 표시 */}
+              <div className="absolute right-[10px] top-0 text-[#86868b] font-normal text-[10px] leading-[18.8px]">
+                {roomName.length}/8
+              </div>
               {/* 입력 필드 배경 이미지 */}
               <div className="absolute left-0 top-[12px] w-[307px] h-[15px]">
                 <img 

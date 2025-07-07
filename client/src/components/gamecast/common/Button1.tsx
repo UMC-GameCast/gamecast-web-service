@@ -110,8 +110,8 @@ export const Button1 = ({
         `}
         style={{
           backgroundImage: `url(${getBackgroundImage()})`,
-          width: '200px',
-          height: '60px',
+          width: '192px',
+          height: '64.6px',
           backgroundSize: '100% 100%'
         }}
       >

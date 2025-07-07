@@ -5,9 +5,30 @@ const ROOMS_STORAGE_KEY = 'gamecast_rooms';
 const CURRENT_ROOM_KEY = 'gamecast_current_room';
 const CURRENT_PLAYER_KEY = 'gamecast_current_player';
 
+// 탭별 고유 세션 ID 생성 및 관리
+const SESSION_ID_KEY = 'gamecast_session_id';
+const getSessionId = (): string => {
+  let sessionId = sessionStorage.getItem(SESSION_ID_KEY);
+  if (!sessionId) {
+    sessionId = 'session_' + Math.random().toString(36).substring(2, 15) + Date.now();
+    sessionStorage.setItem(SESSION_ID_KEY, sessionId);
+  }
+  return sessionId;
+};
+
+// 세션별 키 생성
+const getSessionKey = (baseKey: string): string => {
+  return `${baseKey}_${getSessionId()}`;
+};
+
 // 6자리 랜덤 입장코드 생성
 const generateEntryCode = (): string => {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < 6; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
 };
 
 // UUID 생성 (임시)
@@ -67,8 +88,8 @@ export const createRoom = (request: CreateRoomRequest): { success: boolean; room
     saveRooms(rooms);
     
     // 현재 방과 플레이어 정보 저장
-    localStorage.setItem(CURRENT_ROOM_KEY, JSON.stringify(newRoom));
-    localStorage.setItem(CURRENT_PLAYER_KEY, JSON.stringify(host));
+    localStorage.setItem(getSessionKey(CURRENT_ROOM_KEY), JSON.stringify(newRoom));
+    localStorage.setItem(getSessionKey(CURRENT_PLAYER_KEY), JSON.stringify(host));
     
     return { success: true, room: newRoom };
   } catch {
@@ -108,8 +129,8 @@ export const joinRoom = (request: JoinRoomRequest): { success: boolean; room?: R
     saveRooms(rooms);
     
     // 현재 방과 플레이어 정보 저장
-    localStorage.setItem(CURRENT_ROOM_KEY, JSON.stringify(room));
-    localStorage.setItem(CURRENT_PLAYER_KEY, JSON.stringify(newPlayer));
+    localStorage.setItem(getSessionKey(CURRENT_ROOM_KEY), JSON.stringify(room));
+    localStorage.setItem(getSessionKey(CURRENT_PLAYER_KEY), JSON.stringify(newPlayer));
     
     return { success: true, room };
   } catch {
@@ -119,13 +140,13 @@ export const joinRoom = (request: JoinRoomRequest): { success: boolean; room?: R
 
 // 현재 방 조회
 export const getCurrentRoom = (): RecodeRoom | null => {
-  const room = localStorage.getItem(CURRENT_ROOM_KEY);
+  const room = localStorage.getItem(getSessionKey(CURRENT_ROOM_KEY));
   return room ? JSON.parse(room) : null;
 };
 
 // 현재 플레이어 조회
 export const getCurrentPlayer = (): Player | null => {
-  const player = localStorage.getItem(CURRENT_PLAYER_KEY);
+  const player = localStorage.getItem(getSessionKey(CURRENT_PLAYER_KEY));
   return player ? JSON.parse(player) : null;
 };
 
@@ -158,8 +179,8 @@ export const leaveRoom = (): void => {
   }
   
   // 현재 방과 플레이어 정보 제거
-  localStorage.removeItem(CURRENT_ROOM_KEY);
-  localStorage.removeItem(CURRENT_PLAYER_KEY);
+  localStorage.removeItem(getSessionKey(CURRENT_ROOM_KEY));
+  localStorage.removeItem(getSessionKey(CURRENT_PLAYER_KEY));
 };
 
 // 방 업데이트 (참여자 변경 등)
@@ -168,9 +189,86 @@ export const updateRoom = (roomId: string): RecodeRoom | null => {
   const room = rooms.find(r => r.id === roomId);
   
   if (room) {
-    localStorage.setItem(CURRENT_ROOM_KEY, JSON.stringify(room));
+    localStorage.setItem(getSessionKey(CURRENT_ROOM_KEY), JSON.stringify(room));
     return room;
   }
   
   return null;
+};
+
+// 현재 플레이어 상태 업데이트
+export const updateCurrentPlayer = (updates: Partial<Pick<Player, 'character' | 'recording'>>): { success: boolean; error?: string } => {
+  try {
+    const currentRoom = getCurrentRoom();
+    const currentPlayer = getCurrentPlayer();
+    
+    if (!currentRoom || !currentPlayer) {
+      return { success: false, error: '현재 방 또는 플레이어 정보를 찾을 수 없습니다.' };
+    }
+    
+    // 현재 플레이어 정보 업데이트
+    const updatedPlayer = { ...currentPlayer, ...updates };
+    
+    // 방의 플레이어 목록에서도 업데이트
+    const rooms = getAllRooms();
+    const roomIndex = rooms.findIndex(room => room.id === currentRoom.id);
+    
+    if (roomIndex !== -1) {
+      const room = rooms[roomIndex];
+      const playerIndex = room.players.findIndex(player => player.id === currentPlayer.id);
+      
+      if (playerIndex !== -1) {
+        room.players[playerIndex] = updatedPlayer;
+        rooms[roomIndex] = room;
+        saveRooms(rooms);
+        
+        // 로컬스토리지의 현재 플레이어와 방 정보도 업데이트
+        localStorage.setItem(getSessionKey(CURRENT_PLAYER_KEY), JSON.stringify(updatedPlayer));
+        localStorage.setItem(getSessionKey(CURRENT_ROOM_KEY), JSON.stringify(room));
+        
+        return { success: true };
+      }
+    }
+    
+    return { success: false, error: '플레이어 정보 업데이트에 실패했습니다.' };
+  } catch {
+    return { success: false, error: '플레이어 정보 업데이트 중 오류가 발생했습니다.' };
+  }
+};
+
+// 디버깅용 함수들
+export const debugGetAllData = (): { rooms: RecodeRoom[]; currentRoom: RecodeRoom | null; currentPlayer: Player | null } => {
+  return {
+    rooms: getAllRooms(),
+    currentRoom: getCurrentRoom(),
+    currentPlayer: getCurrentPlayer()
+  };
+};
+
+export const debugClearAllData = (): void => {
+  localStorage.removeItem(ROOMS_STORAGE_KEY);
+  localStorage.removeItem(getSessionKey(CURRENT_ROOM_KEY));
+  localStorage.removeItem(getSessionKey(CURRENT_PLAYER_KEY));
+  console.log('🗑️ All room data cleared');
+  // storage 이벤트 트리거하여 다른 탭에도 알림
+  window.dispatchEvent(new StorageEvent('storage', {
+    key: ROOMS_STORAGE_KEY,
+    newValue: null,
+    oldValue: localStorage.getItem(ROOMS_STORAGE_KEY),
+    url: window.location.href
+  }));
+};
+
+export const debugLogRoomData = (): void => {
+  const data = debugGetAllData();
+  console.log('📊 Current Room Data:');
+  console.log('Rooms:', data.rooms);
+  console.log('Current Room:', data.currentRoom);
+  console.log('Current Player:', data.currentPlayer);
+  
+  // 실제 localStorage 내용도 로그
+  console.log('📁 Raw localStorage:');
+  console.log('gamecast_rooms:', localStorage.getItem(ROOMS_STORAGE_KEY));
+  console.log('gamecast_current_room:', localStorage.getItem(getSessionKey(CURRENT_ROOM_KEY)));
+  console.log('gamecast_current_player:', localStorage.getItem(getSessionKey(CURRENT_PLAYER_KEY)));
 }; 
