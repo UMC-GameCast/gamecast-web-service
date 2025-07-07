@@ -4,6 +4,14 @@ import { Footer } from "../../../components/gamecast/common/Footer";
 import { BackButton1 } from "../../../components/gamecast/common/BackButton1";
 import { getCurrentRoom, getCurrentPlayer, leaveRoom, updateRoom } from "../../../utils/roomManager";
 import type { RecodeRoom, Player } from "../../../types/room";
+import { PlayerCard } from "../../../components/gamecast/room/PlayerCard.tsx";
+import { ButtonContainer } from "../../../components/gamecast/room/ButtonContainer.tsx";
+import CardBlock from "../../../assets/gamecast/Room/Card_block.svg?react";
+import CardEmpty from "../../../assets/gamecast/Room/Card_empty.svg?react";
+import { RoomInfoContainer } from "../../../components/gamecast/room/RoomInfoContainer";
+import { MyCharacterContainer } from "../../../components/gamecast/room/MyCharacterContainer";
+import { NicknameContainer } from "../../../components/gamecast/room/NicknameContainer";
+import SettingIcon from "../../../assets/gamecast/Room/setting.svg?react";
 
 /**
  * RoomPage Props 인터페이스
@@ -19,6 +27,17 @@ interface Props {
 export const RoomPage = ({ setPage }: Props) => {
   const [currentRoom, setCurrentRoom] = useState<RecodeRoom | null>(null);
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null);
+
+  // 상태 새로고침 함수 임시 테슽트용
+  const refreshRoomState = () => {
+    const room = getCurrentRoom();
+    const player = getCurrentPlayer();
+    
+    if (room && player) {
+      setCurrentRoom(room);
+      setCurrentPlayer(player);
+    }
+  };
 
   useEffect(() => {
     // 현재 방과 플레이어 정보 로드
@@ -58,8 +77,15 @@ export const RoomPage = ({ setPage }: Props) => {
     );
   }
 
+  const otherPlayers = currentRoom.players.filter(p => p.id !== currentPlayer.id);
+  const totalSlots = 4;
+  const joinableSlots = currentRoom.maxPlayers - 1;
+
+  // 준비하기 버튼 활성화 조건: 캐릭터 설정과 녹화화면 설정이 모두 완료된 경우
+  const isReadyEnabled = !!(currentPlayer.character && currentPlayer.recording);
+
   return (
-    <div className="h-full flex flex-col justify-between bg-[linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,6,72,1)_100%)] relative overflow-hidden">
+    <div className="h-full flex flex-col justify-between bg-[linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,6,72,1)_100%)] relative overflow-hidden" style={{ minWidth: '1821px', minHeight: '1064px' }}>
       
       {/* 배경 장식 이미지 */}
       <img 
@@ -69,89 +95,86 @@ export const RoomPage = ({ setPage }: Props) => {
       />
       
       {/* 상단 네비게이션 영역 */}
-      <Navigation>
-        <BackButton1
-          onClick={handleLeaveRoom}
-          className="absolute left-[14%] top-[150px] z-20"
-        />
-      </Navigation>
+      <Navigation />
       
       {/* 메인 콘텐츠 영역 */}
       <main className="flex-1 flex items-center justify-center relative z-10">
-        <div className="w-[560px] h-[480px] bg-[rgba(0,0,0,0.8)] border border-[#6b6bb8] rounded-2xl p-8 text-white">
-          
-          {/* 방 제목 */}
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-[#e8e6fd] mb-2">
-              {currentRoom.roomName}
-            </h1>
-            <div className="w-full h-[2px] bg-gradient-to-r from-transparent via-[#6b6bb8] to-transparent"></div>
+        {/* 백버튼 - 메인 콘텐츠 기준 위치 */}
+        <div 
+          className="absolute z-50"
+          style={{
+            left: '230px', // 더 안쪽으로 이동
+            top: '-20px',   // 더 아래쪽으로 이동
+          }}
+        >
+          <BackButton1
+            onClick={handleLeaveRoom}
+          />
+        </div>
+        
+        {/* 설정 버튼 */}
+        <div 
+          className="absolute z-50 cursor-pointer"
+          style={{
+            left: '230px',  // 백버튼과 같은 x값
+            bottom: '10px',   // 백버튼과 대칭 y값 (775px + 20px)
+            width: '59.7px',
+            height: '59.7px'
+          }}
+          onClick={() => console.log("설정 버튼 클릭")}
+        >
+          <SettingIcon className="w-full h-full" />
+        </div>
+        
+        {/* 메인 콘텐츠 영역 - 고정 크기 1265x775 */}
+        <div 
+          className="relative bg-transparent flex gap-[35px]"
+          style={{
+            width: '1265px',
+            height: '775px'
+          }}
+        >
+          {/* 왼쪽 세로 flex 컨테이너 - 세로 중앙 정렬 */}
+          <div className="flex flex-col justify-between" style={{width: '609px', height: '775px'}}>
+            {/* 방이름&입장코드 컨테이너 */}
+            <RoomInfoContainer roomName={currentRoom.roomName} entryCode={currentRoom.entryCode} />
+            {/* 내 캐릭터 컨테이너 */}
+            <MyCharacterContainer isHost={currentRoom.hostId === currentPlayer.id} />
+            {/* 닉네임 표기 컨테이너 */}
+            <NicknameContainer nickname={currentPlayer.name} />
           </div>
           
-          {/* 입장코드 */}
-          <div className="mb-8">
-            <div className="bg-[rgba(107,107,184,0.2)] border border-[#6b6bb8] rounded-lg p-4 text-center">
-              <p className="text-[#b0b0b0] text-sm mb-2">입장코드</p>
-              <p className="text-2xl font-bold text-[#e8e6fd] tracking-widest">
-                {currentRoom.entryCode}
-              </p>
+          {/* 오른쪽 세로 flex 컨테이너 - 우측 정렬 */}
+          <div className="flex flex-col items-end justify-between" style={{width: '621px', height: '775px'}}>
+            {/* 플레이어 목록 컨테이너 */}
+            <div className="w-full h-[628px] justify-end items-start gap-[55.98px] inline-flex flex-wrap content-start">
+              {Array.from({ length: totalSlots }).map((_, index) => {
+                const player = otherPlayers[index];
+                const isBlocked = index >= joinableSlots;
+
+                if (isBlocked) {
+                  return <CardBlock key={`block-${index}`} className="w-[230px] h-[288px]" />;
+                }
+
+                if (player) {
+                  return (
+                    <PlayerCard
+                      key={player.id}
+                      player={player}
+                      isHost={player.id === currentRoom.hostId}
+                    />
+                  );
+                }
+
+                return <CardEmpty key={`empty-${index}`} className="w-[230px] h-[288px]" />;
+              })}
             </div>
+            {/* 버튼 컨테이너 */}
+            <ButtonContainer 
+              isReadyEnabled={isReadyEnabled}
+              onStateUpdate={refreshRoomState}
+            />
           </div>
-          
-          {/* 참여자 정보 */}
-          <div className="mb-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-[#e8e6fd]">참여자</h3>
-              <span className="text-[#b0b0b0]">
-                {currentRoom.players.length} / {currentRoom.maxPlayers}
-              </span>
-            </div>
-            
-            {/* 참여자 목록 */}
-            <div className="space-y-2 max-h-[200px] overflow-y-auto">
-              {currentRoom.players.map((player) => (
-                <div 
-                  key={player.id}
-                  className={`flex items-center justify-between p-3 rounded-lg ${
-                    player.id === currentPlayer.id 
-                      ? 'bg-[rgba(107,107,184,0.3)] border border-[#6b6bb8]' 
-                      : 'bg-[rgba(107,107,184,0.1)]'
-                  }`}
-                >
-                  <span className="text-[#e8e6fd] font-medium">
-                    {player.name}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    {player.isHost && (
-                      <span className="bg-[#ff6b6b] text-white text-xs px-2 py-1 rounded-full">
-                        방장
-                      </span>
-                    )}
-                    {player.id === currentPlayer.id && (
-                      <span className="bg-[#4ecdc4] text-white text-xs px-2 py-1 rounded-full">
-                        나
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          
-          {/* 게임 시작 버튼 (방장만) */}
-          {currentPlayer.isHost && (
-            <div className="text-center">
-              <button 
-                className="bg-[#6b6bb8] hover:bg-[#8a8ac8] text-white font-bold py-3 px-8 rounded-lg transition-colors"
-                onClick={() => {
-                  alert("게임 시작 기능은 추후 구현 예정입니다!");
-                }}
-              >
-                게임 시작
-              </button>
-            </div>
-          )}
-          
         </div>
       </main>
       

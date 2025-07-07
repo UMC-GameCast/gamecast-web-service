@@ -27,7 +27,7 @@ export const CreatePage = ({ setPage }: Props) => {
   };
 
   return (
-    <div className="h-full flex flex-col justify-between bg-[linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,6,72,1)_100%)] relative overflow-hidden">
+    <div className="h-full flex flex-col justify-between bg-[linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,6,72,1)_100%)] relative overflow-hidden" style={{ minWidth: '1821px', minHeight: '1064px' }}>
       
       {/* 배경 장식 이미지 */}
       {/* 
