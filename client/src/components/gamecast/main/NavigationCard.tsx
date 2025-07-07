@@ -1,14 +1,12 @@
-interface NavigationCardProps {
-  onNavigate?: (page: 'main' | 'participate' | 'create' | 'room') => void;
-}
+import { useNavigate } from 'react-router-dom'
 
-export const NavigationCard = ({ onNavigate }: NavigationCardProps) => {
+export const NavigationCard = () => {
+  const navigate = useNavigate();
   const handleParticipate = () => {
-    if (onNavigate) onNavigate('participate');
+    navigate('/participate');
   };
-
   const handleCreate = () => {
-    if (onNavigate) onNavigate('create');
+    navigate('/create');
   };
 
   return (

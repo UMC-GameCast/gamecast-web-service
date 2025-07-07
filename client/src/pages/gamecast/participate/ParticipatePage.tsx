@@ -2,27 +2,20 @@ import { Navigation } from "../../../components/gamecast/common/Navigation";
 import { Footer } from "../../../components/gamecast/common/Footer";
 import { ParticipationCodeCard } from "../../../components/gamecast/participate/ParticipationCodeCard";
 import { BackButton1 } from "../../../components/gamecast/common/BackButton1";
-
-/**
- * ParticipatePage Props 인터페이스
- * 페이지 전환을 위한 setPage 함수를 받습니다
- */
-interface Props {
-  setPage: (page: "main" | "participate" | "create" | "room") => void;
-}
+import { useNavigate } from 'react-router-dom'
 
 /**
  * 게임 참가 페이지 컴포넌트
  * 사용자가 게임에 참가하기 위해 초대 코드를 입력하는 페이지입니다
  * 
- * @param setPage - 페이지 전환을 위한 함수
  * @returns 참가 페이지 JSX 엘리먼트
  */
-export const ParticipatePage = ({ setPage }: Props) => {
+export const ParticipatePage = () => {
+  const navigate = useNavigate();
   
   // 방 참여 성공 핸들러
   const handleJoinSuccess = () => {
-    setPage("room");
+    navigate('/room');
   };
 
   return (
@@ -46,7 +39,7 @@ export const ParticipatePage = ({ setPage }: Props) => {
       <Navigation>
         {/* 뒤로가기 버튼 - 메인 페이지로 이동 */}
         <BackButton1
-          onClick={() => setPage("main")}
+          onClick={() => navigate("/")}
           className="absolute left-[14%] top-[150px] z-20"
         />
       </Navigation>

@@ -4,19 +4,14 @@ import { Footer } from "../../../components/gamecast/common/Footer";
 import { BackButton1 } from "../../../components/gamecast/common/BackButton1";
 import { getCurrentRoom, getCurrentPlayer, leaveRoom, updateRoom } from "../../../utils/roomManager";
 import type { RecodeRoom, Player } from "../../../types/room";
-
-/**
- * RoomPage Props 인터페이스
- */
-interface Props {
-  setPage: (page: "main" | "participate" | "create" | "room") => void;
-}
+import { useNavigate } from 'react-router-dom'
 
 /**
  * 방 정보 표시 페이지 컴포넌트
  * 입장코드, 방이름, 참여자 목록을 표시합니다
  */
-export const RoomPage = ({ setPage }: Props) => {
+export const RoomPage = () => {
+  const navigate = useNavigate();
   const [currentRoom, setCurrentRoom] = useState<RecodeRoom | null>(null);
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null);
 
@@ -27,7 +22,7 @@ export const RoomPage = ({ setPage }: Props) => {
     
     if (!room || !player) {
       // 방 정보가 없으면 메인 페이지로 이동
-      setPage("main");
+      navigate("/");
       return;
     }
     
@@ -43,11 +38,11 @@ export const RoomPage = ({ setPage }: Props) => {
     }, 2000);
     
     return () => clearInterval(interval);
-  }, [setPage]);
+  }, [navigate]);
 
   const handleLeaveRoom = () => {
     leaveRoom();
-    setPage("main");
+    navigate("/");
   };
 
   if (!currentRoom || !currentPlayer) {
