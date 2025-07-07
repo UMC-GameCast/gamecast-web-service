@@ -8,6 +8,14 @@ import Framenotready from '../../../assets/gamecast/participate/Framenotready.pn
 import Frameready from '../../../assets/gamecast/participate/Frameready.png'
 import button2_default from '../../../assets/gamecast/common/button/button2_default.png'
 import { useState } from "react";
+import ready1 from '../../../assets/gamecast/participate/frame/ready-1.png';
+import ready2 from '../../../assets/gamecast/participate/frame/ready-2.png';
+import ready3 from '../../../assets/gamecast/participate/frame/ready-3.png';
+import ready4 from '../../../assets/gamecast/participate/frame/ready-4.png';
+import ready5 from '../../../assets/gamecast/participate/frame/ready-5.png';
+import roomnameUnderline from '../../../assets/gamecast/participate/underline/roomname.png';
+import nameUnderline from '../../../assets/gamecast/participate/underline/name.png';
+import { ApplicationSelectModal } from './Modal';
 
 /**
  * 게임 참가 페이지 컴포넌트
@@ -43,6 +51,19 @@ export const WatingPage = () => {
       
       {/* 상단 네비게이션 영역 */}
       <Navigation>
+        {/* 방제목/입장코드 텍스트와 밑줄 이미지 */}
+        <div className="absolute" style={{ left: '50vw', top: '50vh' }}>
+          <div className="flex gap-16 items-end">
+            <div className="flex flex-col items-center">
+              <span className="text-white text-lg font-bold mb-1">방제목</span>
+              <img src={roomnameUnderline} alt="방제목 밑줄" className="w-[307px] h-[38px] object-contain" />
+            </div>
+            <div className="flex flex-col items-center">
+              <span className="text-white text-lg font-bold mb-1">입장코드</span>
+              <img src={nameUnderline} alt="입장코드 밑줄" className="w-[365px] h-[46.98px] object-contain" />
+            </div>
+          </div>
+        </div>
         {/* 뒤로가기 버튼 - 메인 페이지로 이동 */}
         <BackButton1
           onClick={() => navigate("/")}
@@ -81,13 +102,39 @@ export const WatingPage = () => {
 
         <div className="ml-[1126px]">
         <div className="flex flex-col gap-[41px]  items-center">
-          <div className="flex gap-[80px] justify-center items-center">
-            <img src={Framenotready} alt="프레임 준비 안됨" className="w-[232px] h-[335px]" />
-            <img src={Framenotready} alt="프레임 준비 안됨" className="w-[232px] h-[335px]" />
-          </div>
-          <div className="flex gap-[80px] justify-center items-center">
-            <img src={Framenotready} alt="프레임 준비 안됨" className="w-[232px] h-[335px]" />
-            <img src={Framenotready} alt="프레임 준비 안됨" className="w-[232px] h-[335px]" />
+          <div className="flex flex-col gap-[41px] items-center">  {/* 프레임 전체를 감싸는 div */}
+            {/* 예시: 각 프레임의 상태를 하드코딩 배열로 구현 (실제 연동은 추후) */}
+            {/* 상태: 'host', 'locked', 'ready', 'character', 'default' */}
+            {(() => {
+              // 예시: 4개의 프레임 상태를 하드코딩 (실제 로직 연동 필요)
+              const frameStates = ['default', 'default', 'default', 'default'];
+              const getFrameImage = (state: string) => {
+                switch (state) {
+                  case 'host': return ready1;
+                  case 'locked': return ready2;
+                  case 'ready': return ready3;
+                  case 'character': return ready4;
+                  default: return ready5;
+                }
+              };
+              // 2행 2열(총 4개)만 렌더링
+              return [0, 1].map(rowIdx => (
+                <div key={rowIdx} className="flex gap-[80px] justify-center items-center">
+                  {[0, 1].map(colIdx => {
+                    const idx = rowIdx * 2 + colIdx;
+                    const state = frameStates[idx] || 'default';
+                    return (
+                      <img
+                        key={colIdx}
+                        src={getFrameImage(state)}
+                        alt={`프레임 ${state}`}
+                        className="w-[232px] h-[335px]"
+                      />
+                    );
+                  })}
+                </div>
+              ));
+            })()}
           </div>
           <div className="flex gap-[24.99px] justify-center items-center mt-8">
             <div
@@ -150,76 +197,12 @@ export const WatingPage = () => {
       <Footer />
 
       {/* 모달 */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-          <div
-            className="relative rounded-2xl shadow-2xl flex flex-col items-center"
-            style={{
-              background: "#181C3A",
-              width: 900,
-              minHeight: 600,
-              padding: "40px 48px 32px 48px",
-              borderRadius: "32px",
-            }}
-          >
-            {/* 닫기 버튼 */}
-            <button
-              className="absolute top-6 right-6 text-white text-3xl hover:text-blue-300"
-              onClick={() => setIsModalOpen(false)}
-              style={{ zIndex: 10 }}
-              aria-label="닫기"
-            >
-              ×
-            </button>
-            {/* 타이틀 */}
-            <div className="w-full flex items-center mb-8">
-              <div className="text-white text-xl font-bold tracking-wide border-b-4 border-[#7B6FF7] pb-2 pl-2 pr-6" style={{borderRadius: "8px 8px 0 0", display: "inline-block"}}>
-                애플리케이션 창
-              </div>
-            </div>
-            {/* 썸네일 그리드 */}
-            <div className="grid grid-cols-3 gap-x-8 gap-y-6 w-full mb-10">
-              {/* 각 썸네일 */}
-              {[
-                { name: "오버워치", src: "https://via.placeholder.com/260x150?text=오버워치" },
-                { name: "배틀그라운드", src: "https://via.placeholder.com/260x150?text=배틀그라운드" },
-                { name: "전북대", src: "https://via.placeholder.com/260x150?text=전북대" },
-                { name: "미드저니", src: "https://via.placeholder.com/260x150?text=미드저니" },
-                { name: "구글", src: "https://via.placeholder.com/260x150?text=구글" },
-                { name: "유튜브", src: "https://via.placeholder.com/260x150?text=유튜브" },
-              ].map((app, idx) => (
-                <div key={idx} className="flex flex-col items-center">
-                  <div
-                    className="rounded-xl border-2 border-[#7B6FF7] overflow-hidden mb-2"
-                    style={{ width: 260, height: 150, background: "#22244A" }}
-                  >
-                    <img src={app.src} alt={app.name} className="object-cover w-full h-full" />
-                  </div>
-                  <div
-                    className="bg-[#7B6FF7] text-white text-sm font-semibold rounded-b-lg px-4 py-1"
-                    style={{ minWidth: 80, textAlign: "center", marginTop: "-8px" }}
-                  >
-                    {app.name}
-                  </div>
-                </div>
-              ))}
-            </div>
-            {/* 완료 버튼 */}
-            <button
-              className="mt-2 px-16 py-3 rounded-lg text-lg font-bold"
-              style={{
-                background: "#23265A",
-                color: "#fff",
-                border: "2px solid #7B6FF7",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-              }}
-              onClick={() => setIsModalOpen(false)}
-            >
-              완료
-            </button>
-          </div>
-        </div>
-      )}
+      <ApplicationSelectModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      {/* 이름명 아래 name.png 배치 */}
+      <div className="absolute left-[50%] bottom-[120px] -translate-x-1/2 flex flex-col items-center z-20">
+        <span className="text-white text-xl font-bold mb-2">이름명</span>
+        <img src={nameUnderline} alt="이름명 밑줄" className="w-[365px] h-[46.98px] object-contain" />
+      </div>
     </div>
   );
 }; 
