@@ -3,6 +3,7 @@ import { Navigation } from "../../../components/gamecast/common/Navigation";
 import { Footer } from "../../../components/gamecast/common/Footer";
 import { CreateRoomCard } from "../../../components/gamecast/create/CreateRoomCard";
 import { BackButton1 } from "../../../components/gamecast/common/BackButton1";
+import { useNavigate } from 'react-router-dom';
 
 /**
  * CreatePage Props 인터페이스
@@ -19,11 +20,12 @@ interface Props {
  * @param setPage - 페이지 전환을 위한 함수
  * @returns 방 생성 페이지 JSX 엘리먼트
  */
-export const CreatePage = ({ setPage }: Props) => {
-  
+export const CreatePage = () => {
+  const navigate = useNavigate();
+
   // 방 생성 성공 핸들러
   const handleCreateSuccess = () => {
-    setPage("room");
+    navigate('/room');
   };
 
   return (
@@ -47,7 +49,7 @@ export const CreatePage = ({ setPage }: Props) => {
       <Navigation>
         {/* 뒤로가기 버튼 - 메인 페이지로 이동 */}
         <BackButton1
-          onClick={() => setPage("main")}
+          onClick={() => navigate('/')}
           className="absolute left-[14%] top-[150px] z-20"
         />
       </Navigation>

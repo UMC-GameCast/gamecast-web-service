@@ -1,14 +1,14 @@
-interface NavigationCardProps {
-  onNavigate?: (page: 'main' | 'participate' | 'create' | 'room') => void;
-}
+import { useNavigate } from 'react-router-dom';
 
-export const NavigationCard = ({ onNavigate }: NavigationCardProps) => {
+export const NavigationCard = () => {
+  const navigate = useNavigate();
+
   const handleParticipate = () => {
-    if (onNavigate) onNavigate('participate');
+    navigate('/participate');
   };
 
   const handleCreate = () => {
-    if (onNavigate) onNavigate('create');
+    navigate('/create');
   };
 
   return (
@@ -36,17 +36,15 @@ export const NavigationCard = ({ onNavigate }: NavigationCardProps) => {
             참여하기
           </button>
         </div>
-
         {/* 방 만들기 카드 */}
         <div 
           onClick={handleCreate}
           className="bg-white/10 backdrop-blur-lg rounded-xl p-8 text-center group hover:bg-white/15 transition-all duration-300 cursor-pointer border border-white/20 hover:border-white/40"
         >
-          <div className="mb-5">
+          <div className="mb-6">
             <h3 className="text-2xl font-bold text-white mb-2">새 방 만들기</h3>
             <p className="text-gray-300">
-              새로운 게임 방을 만들어<br />
-              친구들을 초대해보세요
+              새로운 게임 방을 생성하세요
             </p>
           </div>
           <button 
@@ -62,4 +60,4 @@ export const NavigationCard = ({ onNavigate }: NavigationCardProps) => {
       </div>
     </div>
   );
-}; 
+} 
