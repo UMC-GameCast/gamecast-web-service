@@ -12,6 +12,7 @@ import { RoomInfoContainer } from "../../../components/gamecast/room/RoomInfoCon
 import { MyCharacterContainer } from "../../../components/gamecast/room/MyCharacterContainer";
 import { NicknameContainer } from "../../../components/gamecast/room/NicknameContainer";
 import SettingIcon from "../../../assets/gamecast/Room/setting.svg?react";
+import { useNavigate } from 'react-router-dom';
 
 /**
  * RoomPage Props 인터페이스
@@ -24,7 +25,8 @@ interface Props {
  * 방 정보 표시 페이지 컴포넌트
  * 입장코드, 방이름, 참여자 목록을 표시합니다
  */
-export const RoomPage = ({ setPage }: Props) => {
+export const RoomPage = () => {
+  const navigate = useNavigate();
   const [currentRoom, setCurrentRoom] = useState<RecodeRoom | null>(null);
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null);
 
@@ -46,7 +48,7 @@ export const RoomPage = ({ setPage }: Props) => {
     
     if (!room || !player) {
       // 방 정보가 없으면 메인 페이지로 이동
-      setPage("main");
+      navigate('/');
       return;
     }
     
@@ -62,11 +64,11 @@ export const RoomPage = ({ setPage }: Props) => {
     }, 2000);
     
     return () => clearInterval(interval);
-  }, [setPage]);
+  }, [navigate]);
 
   const handleLeaveRoom = () => {
     leaveRoom();
-    setPage("main");
+    navigate('/');
   };
 
   if (!currentRoom || !currentPlayer) {
