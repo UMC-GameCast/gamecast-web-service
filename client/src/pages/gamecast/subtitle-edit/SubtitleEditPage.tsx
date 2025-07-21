@@ -1,81 +1,194 @@
-import React from 'react'
+import { useState, useRef, useEffect } from "react";
+import { Navigation } from "../../../components/gamecast/common/Navigation";
+import { Footer } from "../../../components/gamecast/common/Footer";
 
-const SubtitleEditPage: React.FC = () => {
+interface SubtitleSegment {
+  id: number;
+  start: number;
+  end: number;
+  text: string;
+}
+
+const SubtitleEditPage = () => {
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [subtitles, setSubtitles] = useState<SubtitleSegment[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [whisperModel, setWhisperModel] = useState<any>(null);
+  const [isModelLoading, setIsModelLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Whisper 모델 로드
+  useEffect(() => {
+    const loadWhisperModel = async () => {
+      try {
+        setIsModelLoading(true);
+        console.log('Whisper 모델 로딩 시작...');
+        
+        // @ts-ignore - Transformers.js는 동적으로 로드됨
+        const { pipeline } = await import('@xenova/transformers');
+        console.log('Transformers.js 로드 완료');
+        
+        const model = await pipeline('automatic-speech-recognition', 'Xenova/whisper-base');
+        console.log('Whisper 모델 로드 완료');
+        setWhisperModel(model);
+      } catch (err: any) {
+        console.error('Whisper 모델 로드 실패:', err);
+        alert(`Whisper 모델을 로드할 수 없습니다: ${err.message}`);
+      } finally {
+        setIsModelLoading(false);
+      }
+    };
+
+    loadWhisperModel();
+  }, []);
+
+  const handleWebmUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // webm 또는 mp3 파일 체크
+    if (!file.name.endsWith('.webm') && !file.name.endsWith('.mp3')) {
+      alert('webm 또는 mp3 파일만 업로드 가능합니다.');
+      return;
+    }
+
+    setUploadedFile(file);
+    const url = URL.createObjectURL(file);
+    setVideoUrl(url);
+    setIsProcessing(true);
+
+    try {
+      if (whisperModel) {
+        // Whisper로 음성 인식 실행
+        const result = await whisperModel(file, {
+          language: 'ko', // 한국어로 설정
+          task: 'transcribe',
+          chunk_length_s: 30, // 청크 길이
+          stride_length_s: 5,  // 스트라이드 길이
+          return_timestamps: true
+        });
+
+        // 결과를 자막 형식으로 변환
+        const segments = result.chunks?.map((chunk: any, index: number) => ({
+          id: index + 1,
+          start: chunk.timestamp[0],
+          end: chunk.timestamp[1],
+          text: chunk.text.trim()
+        })) || [];
+
+        setSubtitles(segments);
+      } else {
+        // Whisper 모델이 없으면 임시 샘플 데이터 사용
+        const sampleSubtitles = [
+          { id: 1, start: 0, end: 3, text: "안녕하세요, 테스트 자막입니다." },
+          { id: 2, start: 3, end: 6, text: "이것은 임시 샘플 데이터입니다." },
+          { id: 3, start: 6, end: 9, text: "Whisper 모델이 로드되지 않았을 때 표시됩니다." }
+        ];
+        setSubtitles(sampleSubtitles);
+        alert('Whisper 모델이 로드되지 않아 샘플 데이터를 표시합니다.');
+      }
+    } catch (err) {
+      console.error('음성 인식 실패:', err);
+      alert('음성 인식에 실패했습니다. 파일을 다시 확인해주세요.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    const ms = Math.floor((seconds % 1) * 1000);
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+  };
+
   return (
-    <div className="min-h-screen bg-gray-100 p-8">
-      <div className="max-w-6xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-800 mb-6">
-          자막 편집 페이지
-        </h1>
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <p className="text-gray-600 mb-4">
-            생성된 자막을 편집하고 수정하세요.
-          </p>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div>
-              <h3 className="font-medium text-gray-800 mb-3">자막 목록</h3>
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {[
-                  { time: '00:00:05', text: '안녕하세요, 게임캐스트입니다.' },
-                  { time: '00:00:08', text: '오늘은 특별한 게스트와 함께합니다.' },
-                  { time: '00:00:12', text: '게임을 시작해보겠습니다.' },
-                  { time: '00:00:15', text: '첫 번째 라운드를 시작합니다.' },
-                  { time: '00:00:20', text: '훌륭한 플레이입니다!' }
-                ].map((subtitle, index) => (
-                  <div key={index} className="border border-gray-200 rounded p-3 hover:bg-gray-50 cursor-pointer">
-                    <div className="text-sm text-gray-500 mb-1">{subtitle.time}</div>
-                    <div className="text-gray-800">{subtitle.text}</div>
+    <div className="h-full flex flex-col justify-between bg-[linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,6,72,1)_100%)]" style={{ minWidth: '1821px', minHeight: '1064px' }}>
+      <Navigation />
+      <div className="flex-1 flex flex-col items-center justify-center p-8">
+        <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 w-full max-w-6xl">
+          <h1 className="text-3xl font-bold text-white text-center mb-8">음성 파일 자막 분석</h1>
+          
+          {/* Model Loading Status */}
+          {isModelLoading && (
+            <div className="mb-4 p-4 bg-blue-500/20 border border-blue-500/50 rounded-lg">
+              <p className="text-blue-300">Whisper 모델을 로드하고 있습니다... (처음 로드 시 시간이 걸릴 수 있습니다)</p>
+            </div>
+          )}
+          
+          <div className="mb-8">
+            <div className="border-2 border-dashed border-white/30 rounded-lg p-8 text-center">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".webm,.mp3"
+                onChange={handleWebmUpload}
+                className="hidden"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isProcessing || isModelLoading || !whisperModel}
+                className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+              >
+                {isModelLoading ? '모델 로딩 중...' : 
+                 isProcessing ? '음성 분석 중...' : 
+                 !whisperModel ? '모델 준비 중...' : 'WEBM/MP3 파일 선택'}
+              </button>
+              <p className="text-white/70 mt-2">
+                Whisper.js를 사용하여 브라우저에서 직접 자막을 생성합니다
+              </p>
+              {!whisperModel && !isModelLoading && (
+                <p className="text-yellow-300 mt-2">모델 로드에 실패했습니다. 페이지를 새로고침해주세요.</p>
+              )}
+            </div>
+            {uploadedFile && (
+              <div className="mt-4 p-4 bg-white/5 rounded-lg">
+                <p className="text-white">선택된 파일: {uploadedFile.name}</p>
+              </div>
+            )}
+          </div>
+
+          {/* 비디오/오디오 플레이어 */}
+          {videoUrl && (
+            <div className="flex flex-col items-center mb-8">
+              <video
+                src={videoUrl}
+                controls
+                width={800}
+                onTimeUpdate={e => setCurrentTime((e.target as HTMLVideoElement).currentTime)}
+                onLoadedMetadata={e => setDuration((e.target as HTMLVideoElement).duration)}
+                style={{ background: 'black', borderRadius: '12px' }}
+              />
+              <div className="mt-2 text-white">
+                현재 재생 시간: {currentTime.toFixed(2)} / {duration.toFixed(2)}초
+              </div>
+            </div>
+          )}
+
+          {/* 자막 표시 */}
+          {subtitles.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold text-white">생성된 자막</h2>
+              <div className="max-h-96 overflow-y-auto bg-black/30 rounded-lg p-4">
+                {subtitles.map((subtitle) => (
+                  <div key={subtitle.id} className="mb-3 p-3 bg-white/5 rounded">
+                    <div className="text-yellow-300 font-mono text-sm mb-1">
+                      [{formatTime(subtitle.start)} ~ {formatTime(subtitle.end)}]
+                    </div>
+                    <div className="text-white">{subtitle.text}</div>
                   </div>
                 ))}
               </div>
             </div>
-            
-            <div>
-              <h3 className="font-medium text-gray-800 mb-3">자막 편집</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    시간
-                  </label>
-                  <input 
-                    type="text" 
-                    className="w-full border border-gray-300 rounded px-3 py-2"
-                    defaultValue="00:00:05"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    자막 내용
-                  </label>
-                  <textarea 
-                    className="w-full border border-gray-300 rounded px-3 py-2 h-24"
-                    defaultValue="안녕하세요, 게임캐스트입니다."
-                  />
-                </div>
-                <div className="flex space-x-2">
-                  <button className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-                    저장
-                  </button>
-                  <button className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">
-                    삭제
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div className="mt-6 flex justify-between">
-            <button className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">
-              이전 단계
-            </button>
-            <button className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
-              다음 단계
-            </button>
-          </div>
+          )}
         </div>
       </div>
+      <Footer />
     </div>
-  )
-}
+  );
+};
 
-export default SubtitleEditPage 
+export default SubtitleEditPage;
