@@ -16,7 +16,7 @@ export const CreatePage = () => {
   
   // 방 생성 성공 핸들러
   const handleCreateSuccess = () => {
-    navigate('/room');
+    navigate('/waiting');
   };
 
   return (
