@@ -6,7 +6,6 @@ export const NavigationCard = () => {
   const handleParticipate = () => {
     navigate('/participate');
   };
-
   const handleCreate = () => {
     navigate('/create');
   };

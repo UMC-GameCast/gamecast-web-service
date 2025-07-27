@@ -6,18 +6,9 @@ import { BackButton1 } from "../../../components/gamecast/common/BackButton1";
 import { useNavigate } from 'react-router-dom';
 
 /**
- * CreatePage Props 인터페이스
- * 페이지 전환을 위한 setPage 함수를 받습니다
- */
-interface Props {
-  setPage: (page: "main" | "participate" | "create" | "room") => void;
-}
-
-/**
  * 게임 방 생성 페이지 컴포넌트
  * 사용자가 새로운 게임 방을 생성하는 페이지입니다
- * 
- * @param setPage - 페이지 전환을 위한 함수
+ 
  * @returns 방 생성 페이지 JSX 엘리먼트
  */
 export const CreatePage = () => {
@@ -49,17 +40,12 @@ export const CreatePage = () => {
       <Navigation>
         {/* 뒤로가기 버튼 - 메인 페이지로 이동 */}
         <BackButton1
-          onClick={() => navigate('/')}
+          onClick={() => navigate("/")}
           className="absolute left-[14%] top-[150px] z-20"
         />
       </Navigation>
       
       {/* 메인 콘텐츠 영역 */}
-      {/* 
-        - flex-1: 사용 가능한 공간을 모두 차지
-        - flex items-center justify-center: 수직/수평 중앙 정렬
-        - relative z-10: 배경 이미지보다 앞에 표시
-      */}
       <main className="flex-1 flex items-center justify-center relative z-10">
         {/* 방 생성 카드 */}
         <CreateRoomCard onCreateSuccess={handleCreateSuccess} />
