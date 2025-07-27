@@ -7,6 +7,14 @@
     <title>GAMECAST</title>
   </head>
   <body>
+    <svg style="display:none">
+      <filter id="pixelate" x="0" y="0">
+        <feFlood x="4" y="4" height="4" width="4"/>
+        <feComposite width="4" height="4"/>
+        <feTile result="a"/>
+        <feComposite in="SourceGraphic" in2="a" operator="in"/>
+      </filter>
+    </svg>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
