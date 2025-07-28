@@ -6,3 +6,6 @@ ffmpeg-python
 fastapi
 uvicorn
 python-multipart
+python-socketio
+websockets
+aiortc
