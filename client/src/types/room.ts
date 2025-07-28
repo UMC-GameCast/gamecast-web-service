@@ -4,6 +4,8 @@ export interface Player {
   id: string;
   name: string;
   isHost: boolean; // 방장 여부
+  character?: string | null; // 캐릭터 설정 여부 (설정된 캐릭터 이름 또는 null)
+  recording?: boolean; // 녹화화면 설정 여부
 }
 
 export interface RecodeRoom {
