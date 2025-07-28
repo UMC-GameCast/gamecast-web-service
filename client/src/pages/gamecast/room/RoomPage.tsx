@@ -49,6 +49,7 @@ export const RoomPage = () => {
     if (!room || !player) {
       // 방 정보가 없으면 메인 페이지로 이동
       navigate('/');
+
       return;
     }
     
