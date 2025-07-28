@@ -7,10 +7,11 @@ import { RoomPage } from './pages/gamecast/room/RoomPage'
 import { SourceExtractionPage } from './pages/gamecast/source-extraction/SourceExtractionPage'
 import { SourceSelectionPage } from './pages/gamecast/source-selection/SourceSelectionPage'
 import { SubtitleGenerationPage } from './pages/gamecast/subtitle-generation/SubtitleGenerationPage'
-import SubtitleEditPage from './pages/gamecast/subtitle-edit/SubtitleEditPage'
+import { SubtitleEditPage } from './pages/gamecast/subtitle-edit/SubtitleEditPage'
 import { RenderingPage } from './pages/gamecast/rendering/RenderingPage'
 import { HostEvaluationPage } from './pages/gamecast/host-evaluation/HostEvaluationPage'
 import { GuestEvaluationPage } from './pages/gamecast/guest-evaluation/GuestEvaluationPage'
+import { WatingPage } from './pages/gamecast/waitng/WatingPage'
 import './App.css'
 
 function App() {
@@ -23,6 +24,7 @@ function App() {
           <Route path="/participate" element={<ParticipatePage />} />
           <Route path="/create" element={<CreatePage />} />
           <Route path="/room" element={<RoomPage />} />
+          <Route path="/waiting" element={<WatingPage />} />
           <Route path="/source-extraction" element={<SourceExtractionPage />} />
           <Route path="/source-selection" element={<SourceSelectionPage />} />
           <Route path="/subtitle-generation" element={<SubtitleGenerationPage />} />

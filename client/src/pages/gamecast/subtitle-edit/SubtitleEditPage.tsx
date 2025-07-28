@@ -9,7 +9,7 @@ interface SubtitleSegment {
   text: string;
 }
 
-const SubtitleEditPage = () => {
+export const SubtitleEditPage = () => {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -190,5 +190,3 @@ const SubtitleEditPage = () => {
     </div>
   );
 };
-
-export default SubtitleEditPage;

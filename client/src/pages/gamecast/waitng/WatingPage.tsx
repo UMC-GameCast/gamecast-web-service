@@ -31,7 +31,7 @@ export const WatingPage = () => {
   
   // 방 참여 성공 핸들러
   const handleJoinSuccess = () => {
-    navigate('/waiting');ㄴ
+    navigate('/waiting');
   };
 
   return (
