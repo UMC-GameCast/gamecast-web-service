@@ -1,21 +1,30 @@
 import React from "react";
-import HostBigIcon from "../../../assets/gamecast/Room/Host_big.svg?react";
-import { getCurrentPlayer } from "../../../utils/roomManager";
+import type { Player } from "../../../types/room";
+import HostBig from "../../../assets/gamecast/Room/Host_big.svg?react";
 import CharacterSample from "../../../assets/gamecast/Room/캐릭터 샘플.png";
+// import { VoiceIndicator } from "../common/VoiceIndicator"; // <- 제거
 
+/**
+ * MyCharacterContainer Props 인터페이스
+ */
 interface MyCharacterContainerProps {
   isHost: boolean;
+  currentPlayer: Player | null;
 }
 
-export const MyCharacterContainer = ({ isHost }: MyCharacterContainerProps) => {
-  // 현재 플레이어 정보 가져오기
-  const currentPlayer = getCurrentPlayer();
+/**
+ * 내 캐릭터와 관련된 UI 요소들을 포함하는 컨테이너 컴포넌트
+ */
+export const MyCharacterContainer: React.FC<MyCharacterContainerProps> = ({ isHost, currentPlayer }) => {
   const hasCharacter = !!(currentPlayer?.character);
 
   return (
     <div className="w-[579px] h-[499px] pl-[30px] justify-end items-center inline-flex relative">
       <div className="flex-col justify-start items-center flex gap-[-50px] relative" style={{ width: '480px', height: '477.87px' }}>
         <div className="justify-center items-center gap-[10.67px] inline-flex" style={{ width: '480px', height: '477.87px' }}>
+
+         
+
           {/* 캐릭터가 설정되지 않았을 때 - 텍스트 표시 */}
           {!hasCharacter && (
             <div 
@@ -56,8 +65,8 @@ export const MyCharacterContainer = ({ isHost }: MyCharacterContainerProps) => {
                 src={CharacterSample}
                 alt="내 캐릭터"
                 style={{
-                  width: '480px', // 원본 비율 유지하면서 더 크게 (146.04 * 2)
-                  height: '642px', // 원본 비율 유지하면서 더 크게 (193.68 * 2)
+                  width: '480px',
+                  height: '642px',
                   objectFit: 'cover',
                   objectPosition: 'top'
                 }}
@@ -88,7 +97,8 @@ export const MyCharacterContainer = ({ isHost }: MyCharacterContainerProps) => {
           }}
         >
           {/*방장 표시 아이콘*/}
-          <HostBigIcon
+          <HostBig
+
             style={{
               position: 'absolute',
               width: '43.54px',

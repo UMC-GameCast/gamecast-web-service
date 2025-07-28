@@ -4,14 +4,6 @@ import { ParticipationCodeCard } from "../../../components/gamecast/participate/
 import { BackButton1 } from "../../../components/gamecast/common/BackButton1";
 import { useNavigate } from 'react-router-dom';
 
-/**
- * ParticipatePage Props 인터페이스
- * 페이지 전환을 위한 setPage 함수를 받습니다
- */
-interface Props {
-  setPage: (page: "main" | "participate" | "create" | "room") => void;
-}
-
 
 /**
  * 게임 참가 페이지 컴포넌트
