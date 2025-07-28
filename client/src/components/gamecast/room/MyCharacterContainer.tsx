@@ -22,7 +22,9 @@ export const MyCharacterContainer: React.FC<MyCharacterContainerProps> = ({ isHo
     <div className="w-[579px] h-[499px] pl-[30px] justify-end items-center inline-flex relative">
       <div className="flex-col justify-start items-center flex gap-[-50px] relative" style={{ width: '480px', height: '477.87px' }}>
         <div className="justify-center items-center gap-[10.67px] inline-flex" style={{ width: '480px', height: '477.87px' }}>
+
          
+
           {/* 캐릭터가 설정되지 않았을 때 - 텍스트 표시 */}
           {!hasCharacter && (
             <div 
@@ -96,6 +98,7 @@ export const MyCharacterContainer: React.FC<MyCharacterContainerProps> = ({ isHo
         >
           {/*방장 표시 아이콘*/}
           <HostBig
+
             style={{
               position: 'absolute',
               width: '43.54px',
