@@ -3,7 +3,16 @@ import { Navigation } from "../../../components/gamecast/common/Navigation";
 import { Footer } from "../../../components/gamecast/common/Footer";
 import { CreateRoomCard } from "../../../components/gamecast/create/CreateRoomCard";
 import { BackButton1 } from "../../../components/gamecast/common/BackButton1";
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom';
+
+/**
+ * CreatePage Props 인터페이스
+ * 페이지 전환을 위한 setPage 함수를 받습니다
+ */
+interface Props {
+  setPage: (page: "main" | "participate" | "create" | "room") => void;
+}
+
 
 /**
  * 게임 방 생성 페이지 컴포넌트
@@ -13,14 +22,15 @@ import { useNavigate } from 'react-router-dom'
  */
 export const CreatePage = () => {
   const navigate = useNavigate();
-  
+
   // 방 생성 성공 핸들러
   const handleCreateSuccess = () => {
-    navigate('/waiting');
+    navigate('/room');
+
   };
 
   return (
-    <div className="h-full flex flex-col justify-between bg-[linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,6,72,1)_100%)] relative overflow-hidden">
+    <div className="h-full flex flex-col justify-between bg-[linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,6,72,1)_100%)] relative overflow-hidden" style={{ minWidth: '1821px', minHeight: '1064px' }}>
       
       {/* 배경 장식 이미지 */}
       {/* 
@@ -40,7 +50,9 @@ export const CreatePage = () => {
       <Navigation>
         {/* 뒤로가기 버튼 - 메인 페이지로 이동 */}
         <BackButton1
-          onClick={() => navigate("/")}
+
+          onClick={() => navigate('/')}
+
           className="absolute left-[14%] top-[150px] z-20"
         />
       </Navigation>

@@ -9,7 +9,7 @@ interface ErrorMessageProps {
 
 /**
  * 에러 메시지 컴포넌트
- * 11px 크기, #FF5214 색상, 오른쪽에 에러 아이콘 표시
+ * 11px 크기, #FF0000 색상, 오른쪽에 에러 아이콘 표시
  */
 export const ErrorMessage = ({ message, show, className = "" }: ErrorMessageProps) => {
   if (!show) return null;
@@ -20,7 +20,7 @@ export const ErrorMessage = ({ message, show, className = "" }: ErrorMessageProp
         className="font-medium"
         style={{
           fontSize: '11px',
-          color: '#FF5214',
+          color: '#FF0000',
           lineHeight: '1.2'
         }}
       >
