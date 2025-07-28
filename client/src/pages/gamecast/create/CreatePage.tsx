@@ -40,7 +40,9 @@ export const CreatePage = () => {
       <Navigation>
         {/* 뒤로가기 버튼 - 메인 페이지로 이동 */}
         <BackButton1
-          onClick={() => navigate("/")}
+
+          onClick={() => navigate('/')}
+
           className="absolute left-[14%] top-[150px] z-20"
         />
       </Navigation>

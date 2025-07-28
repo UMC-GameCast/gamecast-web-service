@@ -4,6 +4,7 @@ import { ParticipationCodeCard } from "../../../components/gamecast/participate/
 import { BackButton1 } from "../../../components/gamecast/common/BackButton1";
 import { useNavigate } from 'react-router-dom';
 
+
 /**
  * 게임 참가 페이지 컴포넌트
  * 사용자가 게임에 참가하기 위해 초대 코드를 입력하는 페이지입니다
@@ -12,7 +13,6 @@ import { useNavigate } from 'react-router-dom';
  */
 export const ParticipatePage = () => {
   const navigate = useNavigate();
-  
   // 방 참여 성공 핸들러
   const handleJoinSuccess = () => {
     navigate('/room');
@@ -39,7 +39,8 @@ export const ParticipatePage = () => {
       <Navigation>
         {/* 뒤로가기 버튼 - 메인 페이지로 이동 */}
         <BackButton1
-          onClick={() => navigate("/")}
+          onClick={() => navigate('/')}
+
           className="absolute left-[14%] top-[150px] z-20"
         />
       </Navigation>

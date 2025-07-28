@@ -20,7 +20,6 @@ import type { PlayerWithStream } from "../../../components/gamecast/room/VoiceSt
 export const RoomPage = () => {
   const { currentRoom, currentPlayer, refreshRoomState, handleLeaveRoom } = useRoom();
   const { localStream, remoteStreams } = useVoiceChat(currentRoom?.id || null);
-
   const playersWithStreams = useMemo((): PlayerWithStream[] => {
     if (!currentRoom || !currentPlayer) return [];
 
@@ -32,6 +31,7 @@ export const RoomPage = () => {
       return { player, stream, isLocalPlayer };
     });
 
+
   }, [currentRoom, currentPlayer, localStream, remoteStreams]);
 
   if (!currentRoom || !currentPlayer) {
@@ -41,6 +41,7 @@ export const RoomPage = () => {
       </div>
     );
   }
+
 
   // 준비하기 버튼 활성화 조건: 캐릭터 설정과 녹화화면 설정이 모두 완료된 경우
   const isReadyEnabled = !!(currentPlayer.character && currentPlayer.recording);
@@ -107,7 +108,13 @@ export const RoomPage = () => {
                 currentRoom={currentRoom}
                 currentPlayer={currentPlayer}
               />
+
             </div>
+            {/* 버튼 컨테이너 */}
+            <ButtonContainer 
+              isReadyEnabled={isReadyEnabled}
+              onStateUpdate={refreshRoomState}
+            />
           </div>
         </main>
         
@@ -115,5 +122,6 @@ export const RoomPage = () => {
         <Footer />
       </div>
     </React.Fragment>
+
   );
 }; 

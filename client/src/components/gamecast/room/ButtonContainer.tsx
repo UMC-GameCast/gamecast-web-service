@@ -5,6 +5,7 @@ import { updateCurrentPlayer } from "../../../utils/roomManager";
 import { useRecording } from "../../../hooks/useRecording";
 import type { Player, RecodeRoom } from "../../../types/room";
 
+
 interface ButtonContainerProps {
   isReadyEnabled?: boolean;
   onStateUpdate?: () => void;
@@ -186,6 +187,7 @@ export const ButtonContainer = ({
             >
               캐릭터 설정과 녹화화면 설정이 필요합니다
             </div>
+
           </div>
         </div>
       )}
@@ -215,6 +217,7 @@ export const ButtonContainer = ({
             disabled={getReadyButtonDisabled()}
           >
             {getReadyButtonText()}
+
           </RoomButton>
         </div>
       </div>
