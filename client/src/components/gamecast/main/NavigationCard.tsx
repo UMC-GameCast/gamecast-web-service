@@ -1,12 +1,11 @@
-import { useNavigate } from 'react-router-dom';
+
+import { useNavigate } from 'react-router-dom'
 
 export const NavigationCard = () => {
   const navigate = useNavigate();
-
   const handleParticipate = () => {
     navigate('/participate');
   };
-
   const handleCreate = () => {
     navigate('/create');
   };

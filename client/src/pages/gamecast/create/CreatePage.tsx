@@ -13,11 +13,11 @@ interface Props {
   setPage: (page: "main" | "participate" | "create" | "room") => void;
 }
 
+
 /**
  * 게임 방 생성 페이지 컴포넌트
  * 사용자가 새로운 게임 방을 생성하는 페이지입니다
  * 
- * @param setPage - 페이지 전환을 위한 함수
  * @returns 방 생성 페이지 JSX 엘리먼트
  */
 export const CreatePage = () => {
@@ -26,6 +26,7 @@ export const CreatePage = () => {
   // 방 생성 성공 핸들러
   const handleCreateSuccess = () => {
     navigate('/room');
+
   };
 
   return (
@@ -49,7 +50,9 @@ export const CreatePage = () => {
       <Navigation>
         {/* 뒤로가기 버튼 - 메인 페이지로 이동 */}
         <BackButton1
+
           onClick={() => navigate('/')}
+
           className="absolute left-[14%] top-[150px] z-20"
         />
       </Navigation>
