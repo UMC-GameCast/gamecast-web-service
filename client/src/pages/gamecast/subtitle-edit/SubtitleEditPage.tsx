@@ -1,81 +1,145 @@
-import React from 'react'
+import React, { useState, useRef } from 'react';
+import { useSubtitle } from '../../../hooks/useSubtitle';
 
 const SubtitleEditPage: React.FC = () => {
+  const { subtitles, isLoading, error, generateSubtitles, clearSubtitles } = useSubtitle();
+  const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && file.type.startsWith('audio/')) {
+      setAudioFile(file);
+      const url = URL.createObjectURL(file);
+      setAudioUrl(url);
+      clearSubtitles(); // 기존 자막 초기화
+    } else {
+      alert('오디오 파일을 선택해주세요.');
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!audioFile) {
+      alert('오디오 파일을 먼저 선택해주세요.');
+      return;
+    }
+    await generateSubtitles(audioFile);
+  };
+
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
   return (
-    <div className="min-h-screen bg-gray-100 p-8">
-      <div className="max-w-6xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-800 mb-6">
-          자막 편집 페이지
-        </h1>
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <p className="text-gray-600 mb-4">
-            생성된 자막을 편집하고 수정하세요.
-          </p>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div>
-              <h3 className="font-medium text-gray-800 mb-3">자막 목록</h3>
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {[
-                  { time: '00:00:05', text: '안녕하세요, 게임캐스트입니다.' },
-                  { time: '00:00:08', text: '오늘은 특별한 게스트와 함께합니다.' },
-                  { time: '00:00:12', text: '게임을 시작해보겠습니다.' },
-                  { time: '00:00:15', text: '첫 번째 라운드를 시작합니다.' },
-                  { time: '00:00:20', text: '훌륭한 플레이입니다!' }
-                ].map((subtitle, index) => (
-                  <div key={index} className="border border-gray-200 rounded p-3 hover:bg-gray-50 cursor-pointer">
-                    <div className="text-sm text-gray-500 mb-1">{subtitle.time}</div>
-                    <div className="text-gray-800">{subtitle.text}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            
-            <div>
-              <h3 className="font-medium text-gray-800 mb-3">자막 편집</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    시간
-                  </label>
-                  <input 
-                    type="text" 
-                    className="w-full border border-gray-300 rounded px-3 py-2"
-                    defaultValue="00:00:05"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    자막 내용
-                  </label>
-                  <textarea 
-                    className="w-full border border-gray-300 rounded px-3 py-2 h-24"
-                    defaultValue="안녕하세요, 게임캐스트입니다."
-                  />
-                </div>
-                <div className="flex space-x-2">
-                  <button className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-                    저장
-                  </button>
-                  <button className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">
-                    삭제
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+    <div className="min-h-screen bg-gray-900 text-white p-8">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-3xl font-bold mb-8 text-center">자막 편집 페이지</h1>
+        
+        {/* 파일 업로드 섹션 */}
+        <div className="bg-gray-800 rounded-lg p-6 mb-8">
+          <h2 className="text-xl font-semibold mb-4">오디오 파일 업로드</h2>
           
-          <div className="mt-6 flex justify-between">
-            <button className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">
-              이전 단계
+          <div className="flex items-center gap-4 mb-4">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="audio/*"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg transition-colors"
+            >
+              파일 선택
             </button>
-            <button className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
-              다음 단계
-            </button>
+            {audioFile && (
+              <span className="text-green-400">
+                선택된 파일: {audioFile.name}
+              </span>
+            )}
           </div>
+
+          {audioFile && (
+            <button
+              onClick={handleUpload}
+              disabled={isLoading}
+              className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 px-6 py-2 rounded-lg transition-colors"
+            >
+              {isLoading ? '자막 생성 중...' : '자막 생성'}
+            </button>
+          )}
         </div>
+
+        {/* 오디오 플레이어 */}
+        {audioUrl && (
+          <div className="bg-gray-800 rounded-lg p-6 mb-8">
+            <h2 className="text-xl font-semibold mb-4">오디오 플레이어</h2>
+            <audio controls className="w-full">
+              <source src={audioUrl} type={audioFile?.type} />
+              Your browser does not support the audio element.
+            </audio>
+          </div>
+        )}
+
+        {/* 에러 메시지 */}
+        {error && (
+          <div className="bg-red-900 border border-red-600 rounded-lg p-4 mb-8">
+            <p className="text-red-200">에러: {error}</p>
+          </div>
+        )}
+
+        {/* 자막 표시 */}
+        {subtitles.length > 0 && (
+          <div className="bg-gray-800 rounded-lg p-6">
+            <h2 className="text-xl font-semibold mb-4">생성된 자막</h2>
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {subtitles.map((subtitle, index) => (
+                <div
+                  key={index}
+                  className="bg-gray-700 rounded-lg p-4 border border-gray-600"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-400">
+                      {formatTime(subtitle.startTime)} - {formatTime(subtitle.endTime)}
+                    </span>
+                    <span className="text-xs text-gray-500">#{index + 1}</span>
+                  </div>
+                  <p 
+                    className="text-lg font-medium leading-relaxed"
+                    style={{
+                      color: 'white',
+                      textShadow: `
+                        -1px -1px 0 #000,
+                        1px -1px 0 #000,
+                        -1px 1px 0 #000,
+                        1px 1px 0 #000,
+                        2px 2px 4px rgba(0,0,0,0.8)
+                      `,
+                      WebkitTextStroke: '1px black'
+                    }}
+                  >
+                    {subtitle.text}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 로딩 상태 */}
+        {isLoading && (
+          <div className="bg-gray-800 rounded-lg p-6 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p className="text-gray-300">자막을 생성하고 있습니다...</p>
+          </div>
+        )}
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default SubtitleEditPage 
+export default SubtitleEditPage; 
