@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, Component } from "react";
+import React, { useMemo, useState, useEffect, Component, useRef } from "react";
 import type { ErrorInfo } from "react";
 import { Navigation } from "../../../components/gamecast/common/Navigation";
 import { Footer } from "../../../components/gamecast/common/Footer";
@@ -14,6 +14,7 @@ import { PlayerGrid } from "../../../components/gamecast/room/PlayerGrid.tsx";
 import { useRealTimeRoom } from "../../../hooks/useRealTimeRoom.ts";
 import { VoiceStatusOverlay } from "../../../components/gamecast/room/VoiceStatusOverlay.tsx";
 import type { PlayerWithStream } from "../../../components/gamecast/room/VoiceStatusOverlay.tsx";
+import type { Player } from "../../../types/room";
 import { CharacterSetupPage } from "../character-setup/CharacterSetupPage";
 
 interface ErrorBoundaryState {
@@ -123,31 +124,36 @@ export const RoomPage = () => {
   // 준비하기 버튼 활성화 조건: 캐릭터 설정과 녹화화면 설정이 모두 완료된 경우
   const isReadyEnabled = !!(currentPlayer?.preparationStatus?.characterSetup && currentPlayer?.preparationStatus?.screenSetup);
 
-  // 디버깅을 위한 콘솔 로그
-  console.log('RoomPage 렌더링:', {
-    loading,
-    error,
-    joinError,
-    currentRoom: !!currentRoom,
-    currentPlayer: !!currentPlayer,
-    showCharacterSetup,
-    roomCode: currentRoom?.roomCode,
-    playerNickname: currentPlayer?.nickname,
-    participantsCount: currentRoom?.participants?.length || 0,
-    realtimeParticipantsCount: realtimeParticipants.length,
-    playersWithStreamsCount: playersWithStreams.length,
-    currentPlayerId: currentPlayer?.id,
-    realtimeConnected: realTimeRoom?.isConnected || false,
-    realtimeError: realTimeRoom?.connectionError || null
-  });
+  // 디버깅을 위한 콘솔 로그 - 렌더링 횟수 제한
+  const renderCountRef = useRef(0);
+  renderCountRef.current += 1;
   
-  console.log('👥 플레이어 목록 상세:', {
-    initialParticipants: currentRoom?.participants,
-    realtimeParticipants: realtimeParticipants,
-    currentPlayer: currentPlayer,
-    playersWithStreams: playersWithStreams
-  });
-
+  if (renderCountRef.current <= 5) { // 처음 5번만 로그 출력
+    console.log('RoomPage 렌더링:', {
+      loading,
+      error,
+      joinError,
+      currentRoom: !!currentRoom,
+      currentPlayer: !!currentPlayer,
+      showCharacterSetup,
+      roomCode: currentRoom?.roomCode,
+      playerNickname: currentPlayer?.nickname,
+      participantsCount: currentRoom?.participants?.length || 0,
+      realtimeParticipantsCount: realtimeParticipants.length,
+      playersWithStreamsCount: playersWithStreams.length,
+      currentPlayerId: currentPlayer?.id,
+      realtimeConnected: realTimeRoom?.isConnected || false,
+      realtimeError: realTimeRoom?.connectionError || null
+    });
+    
+    console.log('👥 플레이어 목록 상세:', {
+      initialParticipants: currentRoom?.participants,
+      realtimeParticipants: realtimeParticipants,
+      currentPlayer: currentPlayer,
+      playersWithStreams: playersWithStreams
+    });
+  }
+  
   // 로딩 중 처리
   if (loading) {
     return (

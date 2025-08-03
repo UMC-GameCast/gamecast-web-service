@@ -180,14 +180,14 @@ export const createRoom = async (request: CreateRoomRequest): Promise<{ success:
         participants: []
       };
       
-      // 세션 정보 업데이트
+      // 세션 정보 업데이트 - 서버에서 받은 guestUserId 사용
       updateUserSession({
-        guestUserId: roomData.hostGuestId,
+        guestUserId: roomData.hostGuestId, // 서버에서 받은 guestUserId
         currentRoom: roomInfo
       });
       
       console.log('💾 세션 업데이트 완료:', {
-        guestUserId: roomData.hostGuestId,
+        guestUserId: roomData.hostGuestId, // 서버에서 받은 guestUserId
         roomCode: roomData.roomCode
       });
 
@@ -230,9 +230,9 @@ export const joinRoom = async (request: JoinRoomRequest): Promise<{ success: boo
       // 방 정보 조회
       const roomResponse = await getRoomInfo(request.roomCode);
       if (roomResponse.success && roomResponse.room) {
-        // 세션 정보 업데이트
+        // 세션 정보 업데이트 - 서버에서 받은 guestUserId 사용
         updateUserSession({
-          guestUserId: joinData.guestUserId,
+          guestUserId: joinData.guestUserId, // 서버에서 받은 guestUserId
           currentRoom: roomResponse.room
         });
 

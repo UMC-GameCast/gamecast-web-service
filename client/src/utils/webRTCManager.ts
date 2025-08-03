@@ -23,7 +23,20 @@ export class WebRTCManager {
     this.nickname = nickname;
     this.guestUserId = getCurrentUserId();
     
-    this.socket = io(SOCKET_SERVER_URL);
+    console.log('🔗 WebRTCManager 초기화:', {
+      roomCode,
+      nickname,
+      guestUserId: this.guestUserId
+    });
+    
+    this.socket = io(SOCKET_SERVER_URL, {
+      timeout: 10000,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 2000,
+      transports: ['websocket', 'polling'],
+      forceNew: false
+    });
     
     this.initializeSocketListeners();
   }
@@ -32,6 +45,7 @@ export class WebRTCManager {
     this.socket.on("connect", () => {
       console.log("✅ Socket.IO connected:", this.socket.id);
       console.log("Server URL:", SOCKET_SERVER_URL);
+      // 연결 후 즉시 방 입장
       this.joinRoom();
     });
 
@@ -50,6 +64,8 @@ export class WebRTCManager {
     // 재연결 시도
     this.socket.on("reconnect", (attemptNumber) => {
       console.log("🔄 Socket.IO reconnected after", attemptNumber, "attempts");
+      // 재연결 후에도 즉시 방 입장
+      this.joinRoom();
     });
 
     this.socket.on("reconnect_error", (error) => {
@@ -139,6 +155,9 @@ export class WebRTCManager {
   }
 
   private joinRoom() {
+    // guestUserId 재확인
+    this.guestUserId = getCurrentUserId();
+    
     if (!this.guestUserId) {
       console.error("No guest user ID available for WebRTC, will retry...");
       // 잠시 후 재시도
@@ -148,6 +167,13 @@ export class WebRTCManager {
           this.joinRoom();
         }
       }, 1000);
+      return;
+    }
+
+    // 방장 여부 확인 (현재는 nickname으로 추정, 실제로는 Player 정보가 필요)
+    const isHost = this.nickname === '방장' || this.nickname === 'host';
+    if (isHost) {
+      console.log('👑 WebRTCManager: 방장이므로 join-room 시도하지 않음 (이미 서버에서 방에 추가됨)');
       return;
     }
 
@@ -223,7 +249,9 @@ export class WebRTCManager {
 
   public close() {
     console.log("Closing all connections and leaving room.");
-    this.socket.emit("leave-room");
+    this.socket.emit("leave-room", {
+      roomCode: this.roomCode
+    });
     this.localStream?.getTracks().forEach(track => track.stop());
     this.peerConnections.forEach(pc => pc.close());
     this.peerConnections.clear();
@@ -253,6 +281,8 @@ export class WebRTCManager {
 
   public updatePreparationStatus(characterSetup: boolean, screenSetup: boolean) {
     this.socket.emit("update-preparation-status", {
+      roomCode: this.roomCode,
+      guestUserId: this.guestUserId,
       characterSetup,
       screenSetup
     });
