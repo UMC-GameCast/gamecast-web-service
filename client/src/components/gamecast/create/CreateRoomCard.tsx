@@ -70,10 +70,10 @@ export const CreateRoomCard = ({ onCreateSuccess }: Props) => {
     setError("");
     
     try {
-      const result = createRoom({
+      const result = await createRoom({
         roomName: roomName.trim(),
-        maxPlayers: playerCount
-        // hostName 제거 - 자동으로 "Nickname1"로 설정됨
+        hostNickname: "방장", // 기본 방장 닉네임
+        maxCapacity: playerCount
       });
       
       if (result.success) {
@@ -86,9 +86,9 @@ export const CreateRoomCard = ({ onCreateSuccess }: Props) => {
         // API 에러 시에도 진동 효과 트리거
         triggerExternalError();
       }
-    } catch {
+    } catch (error) {
       const errorMessage = "방 생성 중 오류가 발생했습니다.";
-      console.log("🔴 CreateRoom exception:", errorMessage);
+      console.log("🔴 CreateRoom exception:", error);
       setError(errorMessage);
       // Exception 시에도 진동 효과 트리거
       triggerExternalError();

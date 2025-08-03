@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import type { Player } from "../../../types/room";
 import HostSmallIcon from "../../../assets/gamecast/Room/Host_small.svg?react";
 import CardTop from "../../../assets/gamecast/Room/Card_top.svg?react";
@@ -9,6 +9,7 @@ import CardTopReady from "../../../assets/gamecast/Room/Card_top_ready.svg?react
 import NonSelectTop from "../../../assets/gamecast/Room/nonselect_top.svg?react";
 import NonSelectBottom from "../../../assets/gamecast/Room/nonselect_bottom.svg?react";
 import CharacterSample from "../../../assets/gamecast/Room/캐릭터 샘플.png";
+import { useCharacterAnimation } from "../../../hooks/useCharacterAnimation";
 
 interface PlayerCardProps {
   player: Player;
@@ -21,25 +22,19 @@ interface PlayerCardProps {
  * @param isHost - 방장 여부
  */
 export const PlayerCard = ({ player, isHost }: PlayerCardProps) => {
-  // 준비상태 확인 (캐릭터와 녹화화면이 모두 설정되어 있으면 준비완료)
-  const isReady = !!(player.character && player.recording);
+  // 준비상태 확인 (새로운 데이터 구조 사용)
+  const isReady = !!(player.preparationStatus?.characterSetup && player.preparationStatus?.screenSetup);
   
-  // 회전 각도 상태
-  const [rotation, setRotation] = useState(0);
+  // 캐릭터 설정 여부
+  const hasCharacter = !!player.preparationStatus?.characterSetup;
   
-  // 캐릭터 설정 여부 (임시로 player.character가 있으면 캐릭터가 설정된 것으로 간주)
-  const hasCharacter = !!player.character;
-  
-  // 준비하지 않은 상태일 때 회전 애니메이션
-  useEffect(() => {
-    if (!isReady) {
-      const interval = setInterval(() => {
-        setRotation(prev => prev - 3); // 3도씩 반시계방향 회전 (음수값 사용)
-      }, 16); // 약 60fps
-      
-      return () => clearInterval(interval);
-    }
-  }, [isReady]);
+  // 캐릭터 애니메이션 훅 사용
+  const {
+    topPartStyle,
+    bottomPartStyle,
+    characterImageStyle,
+    loadingIconStyle
+  } = useCharacterAnimation(hasCharacter, isReady);
 
   return (
     <div className="w-[230px] h-[288px] flex flex-col items-center justify-between">
@@ -55,7 +50,7 @@ export const PlayerCard = ({ player, isHost }: PlayerCardProps) => {
             top: '13px', 
             width: '24px', 
             height: '24px',
-            transform: !isReady ? `rotate(${rotation}deg)` : 'none'
+            ...loadingIconStyle
           }}
         >
           {isReady ? (
@@ -85,7 +80,7 @@ export const PlayerCard = ({ player, isHost }: PlayerCardProps) => {
               wordWrap: 'break-word'
             }}
           >
-            {player.name}
+            {player.nickname}
           </span>
         </div>
       </div>
@@ -94,10 +89,10 @@ export const PlayerCard = ({ player, isHost }: PlayerCardProps) => {
       <div className="w-[230px] h-[175px] relative border-[1.37px] border-[#96bbff] rounded-[5.04px] overflow-hidden">
         {/* 상단 부분 - 위로 사라짐 */}
         <div 
-          className="absolute top-0 left-0 w-full flex justify-center transition-transform duration-500 ease-in-out"
+          className="absolute top-0 left-0 w-full flex justify-center"
           style={{ 
             height: '109px',
-            transform: hasCharacter ? 'translateY(-100%)' : 'translateY(0)'
+            ...topPartStyle
           }}
         >
           <NonSelectTop 
@@ -107,11 +102,11 @@ export const PlayerCard = ({ player, isHost }: PlayerCardProps) => {
         
         {/* 하단 부분 - 아래로 사라짐 */}
         <div 
-          className="absolute left-0 w-full flex justify-center transition-transform duration-500 ease-in-out"
+          className="absolute left-0 w-full flex justify-center"
           style={{ 
             top: '107.63px',
             height: '67.37px',
-            transform: hasCharacter ? 'translateY(100%)' : 'translateY(0)'
+            ...bottomPartStyle
           }}
         >
           <NonSelectBottom 
@@ -121,7 +116,7 @@ export const PlayerCard = ({ player, isHost }: PlayerCardProps) => {
         
         {/* 캐릭터 이미지 - 항상 렌더링하되 opacity로 제어 */}
         <div 
-          className="absolute flex justify-center items-start transition-opacity duration-700 ease-in-out"
+          className="absolute flex justify-center items-start"
           style={{
             width: '139px',
             height: '139px',
@@ -129,8 +124,7 @@ export const PlayerCard = ({ player, isHost }: PlayerCardProps) => {
             left: '50%',
             transform: 'translate(-50%, -50%)',
             overflow: 'hidden',
-            opacity: hasCharacter ? 1 : 0,
-            transitionDelay: hasCharacter ? '300ms' : '0ms' // 열린 후에 나타나도록 지연
+            ...characterImageStyle
           }}
         >
           <img 

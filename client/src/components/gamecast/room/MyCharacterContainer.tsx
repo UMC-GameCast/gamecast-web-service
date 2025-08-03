@@ -1,7 +1,7 @@
 import React from "react";
 import type { Player } from "../../../types/room";
 import HostBig from "../../../assets/gamecast/Room/Host_big.svg?react";
-import CharacterSample from "../../../assets/gamecast/Room/캐릭터 샘플.png";
+import { CharacterRenderer } from "../../../utils/characterRenderer";
 // import { VoiceIndicator } from "../common/VoiceIndicator"; // <- 제거
 
 /**
@@ -48,10 +48,10 @@ export const MyCharacterContainer: React.FC<MyCharacterContainerProps> = ({ isHo
             </div>
           )}
           
-          {/* 캐릭터가 설정되었을 때 - 캐릭터 이미지 표시 */}
-          {hasCharacter && (
+          {/* 캐릭터가 설정되었을 때 - 저장된 캐릭터 표시 */}
+          {hasCharacter && currentPlayer?.character && (
             <div 
-              className="absolute flex justify-center items-start"
+              className="absolute"
               style={{
                 width: '480px',
                 height: '480px',
@@ -61,15 +61,9 @@ export const MyCharacterContainer: React.FC<MyCharacterContainerProps> = ({ isHo
                 overflow: 'hidden'
               }}
             >
-              <img 
-                src={CharacterSample}
-                alt="내 캐릭터"
-                style={{
-                  width: '480px',
-                  height: '642px',
-                  objectFit: 'cover',
-                  objectPosition: 'top'
-                }}
+              <CharacterRenderer 
+                characterData={currentPlayer.character}
+                className="relative w-full h-full"
               />
             </div>
           )}

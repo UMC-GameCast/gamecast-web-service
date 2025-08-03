@@ -11,6 +11,7 @@ interface ButtonContainerProps {
   onStateUpdate?: () => void;
   currentRoom: RecodeRoom | null;
   currentPlayer: Player | null;
+  onCharacterSetup?: () => void;
 }
 
 /**
@@ -20,7 +21,8 @@ export const ButtonContainer = ({
   isReadyEnabled = false, 
   onStateUpdate,
   currentRoom,
-  currentPlayer 
+  currentPlayer,
+  onCharacterSetup
 }: ButtonContainerProps) => {
   const [isTooltipVisible, setIsTooltipVisible] = useState(false);
   const [isHoveringHostButton, setIsHoveringHostButton] = useState(false);
@@ -40,30 +42,17 @@ export const ButtonContainer = ({
   const currentPlayerReadyStatus = playersReadyStatus.find(p => p.playerId === currentPlayer?.id);
   const isPlayerReady = currentPlayerReadyStatus?.isReady || false;
   
-  // TODO: 각 버튼에 실제 동작하는 onClick 핸들러를 연결해야 합니다.
+  // 캐릭터 설정 페이지로 이동
   const handleCharacterSettings = () => {
-    console.log("캐릭터 설정 클릭");
-    // 캐릭터 설정 완료로 변경
-    const result = updateCurrentPlayer({ character: "default" });
-    if (result.success) {
-      console.log("캐릭터 설정 완료");
-      // 상태 업데이트 함수 호출
-      onStateUpdate?.();
-    } else {
-      console.error("캐릭터 설정 실패:", result.error);
-    }
+    onCharacterSetup?.();
   };
   
   const handleRecordingSettings = () => {
-    console.log("녹화화면 설정 클릭");
     // 녹화화면 설정 완료로 변경
     const result = updateCurrentPlayer({ recording: true });
     if (result.success) {
-      console.log("녹화화면 설정 완료");
       // 상태 업데이트 함수 호출
       onStateUpdate?.();
-    } else {
-      console.error("녹화화면 설정 실패:", result.error);
     }
   };
   

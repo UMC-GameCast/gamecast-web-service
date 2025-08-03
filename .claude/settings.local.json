@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(taskkill:*)",
+      "Bash(kill:*)",
+      "Bash(cmd.exe /c \"taskkill /F /PID 8288\")",
+      "Bash(npm start)",
+      "Bash(cmd.exe /c \"taskkill /F /PID 60384\")",
+      "Bash(npm run dev:*)",
+      "mcp__ide__getDiagnostics",
+      "WebFetch(domain:3.37.34.211)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(npm run type-check:*)",
+      "Bash(npm run lint)"
+    ],
+    "deny": []
+  }
+}

@@ -58,12 +58,16 @@ export const useRecording = (currentRoom: RecodeRoom | null, currentPlayer: Play
     return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   }, []);
 
-  // Socket.IO 연결 및 이벤트 처리
+  // Socket.IO 연결 및 이벤트 처리 - 완전 비활성화
   useEffect(() => {
     if (!currentRoom?.id || !currentPlayer?.id) return;
 
-    // Socket.IO 클라이언트 연결
-    const socket = io('http://localhost:3000');
+    // 녹화 기능 임시 비활성화 - REST API 테스트를 위해
+    console.log('🎬 녹화 기능 비활성화 상태');
+    return;
+
+    // Socket.IO 클라이언트 연결 - 서버 주소 변경
+    const socket = io('http://3.37.34.211:8889');
     socketRef.current = socket;
 
     socket.on('connect', () => {
@@ -186,7 +190,7 @@ export const useRecording = (currentRoom: RecodeRoom | null, currentPlayer: Play
     formData.append('recordingType', recordingType);
 
     try {
-      const response = await fetch('http://localhost:3000/api/upload-video', {
+      const response = await fetch('http://3.37.34.211:8889/api/upload-video', {
         method: 'POST',
         body: formData
       });

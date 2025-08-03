@@ -61,9 +61,9 @@ export const ParticipationCodeCard = ({ onJoinSuccess }: Props) => {
     setError("");
     
     try {
-      const result = joinRoom({
-        entryCode: entryCode.trim().toUpperCase()
-        // playerName 제거 - 자동으로 순서대로 닉네임 설정됨
+      const result = await joinRoom({
+        roomCode: entryCode.trim().toUpperCase(),
+        nickname: "참가자" // 기본 참가자 닉네임
       });
       
       if (result.success) {
@@ -76,9 +76,9 @@ export const ParticipationCodeCard = ({ onJoinSuccess }: Props) => {
         // API 에러 시에도 진동 효과 트리거
         triggerExternalError();
       }
-    } catch {
+    } catch (error) {
       const errorMessage = "방 참여 중 오류가 발생했습니다.";
-      console.log("🔴 JoinRoom exception:", errorMessage);
+      console.log("🔴 JoinRoom exception:", error);
       setError(errorMessage);
       // Exception 시에도 진동 효과 트리거
       triggerExternalError();
