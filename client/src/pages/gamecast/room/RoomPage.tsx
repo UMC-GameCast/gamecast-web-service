@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, Component, useRef } from "react";
+import React, { useMemo, useState, useEffect, Component } from "react";
 import type { ErrorInfo } from "react";
 import { Navigation } from "../../../components/gamecast/common/Navigation";
 import { Footer } from "../../../components/gamecast/common/Footer";
@@ -14,7 +14,6 @@ import { PlayerGrid } from "../../../components/gamecast/room/PlayerGrid.tsx";
 import { useRealTimeRoom } from "../../../hooks/useRealTimeRoom.ts";
 import { VoiceStatusOverlay } from "../../../components/gamecast/room/VoiceStatusOverlay.tsx";
 import type { PlayerWithStream } from "../../../components/gamecast/room/VoiceStatusOverlay.tsx";
-import type { Player } from "../../../types/room";
 import { CharacterSetupPage } from "../character-setup/CharacterSetupPage";
 
 interface ErrorBoundaryState {
@@ -72,24 +71,50 @@ export const RoomPage = () => {
   
   const [showCharacterSetup, setShowCharacterSetup] = useState(false);
   
-  // 실시간 참여자 업데이트 콜백 설정
+  // 실시간 참여자 업데이트 콜백 설정 - refreshRoomState 제거로 무한루프 방지
   useEffect(() => {
+    console.log('🔧 실시간 참여자 업데이트 콜백 설정 시도:', {
+      hasRealTimeRoom: !!realTimeRoom,
+      hasSetOnParticipantsUpdate: !!realTimeRoom?.setOnParticipantsUpdate
+    });
+    
     if (realTimeRoom?.setOnParticipantsUpdate) {
       realTimeRoom.setOnParticipantsUpdate((participants) => {
-        console.log('🔄 실시간 참여자 업데이트 수신:', participants);
+        console.log('🔄 실시간 참여자 업데이트 수신:', {
+          participantCount: participants.length,
+          participants: participants
+        });
+        console.log('🎯 setRealtimeParticipants 호출 전 상태:', realtimeParticipants.length);
         setRealtimeParticipants(participants);
-        // 서버에서 최신 방 정보도 다시 조회
-        refreshRoomState();
+        console.log('✅ setRealtimeParticipants 호출 완료');
+        // refreshRoomState() 제거 - 무한루프 방지
+        // 실시간 데이터가 이미 최신이므로 추가 조회 불필요
       });
+      console.log('✅ 실시간 참여자 업데이트 콜백 설정 완료');
+    } else {
+      console.warn('⚠️ realTimeRoom.setOnParticipantsUpdate가 없음');
     }
-  }, [realTimeRoom?.setOnParticipantsUpdate, refreshRoomState]);
+  }, [realTimeRoom?.setOnParticipantsUpdate]);
   
   // Hook들을 항상 같은 순서로 호출하기 위해 여기서 모든 데이터 준비
   const playersWithStreams = useMemo((): PlayerWithStream[] => {
+    console.log('🎮 playersWithStreams 계산 시작:', {
+      hasCurrentRoom: !!currentRoom,
+      hasCurrentPlayer: !!currentPlayer,
+      realtimeParticipantsCount: realtimeParticipants.length,
+      initialParticipantsCount: currentRoom?.participants?.length || 0
+    });
+    
     if (!currentRoom || !currentPlayer) return [];
 
     // 실시간으로 받은 참여자 정보가 있으면 우선 사용, 없으면 초기 방 정보 사용
     const participantsSource = realtimeParticipants.length > 0 ? realtimeParticipants : (currentRoom.participants || []);
+    
+    console.log('📊 사용할 participantsSource:', {
+      source: realtimeParticipants.length > 0 ? 'realtime' : 'initial',
+      count: participantsSource.length,
+      data: participantsSource
+    });
     
     // 서버에서 받은 participants를 클라이언트 형식으로 변환
     const convertedParticipants = participantsSource.map(p => ({
@@ -109,51 +134,55 @@ export const RoomPage = () => {
     if (currentPlayerInParticipants) {
       // 현재 플레이어가 이미 participants에 있으면 participants만 사용
       allPlayers = convertedParticipants;
+      console.log('✅ 현재 플레이어가 participants에 포함됨');
     } else {
       // 현재 플레이어가 participants에 없으면 추가
       allPlayers = [currentPlayer, ...convertedParticipants];
+      console.log('➕ 현재 플레이어를 participants에 추가');
     }
     
-    return allPlayers.map(player => {
+    const result = allPlayers.map(player => {
       const isLocalPlayer = player.id === currentPlayer.id;
       const stream = isLocalPlayer ? localStream : remoteStreams.get(player.id) || null;
       return { player, stream, isLocalPlayer };
     });
+    
+    console.log('🎯 최종 playersWithStreams:', {
+      count: result.length,
+      players: result.map(p => ({ id: p.player.id, nickname: p.player.nickname, isHost: p.player.isHost }))
+    });
+    
+    return result;
   }, [currentRoom, currentPlayer, localStream, remoteStreams, realtimeParticipants]);
 
   // 준비하기 버튼 활성화 조건: 캐릭터 설정과 녹화화면 설정이 모두 완료된 경우
   const isReadyEnabled = !!(currentPlayer?.preparationStatus?.characterSetup && currentPlayer?.preparationStatus?.screenSetup);
 
-  // 디버깅을 위한 콘솔 로그 - 렌더링 횟수 제한
-  const renderCountRef = useRef(0);
-  renderCountRef.current += 1;
+  // 디버깅을 위한 콘솔 로그
+  console.log('RoomPage 렌더링:', {
+    loading,
+    error,
+    joinError,
+    currentRoom: !!currentRoom,
+    currentPlayer: !!currentPlayer,
+    showCharacterSetup,
+    roomCode: currentRoom?.roomCode,
+    playerNickname: currentPlayer?.nickname,
+    participantsCount: currentRoom?.participants?.length || 0,
+    realtimeParticipantsCount: realtimeParticipants.length,
+    playersWithStreamsCount: playersWithStreams.length,
+    currentPlayerId: currentPlayer?.id,
+    realtimeConnected: realTimeRoom?.isConnected || false,
+    realtimeError: realTimeRoom?.connectionError || null
+  });
   
-  if (renderCountRef.current <= 5) { // 처음 5번만 로그 출력
-    console.log('RoomPage 렌더링:', {
-      loading,
-      error,
-      joinError,
-      currentRoom: !!currentRoom,
-      currentPlayer: !!currentPlayer,
-      showCharacterSetup,
-      roomCode: currentRoom?.roomCode,
-      playerNickname: currentPlayer?.nickname,
-      participantsCount: currentRoom?.participants?.length || 0,
-      realtimeParticipantsCount: realtimeParticipants.length,
-      playersWithStreamsCount: playersWithStreams.length,
-      currentPlayerId: currentPlayer?.id,
-      realtimeConnected: realTimeRoom?.isConnected || false,
-      realtimeError: realTimeRoom?.connectionError || null
-    });
-    
-    console.log('👥 플레이어 목록 상세:', {
-      initialParticipants: currentRoom?.participants,
-      realtimeParticipants: realtimeParticipants,
-      currentPlayer: currentPlayer,
-      playersWithStreams: playersWithStreams
-    });
-  }
-  
+  console.log('👥 플레이어 목록 상세:', {
+    initialParticipants: currentRoom?.participants,
+    realtimeParticipants: realtimeParticipants,
+    currentPlayer: currentPlayer,
+    playersWithStreams: playersWithStreams
+  });
+
   // 로딩 중 처리
   if (loading) {
     return (
@@ -271,6 +300,7 @@ export const RoomPage = () => {
                 <PlayerGrid 
                   currentRoom={currentRoom} 
                   currentPlayer={currentPlayer}
+                  realtimeParticipants={realtimeParticipants}
                 />
                 {/* 버튼 컨테이너 */}
                 <ButtonContainer 

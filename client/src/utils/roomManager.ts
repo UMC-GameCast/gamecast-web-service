@@ -89,9 +89,27 @@ const apiRequest = async <T>(
     console.log(`📡 응답 상태: ${response.status} ${response.statusText}`);
     
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`❌ HTTP 오류: ${response.status}`, errorText);
-      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+      let errorData;
+      try {
+        const errorText = await response.text();
+        errorData = JSON.parse(errorText);
+        console.error(`❌ HTTP 오류: ${response.status}`, errorData);
+      } catch (parseError) {
+        console.error(`❌ HTTP 오류 (JSON 파싱 실패): ${response.status}`, parseError);
+        errorData = { message: `HTTP ${response.status} 오류` };
+      }
+      
+      // 서버에서 보낸 구조화된 에러 응답 처리
+      if (errorData.resultType === 'FAIL' && errorData.error) {
+        return {
+          resultType: 'FAIL',
+          error: errorData.error,
+          success: null
+        };
+      }
+      
+      // 일반적인 HTTP 에러 처리
+      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
     }
 
     const responseData = await response.json();
@@ -100,39 +118,39 @@ const apiRequest = async <T>(
   } catch (error) {
     console.error('🚨 API request failed:', error);
     
-    // 네트워크 오류인 경우 더 구체적인 메시지
+    // 에러 메시지에서 더 구체적인 정보 추출
+    let errorReason = '서버 연결에 실패했습니다.';
+    let errorCode = 'NETWORK_ERROR';
+    
     if (error instanceof TypeError) {
       if (error.message.includes('fetch') || error.message.includes('NetworkError')) {
-        return {
-          resultType: 'FAIL',
-          error: {
-            errorCode: 'NETWORK_ERROR',
-            reason: '서버에 연결할 수 없습니다. 네트워크 연결을 확인해주세요.',
-            data: error
-          },
-          success: null
-        };
+        errorReason = '서버에 연결할 수 없습니다. 네트워크 연결을 확인해주세요.';
+        errorCode = 'NETWORK_ERROR';
       }
-    }
-    
-    // CORS 관련 오류
-    if (error instanceof Error && error.message.includes('CORS')) {
-      return {
-        resultType: 'FAIL',
-        error: {
-          errorCode: 'CORS_ERROR',
-          reason: 'CORS 정책으로 인해 서버에 접근할 수 없습니다.',
-          data: error
-        },
-        success: null
-      };
+    } else if (error instanceof Error) {
+      if (error.message.includes('CORS')) {
+        errorReason = 'CORS 정책으로 인해 서버에 접근할 수 없습니다.';
+        errorCode = 'CORS_ERROR';
+      } else if (error.message.includes('HTTP 409')) {
+        errorReason = '방 인원이 가득 찼습니다.';
+        errorCode = 'CONFLICT';
+      } else if (error.message.includes('HTTP 404')) {
+        errorReason = '존재하지 않는 방입니다.';
+        errorCode = 'NOT_FOUND';
+      } else if (error.message.includes('HTTP 400')) {
+        errorReason = '잘못된 요청입니다.';
+        errorCode = 'BAD_REQUEST';
+      } else if (error.message) {
+        // 에러 메시지에 의미있는 정보가 있으면 사용
+        errorReason = error.message;
+      }
     }
     
     return {
       resultType: 'FAIL',
       error: {
-        errorCode: 'NETWORK_ERROR',
-        reason: '서버 연결에 실패했습니다.',
+        errorCode: errorCode,
+        reason: errorReason,
         data: error
       },
       success: null
@@ -180,14 +198,14 @@ export const createRoom = async (request: CreateRoomRequest): Promise<{ success:
         participants: []
       };
       
-      // 세션 정보 업데이트 - 서버에서 받은 guestUserId 사용
+      // 세션 정보 업데이트
       updateUserSession({
-        guestUserId: roomData.hostGuestId, // 서버에서 받은 guestUserId
+        guestUserId: roomData.hostGuestId,
         currentRoom: roomInfo
       });
       
       console.log('💾 세션 업데이트 완료:', {
-        guestUserId: roomData.hostGuestId, // 서버에서 받은 guestUserId
+        guestUserId: roomData.hostGuestId,
         roomCode: roomData.roomCode
       });
 
@@ -230,9 +248,9 @@ export const joinRoom = async (request: JoinRoomRequest): Promise<{ success: boo
       // 방 정보 조회
       const roomResponse = await getRoomInfo(request.roomCode);
       if (roomResponse.success && roomResponse.room) {
-        // 세션 정보 업데이트 - 서버에서 받은 guestUserId 사용
+        // 세션 정보 업데이트
         updateUserSession({
-          guestUserId: joinData.guestUserId, // 서버에서 받은 guestUserId
+          guestUserId: joinData.guestUserId,
           currentRoom: roomResponse.room
         });
 
@@ -248,6 +266,22 @@ export const joinRoom = async (request: JoinRoomRequest): Promise<{ success: boo
     }
   } catch (error) {
     console.error('방 참여 오류:', error);
+    
+    // 에러 타입에 따른 구체적인 메시지 반환
+    if (error instanceof Error) {
+      if (error.message.includes('NETWORK_ERROR')) {
+        return { success: false, error: '네트워크 연결을 확인해주세요.' };
+      } else if (error.message.includes('CORS')) {
+        return { success: false, error: '서버 접근 권한 오류가 발생했습니다.' };
+      } else if (error.message.includes('HTTP 409')) {
+        return { success: false, error: '방 인원이 가득 찼습니다.' };
+      } else if (error.message.includes('HTTP 404')) {
+        return { success: false, error: '존재하지 않는 방입니다.' };
+      } else {
+        return { success: false, error: error.message || '방 참여 중 오류가 발생했습니다.' };
+      }
+    }
+    
     return { success: false, error: '방 참여 중 오류가 발생했습니다.' };
   }
 };

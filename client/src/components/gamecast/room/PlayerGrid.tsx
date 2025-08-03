@@ -7,14 +7,23 @@ import CardEmpty from "../../../assets/gamecast/Room/Card_empty.svg?react";
 interface PlayerGridProps {
   currentRoom: Room;
   currentPlayer: Player;
+  realtimeParticipants?: Player[];
 }
 
 export const PlayerGrid: React.FC<PlayerGridProps> = ({
   currentRoom,
   currentPlayer,
+  realtimeParticipants = [],
 }) => {
-  // 안전한 배열 처리 및 새로운 데이터 구조 사용
-  const participants = currentRoom?.participants || [];
+  // 실시간 참여자 데이터가 있으면 우선 사용, 없으면 REST API 데이터 사용
+  const participants = realtimeParticipants.length > 0 ? realtimeParticipants : (currentRoom?.participants || []);
+  
+  console.log('🎮 PlayerGrid 렌더링:', {
+    realtimeCount: realtimeParticipants.length,
+    restApiCount: currentRoom?.participants?.length || 0,
+    usingRealtime: realtimeParticipants.length > 0,
+    finalParticipantsCount: participants.length
+  });
   
   // 서버에서 받은 participants를 클라이언트 형식으로 변환
   const convertedParticipants = participants.map(p => ({

@@ -23,20 +23,7 @@ export class WebRTCManager {
     this.nickname = nickname;
     this.guestUserId = getCurrentUserId();
     
-    console.log('🔗 WebRTCManager 초기화:', {
-      roomCode,
-      nickname,
-      guestUserId: this.guestUserId
-    });
-    
-    this.socket = io(SOCKET_SERVER_URL, {
-      timeout: 10000,
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 2000,
-      transports: ['websocket', 'polling'],
-      forceNew: false
-    });
+    this.socket = io(SOCKET_SERVER_URL);
     
     this.initializeSocketListeners();
   }
@@ -45,7 +32,6 @@ export class WebRTCManager {
     this.socket.on("connect", () => {
       console.log("✅ Socket.IO connected:", this.socket.id);
       console.log("Server URL:", SOCKET_SERVER_URL);
-      // 연결 후 즉시 방 입장
       this.joinRoom();
     });
 
@@ -64,15 +50,19 @@ export class WebRTCManager {
     // 재연결 시도
     this.socket.on("reconnect", (attemptNumber) => {
       console.log("🔄 Socket.IO reconnected after", attemptNumber, "attempts");
-      // 재연결 후에도 즉시 방 입장
-      this.joinRoom();
     });
 
     this.socket.on("reconnect_error", (error) => {
       console.error("❌ Socket.IO reconnection failed:", error);
     });
 
-    // 새 서버 이벤트: 방 참여 관련
+    // room_status 이벤트 처리 - 서버 요구사항에 따른 방 상태 업데이트
+    this.socket.on("room_status", (userList: unknown[]) => {
+      console.log("Room status updated:", userList);
+      this.onRoomUsers(userList);
+    });
+
+    // 새 서버 이벤트: 방 참여 관련 (기존 이벤트 유지)
     this.socket.on("joined-room-success", (data: { roomCode: string; roomId: string; users: unknown[] }) => {
       console.log("Successfully joined room:", data.roomCode);
       this.onRoomUsers(data.users);
@@ -155,9 +145,6 @@ export class WebRTCManager {
   }
 
   private joinRoom() {
-    // guestUserId 재확인
-    this.guestUserId = getCurrentUserId();
-    
     if (!this.guestUserId) {
       console.error("No guest user ID available for WebRTC, will retry...");
       // 잠시 후 재시도
@@ -170,24 +157,32 @@ export class WebRTCManager {
       return;
     }
 
-    // 방장 여부 확인 (현재는 nickname으로 추정, 실제로는 Player 정보가 필요)
-    const isHost = this.nickname === '방장' || this.nickname === 'host';
-    if (isHost) {
-      console.log('👑 WebRTCManager: 방장이므로 join-room 시도하지 않음 (이미 서버에서 방에 추가됨)');
+    // guestUserId, nickname, roomCode 값 정확성 확인
+    if (!this.roomCode || !this.nickname) {
+      console.error("Missing required values for room join:", {
+        roomCode: !!this.roomCode,
+        guestUserId: !!this.guestUserId,
+        nickname: !!this.nickname
+      });
       return;
     }
 
-    console.log("Attempting to join room via Socket.IO:", {
+    // 닉네임 고유화 - 전역 중복 방지
+    const uniqueNickname = `${this.nickname}_${this.roomCode}_${this.guestUserId.slice(-8)}`;
+    
+    console.log("Attempting to join room via Socket.IO (정확성 확인됨):", {
       roomCode: this.roomCode,
       guestUserId: this.guestUserId,
-      nickname: this.nickname
+      originalNickname: this.nickname,
+      uniqueNickname: uniqueNickname
     });
 
     // API 문서에 맞는 Socket.IO 이벤트 구조 사용
     this.socket.emit("join-room", {
       roomCode: this.roomCode,
       guestUserId: this.guestUserId,
-      nickname: this.nickname
+      nickname: uniqueNickname,  // 고유 닉네임 사용
+      isReconnect: true  // 이미 REST API로 입장한 상태임을 표시
     });
   }
 
@@ -249,13 +244,24 @@ export class WebRTCManager {
 
   public close() {
     console.log("Closing all connections and leaving room.");
-    this.socket.emit("leave-room", {
-      roomCode: this.roomCode
-    });
+    
+    // 방 나가기 이벤트 emit (roomCode 포함)
+    if (this.socket.connected && this.roomCode) {
+      this.socket.emit("leave-room", {
+        roomCode: this.roomCode
+      });
+    }
+    
+    // 로컬 스트림 정리
     this.localStream?.getTracks().forEach(track => track.stop());
+    
+    // P2P 연결 정리
     this.peerConnections.forEach(pc => pc.close());
     this.peerConnections.clear();
+    
+    // Socket.IO 연결 해제
     this.socket.disconnect();
+    console.log("✅ WebRTC Manager cleanup 완료");
   }
 
   // 추가 메서드들
@@ -281,8 +287,6 @@ export class WebRTCManager {
 
   public updatePreparationStatus(characterSetup: boolean, screenSetup: boolean) {
     this.socket.emit("update-preparation-status", {
-      roomCode: this.roomCode,
-      guestUserId: this.guestUserId,
       characterSetup,
       screenSetup
     });

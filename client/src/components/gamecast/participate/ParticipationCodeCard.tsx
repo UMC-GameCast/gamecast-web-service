@@ -77,8 +77,25 @@ export const ParticipationCodeCard = ({ onJoinSuccess }: Props) => {
         triggerExternalError();
       }
     } catch (error) {
-      const errorMessage = "방 참여 중 오류가 발생했습니다.";
-      console.log("🔴 JoinRoom exception:", error);
+      let errorMessage = "방 참여 중 오류가 발생했습니다.";
+      
+      // 에러 객체에서 더 구체적인 메시지 추출
+      if (error instanceof Error) {
+        if (error.message.includes('CONFLICT')) {
+          errorMessage = "방 인원이 가득 찼습니다.";
+        } else if (error.message.includes('NOT_FOUND')) {
+          errorMessage = "존재하지 않는 방입니다.";
+        } else if (error.message.includes('NETWORK_ERROR')) {
+          errorMessage = "네트워크 연결을 확인해주세요.";
+        } else if (error.message.includes('CORS')) {
+          errorMessage = "서버 접근 권한 오류가 발생했습니다.";
+        } else {
+          // 기타 에러 메시지 그대로 사용
+          errorMessage = error.message || errorMessage;
+        }
+      }
+      
+      console.log("🔴 JoinRoom exception:", error, "→ 사용자 메시지:", errorMessage);
       setError(errorMessage);
       // Exception 시에도 진동 효과 트리거
       triggerExternalError();

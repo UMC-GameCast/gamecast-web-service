@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   getCurrentRoom,
@@ -14,7 +14,6 @@ export const useRoom = () => {
   const [currentPlayer, setCurrentPlayer] = useState<Player | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const isInitializedRef = useRef(false);
 
   const refreshRoomState = async () => {
     console.log('🔄 방 상태 서버에서 새로고침');
@@ -27,36 +26,20 @@ export const useRoom = () => {
         if (result.success && result.room) {
           console.log('✅ 방 상태 새로고침 성공:', result.room);
           setCurrentRoom(result.room);
-          // 현재 플레이어 찾기 (guestUserId로 비교)
-          const serverPlayer = result.room.participants?.find(p => p.guestUserId === userId || p.id === userId);
+          // 현재 플레이어 찾기 (id로 비교)
+          const serverPlayer = result.room.participants?.find(p => p.id === userId);
           if (serverPlayer) {
             // 서버 응답을 클라이언트 형식에 맞게 변환
             const playerInfo: Player = {
               ...serverPlayer,
-              guestUserId: serverPlayer.guestUserId || serverPlayer.id,
+              guestUserId: serverPlayer.id,
               preparationStatus: serverPlayer.preparationStatus || {
                 characterSetup: false,
                 screenSetup: false
               },
-              isHost: serverPlayer.role === 'host' || serverPlayer.nickname === '방장'
+              isHost: serverPlayer.role === 'host'
             };
             setCurrentPlayer(playerInfo);
-          } else {
-            console.log('⚠️ 서버에서 플레이어 정보 못찾음, 로컬 정보 생성');
-            // 서버에서 플레이어를 찾지 못한 경우 로컬 정보 사용
-            const fallbackPlayer: Player = {
-              id: userId,
-              guestUserId: userId,
-              nickname: "사용자",
-              role: room.hostGuestId === userId ? 'host' : 'guest',
-              joinedAt: new Date().toISOString(),
-              preparationStatus: {
-                characterSetup: false,
-                screenSetup: false
-              },
-              isHost: room.hostGuestId === userId
-            };
-            setCurrentPlayer(fallbackPlayer);
           }
         } else {
           console.error('❌ 방 상태 새로고침 실패:', result.error);
@@ -70,16 +53,8 @@ export const useRoom = () => {
   };
 
   useEffect(() => {
-    // 이미 초기화되었다면 중복 실행 방지
-    if (isInitializedRef.current) {
-      console.log('🚫 useRoom 이미 초기화됨 - 중복 실행 방지');
-      return;
-    }
-
     const initializeRoom = async () => {
       console.log('🏠 useRoom 초기화 시작');
-      isInitializedRef.current = true;
-      
       const room = getCurrentRoom();
       const userId = getCurrentUserId();
       
@@ -102,28 +77,20 @@ export const useRoom = () => {
           console.log('✅ 서버에서 방 정보 조회 성공:', result.room);
           setCurrentRoom(result.room);
           
-          // 서버 응답에서 플레이어 정보 찾기 (guestUserId 또는 id로 비교)
-          const serverPlayer = result.room.participants?.find(p => p.guestUserId === userId || p.id === userId);
+          // 서버 응답에서 플레이어 정보 찾기 (guestUserId 대신 id로 비교)
+          const serverPlayer = result.room.participants?.find(p => p.id === userId);
           if (serverPlayer) {
             console.log('👤 서버에서 플레이어 정보 찾음:', serverPlayer);
-            console.log('🔍 서버 플레이어 상세 정보:', {
-              id: serverPlayer.id,
-              guestUserId: serverPlayer.guestUserId,
-              nickname: serverPlayer.nickname,
-              role: serverPlayer.role,
-              isHost: serverPlayer.role === 'host' || serverPlayer.nickname === '방장'
-            });
             // 서버 응답을 클라이언트 형식에 맞게 변환
             const playerInfo: Player = {
               ...serverPlayer,
-              guestUserId: serverPlayer.guestUserId || serverPlayer.id,
-              preparationStatus: serverPlayer.preparationStatus || {
+              guestUserId: serverPlayer.id,
+              preparationStatus: {
                 characterSetup: false,
                 screenSetup: false
               },
-              isHost: serverPlayer.role === 'host' || serverPlayer.nickname === '방장'
+              isHost: serverPlayer.role === 'host'
             };
-            console.log('✅ 변환된 플레이어 정보:', playerInfo);
             setCurrentPlayer(playerInfo);
           } else {
             console.log('⚠️ 서버에서 플레이어 정보 못찾음, 로컬 정보 생성');
@@ -182,7 +149,7 @@ export const useRoom = () => {
     };
 
     initializeRoom();
-  }, []); // 빈 의존성 배열로 한 번만 실행
+  }, [navigate]);
 
   const handleLeaveRoom = async (realtimeLeaveCallback?: () => void) => {
     try {
