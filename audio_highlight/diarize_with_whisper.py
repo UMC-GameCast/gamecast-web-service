@@ -1,6 +1,8 @@
 import os
 import sys
 import whisper
+import librosa
+import numpy as np
 from pyannote.audio import Pipeline
 from datetime import timedelta
 
@@ -19,6 +21,102 @@ python diarize_with_whisper.py your_audio_file.wav
 
 def format_time(seconds):
     return str(timedelta(seconds=round(seconds)))
+
+def detect_voice_activity_local(audio_path, frame_length=2048, hop_length=512, top_db=25):
+    """
+    로컬에서 오디오 음성 활동 감지 (VAD)
+    """
+    try:
+        # 오디오 로드
+        y, sr = librosa.load(audio_path)
+        
+        # RMS 에너지 계산
+        rms = librosa.feature.rms(y=y, frame_length=frame_length, hop_length=hop_length)[0]
+        
+        # 시간 축 생성
+        times = librosa.frames_to_time(np.arange(len(rms)), sr=sr, hop_length=hop_length)
+        
+        # 음성 활동 임계값 계산 (상위 top_db 이상)
+        db_threshold = np.max(librosa.amplitude_to_db(rms)) - top_db
+        voice_frames = librosa.amplitude_to_db(rms) > db_threshold
+        
+        # 연속된 음성 구간 찾기 (최소 0.3초 이상만 유효한 구간으로 간주)
+        voice_segments = []
+        start_idx = None
+        min_duration = 0.3
+        
+        for i, is_voice in enumerate(voice_frames):
+            if is_voice and start_idx is None:
+                start_idx = i
+            elif not is_voice and start_idx is not None:
+                duration = times[i-1] - times[start_idx]
+                if duration >= min_duration:
+                    voice_segments.append((times[start_idx], times[i-1]))
+                start_idx = None
+        
+        # 마지막 구간 처리
+        if start_idx is not None:
+            duration = times[-1] - times[start_idx]
+            if duration >= min_duration:
+                voice_segments.append((times[start_idx], times[-1]))
+        
+        return voice_segments
+    
+    except Exception as e:
+        print(f"VAD 분석 중 오류: {e}")
+        return []
+
+def adjust_whisper_timing(whisper_segments, voice_segments):
+    """
+    Whisper 결과와 VAD 결과를 결합하여 타이밍 조정
+    """
+    adjusted_segments = []
+    
+    for seg in whisper_segments:
+        whisper_start = seg["start"]
+        whisper_end = seg["end"]
+        whisper_text = seg["text"].strip()
+        
+        # VAD 결과에서 가장 가까운 음성 구간 찾기
+        best_match = None
+        best_overlap = 0
+        
+        for voice_start, voice_end in voice_segments:
+            # 겹치는 구간 계산
+            overlap_start = max(whisper_start, voice_start)
+            overlap_end = min(whisper_end, voice_end)
+            overlap = max(0, overlap_end - overlap_start)
+            
+            if overlap > best_overlap:
+                best_overlap = overlap
+                best_match = (voice_start, voice_end)
+        
+        # VAD 결과로 타이밍 조정
+        if best_match and best_overlap > 0.2:  # 최소 0.2초 겹침
+            # 시작점은 더 정확한 것을 선택
+            adjusted_start = max(whisper_start, best_match[0])
+            # 끝점은 VAD의 실제 음성 끝점 사용 (주요 개선점)
+            adjusted_end = min(whisper_end, best_match[1])
+            
+            adjusted_segments.append({
+                "start": adjusted_start,
+                "end": adjusted_end,
+                "text": whisper_text,
+                "original_end": whisper_end,
+                "adjusted": True
+            })
+            
+            print(f"  🔧 타이밍 조정: '{whisper_text[:30]}...' {whisper_end:.2f}s → {adjusted_end:.2f}s")
+        else:
+            # VAD 매칭이 안되면 원본 사용
+            adjusted_segments.append({
+                "start": whisper_start,
+                "end": whisper_end,
+                "text": whisper_text,
+                "adjusted": False
+            })
+    
+    return adjusted_segments
 
 def main(audio_path):
     # 1. Whisper로 segment별 자막 추출

@@ -1,78 +1,252 @@
 import React from 'react'
+import { useSubtitleEditor } from './hooks/useSubtitleEditor'
+import SubtitleHeader from './components/SubtitleHeader'
+import VideoSection from './components/VideoSection'
+import EditorSection from './components/EditorSection'
+import SubtitleStylePanel from './components/SubtitleStylePanel'
+import RenderModal from './components/RenderModal'
 
 const SubtitleEditPage: React.FC = () => {
+  const {
+    // 상태
+    subtitleSegments,
+    currentTime,
+    duration,
+    isPlaying,
+    selectedSegment,
+    zoom,
+    showHelp,
+    showAudioUploader,
+    showMultiSpeakerUploader,
+    showVideoUploader,
+    videoUrl,
+    videos,
+    activeVideoIndex,
+    isRendering,
+    renderProgress,
+    speakers,
+    emotions,
+    timelineRef,
+    selectedStyle,
+    selectedEmphasis,
+    selectedEmotion,
+    
+    // 액션
+    setCurrentTime,
+    setDuration,
+    setIsPlaying,
+    setSelectedSegment,
+    setZoom,
+    setShowHelp,
+    setShowAudioUploader,
+    setShowMultiSpeakerUploader,
+    setShowVideoUploader,
+    setIsRendering,
+    setRenderProgress,
+    
+    // 이벤트 핸들러
+    handleVideoUploaded,
+    handleVideoUploadStart,
+    handleVideoDelete,
+    handleStyleChange,
+    handleEmphasisChange,
+    handleEmotionChange,
+    handleSubtitlesGenerated,
+    handleTimelineClick,
+    handleDragStart,
+    handleResizeStart,
+    addSubtitleSegment,
+    deleteSubtitleSegment,
+    updateSubtitleSegment,
+    handleTextChange,
+    togglePlayback,
+    exportSubtitles,
+    importSubtitles,
+    handleFFmpegRender,
+    handleClientSideRender
+  } = useSubtitleEditor()
+
   return (
-    <div className="min-h-screen bg-gray-100 p-8">
-      <div className="max-w-6xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-800 mb-6">
-          자막 편집 페이지
-        </h1>
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <p className="text-gray-600 mb-4">
-            생성된 자막을 편집하고 수정하세요.
-          </p>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div>
-              <h3 className="font-medium text-gray-800 mb-3">자막 목록</h3>
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {[
-                  { time: '00:00:05', text: '안녕하세요, 게임캐스트입니다.' },
-                  { time: '00:00:08', text: '오늘은 특별한 게스트와 함께합니다.' },
-                  { time: '00:00:12', text: '게임을 시작해보겠습니다.' },
-                  { time: '00:00:15', text: '첫 번째 라운드를 시작합니다.' },
-                  { time: '00:00:20', text: '훌륭한 플레이입니다!' }
-                ].map((subtitle, index) => (
-                  <div key={index} className="border border-gray-200 rounded p-3 hover:bg-gray-50 cursor-pointer">
-                    <div className="text-sm text-gray-500 mb-1">{subtitle.time}</div>
-                    <div className="text-gray-800">{subtitle.text}</div>
+    <div className="min-h-screen bg-gray-900 text-white">
+      {/* 헤더 */}
+      <SubtitleHeader
+        showHelp={showHelp}
+        showVideoUploader={showVideoUploader}
+        showAudioUploader={showAudioUploader}
+        showMultiSpeakerUploader={showMultiSpeakerUploader}
+        isRendering={isRendering}
+        videoUrl={videoUrl}
+        onToggleHelp={() => setShowHelp(!showHelp)}
+        onToggleVideoUploader={() => setShowVideoUploader(!showVideoUploader)}
+        onToggleAudioUploader={() => setShowAudioUploader(!showAudioUploader)}
+        onToggleMultiSpeakerUploader={() => setShowMultiSpeakerUploader(!showMultiSpeakerUploader)}
+        onImportSubtitles={importSubtitles}
+        onExportSubtitles={exportSubtitles}
+        onAddSubtitleSegment={addSubtitleSegment}
+        onTogglePlayback={togglePlayback}
+        onFFmpegRender={handleFFmpegRender}
+        onCanvasRender={handleClientSideRender}
+      />
+
+      <div className="max-w-[1600px] mx-auto p-4">
+        {/* 비디오 섹션 - 왼쪽 작은 동영상들, 중앙 메인 동영상, 오른쪽 스타일 패널 */}
+        <div className="mb-20 flex gap-4">
+          {/* 왼쪽 - 4개의 작은 동영상들 */}
+          <div className="flex flex-col gap-3 w-64">
+            {videos.slice(1).map((video, arrayIndex) => {
+              const videoIndex = arrayIndex + 1; // 실제 인덱스 (1,2,3,4)
+              return (
+                <div key={videoIndex} className="bg-gray-800 rounded-lg p-3 relative">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-sm text-gray-300">{video.name}</div>
+                    {video.url && (
+                      <button 
+                        className="text-red-400 hover:text-red-300 text-xs p-1"
+                        onClick={() => handleVideoDelete(videoIndex)}
+                        title="동영상 삭제"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
-                ))}
-              </div>
-            </div>
-            
-            <div>
-              <h3 className="font-medium text-gray-800 mb-3">자막 편집</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    시간
-                  </label>
-                  <input 
-                    type="text" 
-                    className="w-full border border-gray-300 rounded px-3 py-2"
-                    defaultValue="00:00:05"
-                  />
+                  <div className="aspect-video bg-gray-700 rounded relative overflow-hidden">
+                    {video.url ? (
+                      <div className="relative group">
+                        <video 
+                          className="w-full h-full object-cover rounded"
+                          src={video.url}
+                          controls
+                          preload="metadata"
+                        />
+                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button 
+                            className="bg-black bg-opacity-50 text-white p-1 rounded text-xs hover:bg-opacity-75"
+                            onClick={() => handleVideoUploadStart(videoIndex)}
+                            title="동영상 교체"
+                          >
+                            교체
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-gray-400 text-xs">
+                        <div className="text-center">
+                          <div className="mb-2">📹</div>
+                          <div className="mb-2">동영상을 업로드하세요</div>
+                          <button 
+                            className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition-colors"
+                            onClick={() => handleVideoUploadStart(videoIndex)}
+                          >
+                            업로드
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    자막 내용
-                  </label>
-                  <textarea 
-                    className="w-full border border-gray-300 rounded px-3 py-2 h-24"
-                    defaultValue="안녕하세요, 게임캐스트입니다."
-                  />
-                </div>
-                <div className="flex space-x-2">
-                  <button className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-                    저장
-                  </button>
-                  <button className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">
-                    삭제
-                  </button>
-                </div>
-              </div>
-            </div>
+              );
+            })}
           </div>
-          
-          <div className="mt-6 flex justify-between">
-            <button className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">
-              이전 단계
-            </button>
-            <button className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
-              다음 단계
-            </button>
+
+          {/* 중앙 - 메인 동영상 */}
+          <div className="flex-1">
+            <div className="mb-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-gray-200">{videos[0].name}</h2>
+                <div className="flex gap-2">
+                  {videoUrl ? (
+                    <>
+                      <button 
+                        className="px-3 py-1 bg-gray-600 text-white rounded text-sm hover:bg-gray-700"
+                        onClick={() => handleVideoUploadStart(0)}
+                      >
+                        동영상 교체
+                      </button>
+                      <button 
+                        className="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700"
+                        onClick={() => handleVideoDelete(0)}
+                      >
+                        삭제
+                      </button>
+                    </>
+                  ) : (
+                    <button 
+                      className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+                      onClick={() => handleVideoUploadStart(0)}
+                    >
+                      메인 동영상 업로드
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+            <VideoSection
+              videoUrl={videoUrl}
+              subtitleSegments={subtitleSegments}
+              speakers={speakers}
+              emotions={emotions}
+              currentTime={currentTime}
+              duration={duration}
+              isPlaying={isPlaying}
+              showVideoUploader={showVideoUploader}
+              showAudioUploader={showAudioUploader}
+              showMultiSpeakerUploader={showMultiSpeakerUploader}
+              onTimeUpdate={setCurrentTime}
+              onDurationChange={setDuration}
+              onPlayPause={togglePlayback}
+              onVideoUploaded={handleVideoUploaded}
+              onSubtitlesGenerated={handleSubtitlesGenerated}
+            />
+          </div>
+
+          {/* 오른쪽 - 자막 스타일 패널 */}
+          <div className="w-80">
+            <SubtitleStylePanel
+              selectedStyle={selectedStyle}
+              selectedEmphasis={selectedEmphasis}
+              selectedEmotion={selectedEmotion}
+              selectedSegment={subtitleSegments.find(s => s.id === selectedSegment) || null}
+              speakers={speakers}
+              emotions={emotions}
+              onStyleChange={handleStyleChange}
+              onEmphasisChange={handleEmphasisChange}
+              onEmotionChange={handleEmotionChange}
+              onUpdateSegment={updateSubtitleSegment}
+              onDeleteSegment={deleteSubtitleSegment}
+              onCloseEdit={() => setSelectedSegment(null)}
+            />
           </div>
         </div>
+
+        {/* 편집 섹션 */}
+        <EditorSection
+          videoUrl={videoUrl}
+          subtitleSegments={subtitleSegments}
+          speakers={speakers}
+          emotions={emotions}
+          currentTime={currentTime}
+          duration={duration}
+          zoom={zoom}
+          selectedSegment={selectedSegment}
+          timelineRef={timelineRef}
+          onTimeUpdate={setCurrentTime}
+          onZoomChange={setZoom}
+          onTimelineClick={handleTimelineClick}
+          onDragStart={handleDragStart}
+          onResizeStart={handleResizeStart}
+          onSegmentClick={setSelectedSegment}
+          onTextChange={handleTextChange}
+        />
+
+        {/* 렌더링 모달 */}
+        <RenderModal
+          isRendering={isRendering}
+          renderProgress={renderProgress}
+          onCancel={() => {
+            setIsRendering(false)
+            setRenderProgress(0)
+          }}
+        />
       </div>
     </div>
   )
