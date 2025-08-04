@@ -6,49 +6,21 @@ import type {
   PeerConnectionState 
 } from "../types/room";
 
-// 🚨 초강력 싱글톤 시스템 - 절대 중복 생성 불가
+// 단순화된 WebRTC 관리자 싱글톤
 let globalWebRTCManager: WebRTCManager | null = null;
 let currentManagerRoomCode: string | null = null;
-
-// 🔒 절대 중복 방지 - 한 번에 하나만 허용
-let ABSOLUTE_LOCK = false;
-const MANAGER_CREATION_KEY = `webrtc_manager_${Date.now()}`;
-
-// 현재 활성 매니저 정보
-let activeManagerInfo: {
-  roomCode: string;
-  createdAt: number;
-  id: string;
-} | null = null;
-
-// 활성 useVoiceChat 인스턴스 추적
-let activeHookInstances = new Set<string>();
 let hookInstanceCounter = 0;
+let activeHookInstances = new Set<string>();
 
-// 누락된 전역 변수들 추가
-let globalLock = false;
-let lockTimeout: NodeJS.Timeout | null = null;
-let managerInitPromise: Promise<WebRTCManager> | null = null;
-let isInitializing = false;
-let lastInitTimestamp = 0;
-
-// HMR(Hot Module Replacement) 감지
+// HMR 시 정리
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
-    console.log('🔥 [HMR] useVoiceChat 모듈 재로드 감지, 전역 상태 정리');
     if (globalWebRTCManager) {
       globalWebRTCManager.close();
-    }
-    globalWebRTCManager = null;
-    managerInitPromise = null;
-    isInitializing = false;
-    globalLock = false; // 전역 잠금 해제
-    if (lockTimeout) {
-      clearTimeout(lockTimeout);
-      lockTimeout = null;
+      globalWebRTCManager = null;
+      currentManagerRoomCode = null;
     }
     activeHookInstances.clear();
-    console.log('🔥 [HMR] 모든 전역 상태 정리 완료');
   });
 }
 
@@ -61,6 +33,25 @@ export const useVoiceChat = (roomCode: string | null, nickname: string = "사용
   const [participants, setParticipants] = useState<unknown[]>([]);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [microphoneError, setMicrophoneError] = useState<string | null>(null);
+
+  // WebRTC 연결 인원수 모니터링
+  useEffect(() => {
+    const connectedPeers = remoteStreams.size;
+    const totalInRoom = connectedPeers + (localStream ? 1 : 0); // 로컬 스트림까지 포함
+    
+    console.log(`🌐 [WebRTC] 연결 상태 업데이트:`, {
+      remoteStreams: connectedPeers,
+      hasLocalStream: !!localStream,
+      totalWebRTCParticipants: totalInRoom,
+      streamDetails: Array.from(remoteStreams.entries()).map(([socketId, stream]) => ({
+        socketId: socketId,
+        streamId: stream.id,
+        tracks: stream.getTracks().length
+      }))
+    });
+    
+    console.log(`📡 [WebRTC] 현재 WebRTC 참여자: ${totalInRoom}명 (본인 ${localStream ? '포함' : '제외'}, 원격 ${connectedPeers}명)`);
+  }, [remoteStreams, localStream]);
   const [voiceChatState, setVoiceChatState] = useState<VoiceChatState>({
     localStream: null,
     remoteStreams: new Map(),
@@ -76,55 +67,26 @@ export const useVoiceChat = (roomCode: string | null, nickname: string = "사용
   useEffect(() => {
     const instanceId = hookInstanceId.current;
     activeHookInstances.add(instanceId);
-    console.log(`🔗 [useVoiceChat] Hook instance registered:`, {
-      instanceId,
-      totalInstances: activeHookInstances.size,
-      allInstances: Array.from(activeHookInstances)
-    });
     
     return () => {
       activeHookInstances.delete(instanceId);
-      console.log(`🔗 [useVoiceChat] Hook instance unregistered:`, {
-        instanceId,
-        remainingInstances: activeHookInstances.size
-      });
     };
   }, []);
 
   useEffect(() => {
     const instanceId = hookInstanceId.current;
-    console.log(`🔍 [useVoiceChat] useEffect 실행:`, {
-      instanceId,
-      roomCode,
-      enabled,
-      activeInstances: activeHookInstances.size,
-      globalManagerExists: !!globalWebRTCManager,
-      currentManagerRoom: currentManagerRoomCode
-    });
 
     if (!roomCode || !enabled) {
-      console.log(`🚫 [useVoiceChat] 초기화 건너뜀:`, { instanceId, roomCode, enabled });
       return;
     }
 
     // 🚨 강제 중복 방지: 이미 같은 방의 매니저가 있으면 무조건 재사용
     if (globalWebRTCManager && currentManagerRoomCode === roomCode) {
-      console.log(`🔄 [useVoiceChat] 강제 재사용 (중복 방지):`, { 
-        instanceId, 
-        roomCode,
-        existingManagerId: globalWebRTCManager.getSocket()?.id,
-        hasLocalStream: !!globalWebRTCManager.localStream
-      });
       
       webRTCManagerRef.current = globalWebRTCManager;
       
       // 로컬 스트림이 있으면 동기화
       if (globalWebRTCManager.localStream) {
-        console.log(`✅ [useVoiceChat] 기존 로컬 스트림 동기화:`, {
-          instanceId,
-          streamId: globalWebRTCManager.localStream.id,
-          audioTracks: globalWebRTCManager.localStream.getAudioTracks().length
-        });
         setLocalStream(globalWebRTCManager.localStream);
       } else {
         console.log(`⚠️ [useVoiceChat] 기존 매니저에 로컬 스트림 없음, 마이크 초기화 재시도:`, { instanceId });

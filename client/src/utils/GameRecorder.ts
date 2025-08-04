@@ -1,0 +1,418 @@
+/**
+ * 게임 스트리밍 서비스용 GameRecorder 클래스
+ * 화면 녹화와 마이크 음성을 분리해서 처리하는 고성능 녹화 시스템
+ */
+
+interface VideoMetadata {
+  resolution: string;
+  fps: number;
+}
+
+interface RecordingState {
+  isRecording: boolean;
+  startTime: number;
+  duration: number;
+}
+
+export class GameRecorder {
+  private screenRecorder: MediaRecorder | null = null;
+  private audioRecorder: MediaRecorder | null = null;
+  
+  private screenStream: MediaStream | null = null;
+  private audioStream: MediaStream | null = null;
+  
+  private screenChunks: Blob[] = [];
+  private audioChunks: Blob[] = [];
+  
+  private startTime: number = 0;
+  private videoMetadata: VideoMetadata = { resolution: '1920x1080', fps: 60 };
+  
+  private state: RecordingState = {
+    isRecording: false,
+    startTime: 0,
+    duration: 0
+  };
+
+  /**
+   * 화면 선택 및 녹화 준비 (녹화화면 설정 버튼용)
+   */
+  public async selectScreen(): Promise<{ success: boolean; error?: string }> {
+    try {
+      console.log('🎮 [GameRecorder] Starting screen selection...');
+
+      // 화면 캡처 스트림 요청 (애플리케이션 창만 선택 가능하도록 설정)
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          frameRate: { ideal: 60 },
+          displaySurface: 'application' as any // 애플리케이션 창만 선택 가능
+        },
+        audio: false // 화면 오디오는 제외 (마이크 음성만 별도 처리)
+      });
+
+      this.screenStream = displayStream;
+
+      // 비디오 트랙에서 실제 해상도와 fps 추출
+      const videoTrack = displayStream.getVideoTracks()[0];
+      if (videoTrack) {
+        const settings = videoTrack.getSettings();
+        this.videoMetadata = {
+          resolution: `${settings.width}x${settings.height}`,
+          fps: settings.frameRate || 60
+        };
+
+        console.log('✅ [GameRecorder] Screen selected successfully:', {
+          resolution: this.videoMetadata.resolution,
+          fps: this.videoMetadata.fps,
+          trackLabel: videoTrack.label
+        });
+      }
+
+      return { success: true };
+
+    } catch (error) {
+      console.error('❌ [GameRecorder] Screen selection failed:', error);
+      
+      let errorMessage = '화면 선택에 실패했습니다.';
+      if (error instanceof Error) {
+        if (error.name === 'NotAllowedError') {
+          errorMessage = '화면 공유 권한이 거부되었습니다. 브라우저에서 화면 공유를 허용해주세요.';
+        } else if (error.name === 'NotFoundError') {
+          errorMessage = '공유 가능한 화면을 찾을 수 없습니다.';
+        } else if (error.name === 'NotSupportedError') {
+          errorMessage = '이 브라우저는 화면 공유를 지원하지 않습니다.';
+        }
+      }
+      
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  /**
+   * 녹화 시작 (모든 플레이어가 준비 완료된 후 호출)
+   */
+  public async startRecording(roomCode: string, userId: string, gameTitle: string): Promise<void> {
+    if (this.state.isRecording) {
+      console.warn('⚠️ [GameRecorder] Recording already in progress');
+      return;
+    }
+
+    try {
+      console.log('🎬 [GameRecorder] Starting recording...', {
+        roomCode,
+        userId,
+        gameTitle,
+        timestamp: new Date().toISOString()
+      });
+
+      this.startTime = Date.now();
+      this.state = {
+        isRecording: true,
+        startTime: this.startTime,
+        duration: 0
+      };
+
+      // 화면 녹화와 음성 녹음을 병렬로 시작
+      await Promise.all([
+        this.startScreenRecording(),
+        this.startAudioRecording()
+      ]);
+
+      console.log('✅ [GameRecorder] Recording started successfully');
+
+    } catch (error) {
+      console.error('❌ [GameRecorder] Failed to start recording:', error);
+      this.state.isRecording = false;
+      throw new Error(`녹화 시작에 실패했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
+    }
+  }
+
+  /**
+   * 녹화 종료 및 서버 업로드 (방장만 호출 가능)
+   */
+  public async stopRecording(roomCode: string, userId: string, gameTitle: string): Promise<any> {
+    if (!this.state.isRecording) {
+      console.warn('⚠️ [GameRecorder] No recording in progress');
+      return null;
+    }
+
+    try {
+      console.log('⏹️ [GameRecorder] Stopping recording...', {
+        roomCode,
+        userId,
+        gameTitle,
+        duration: Math.round((Date.now() - this.startTime) / 1000)
+      });
+
+      this.state.isRecording = false;
+      this.state.duration = Math.round((Date.now() - this.startTime) / 1000);
+
+      // 녹화 중지
+      await Promise.all([
+        this.stopScreenRecording(),
+        this.stopAudioRecording()
+      ]);
+
+      // 서버로 업로드
+      const uploadResult = await this.uploadToServer(roomCode, userId, gameTitle);
+
+      console.log('✅ [GameRecorder] Recording completed and uploaded:', uploadResult);
+      
+      // 리소스 정리
+      this.cleanup();
+
+      return uploadResult;
+
+    } catch (error) {
+      console.error('❌ [GameRecorder] Failed to stop recording:', error);
+      throw new Error(`녹화 종료에 실패했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
+    }
+  }
+
+  /**
+   * 화면 녹화 시작
+   */
+  private async startScreenRecording(): Promise<void> {
+    if (!this.screenStream) {
+      throw new Error('화면 스트림이 준비되지 않았습니다. 먼저 화면을 선택해주세요.');
+    }
+
+    try {
+      // VP9 코덱으로 WebM 포맷 녹화
+      const options = {
+        mimeType: 'video/webm; codecs=vp9',
+        videoBitsPerSecond: 8000000 // 8Mbps 고화질
+      };
+
+      this.screenRecorder = new MediaRecorder(this.screenStream, options);
+      this.screenChunks = [];
+
+      this.screenRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          this.screenChunks.push(event.data);
+          console.log(`📹 [GameRecorder] Screen chunk received: ${Math.round(event.data.size / 1024)}KB`);
+        }
+      };
+
+      this.screenRecorder.onerror = (event) => {
+        console.error('❌ [GameRecorder] Screen recording error:', event);
+      };
+
+      this.screenRecorder.start(1000); // 1초마다 청크 생성
+      console.log('📹 [GameRecorder] Screen recording started');
+
+    } catch (error) {
+      console.error('❌ [GameRecorder] Failed to start screen recording:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 음성 녹음 시작
+   */
+  private async startAudioRecording(): Promise<void> {
+    try {
+      // 마이크 음성 스트림 획득 (화면과 별도)
+      this.audioStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 44100,
+          channelCount: 1
+        },
+        video: false
+      });
+
+      // Opus 코덱으로 WebM 포맷 녹음
+      const options = {
+        mimeType: 'audio/webm; codecs=opus',
+        audioBitsPerSecond: 128000 // 128kbps 고음질
+      };
+
+      this.audioRecorder = new MediaRecorder(this.audioStream, options);
+      this.audioChunks = [];
+
+      this.audioRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          this.audioChunks.push(event.data);
+          console.log(`🎤 [GameRecorder] Audio chunk received: ${Math.round(event.data.size / 1024)}KB`);
+        }
+      };
+
+      this.audioRecorder.onerror = (event) => {
+        console.error('❌ [GameRecorder] Audio recording error:', event);
+      };
+
+      this.audioRecorder.start(1000); // 1초마다 청크 생성
+      console.log('🎤 [GameRecorder] Audio recording started');
+
+    } catch (error) {
+      console.error('❌ [GameRecorder] Failed to start audio recording:', error);
+      
+      let errorMessage = '마이크 녹음 시작에 실패했습니다.';
+      if (error instanceof Error) {
+        if (error.name === 'NotAllowedError') {
+          errorMessage = '마이크 권한이 거부되었습니다. 브라우저 설정에서 마이크 권한을 허용해주세요.';
+        } else if (error.name === 'NotFoundError') {
+          errorMessage = '마이크 장치를 찾을 수 없습니다.';
+        }
+      }
+      
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
+   * 화면 녹화 중지
+   */
+  private async stopScreenRecording(): Promise<void> {
+    return new Promise((resolve) => {
+      if (!this.screenRecorder) {
+        resolve();
+        return;
+      }
+
+      this.screenRecorder.onstop = () => {
+        console.log('📹 [GameRecorder] Screen recording stopped');
+        resolve();
+      };
+
+      this.screenRecorder.stop();
+    });
+  }
+
+  /**
+   * 음성 녹음 중지
+   */
+  private async stopAudioRecording(): Promise<void> {
+    return new Promise((resolve) => {
+      if (!this.audioRecorder) {
+        resolve();
+        return;
+      }
+
+      this.audioRecorder.onstop = () => {
+        console.log('🎤 [GameRecorder] Audio recording stopped');
+        resolve();
+      };
+
+      this.audioRecorder.stop();
+    });
+  }
+
+  /**
+   * 서버로 녹화 파일 업로드
+   */
+  private async uploadToServer(roomCode: string, userId: string, gameTitle: string): Promise<any> {
+    try {
+      console.log('📤 [GameRecorder] Starting upload to server...');
+
+      // 비디오와 오디오 Blob 생성
+      const videoBlob = new Blob(this.screenChunks, { type: 'video/webm' });
+      const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+
+      console.log('📦 [GameRecorder] Files prepared for upload:', {
+        videoSize: `${Math.round(videoBlob.size / 1024 / 1024)}MB`,
+        audioSize: `${Math.round(audioBlob.size / 1024)}KB`,
+        duration: this.state.duration,
+        resolution: this.videoMetadata.resolution,
+        fps: this.videoMetadata.fps
+      });
+
+      // FormData 생성
+      const formData = new FormData();
+      formData.append('video', videoBlob, 'recording.webm');
+      formData.append('audio', audioBlob, 'audio.webm');
+      formData.append('roomCode', roomCode);
+      formData.append('userId', userId);
+      formData.append('gameTitle', gameTitle);
+      formData.append('duration', this.state.duration.toString());
+      formData.append('resolution', this.videoMetadata.resolution);
+      formData.append('fps', this.videoMetadata.fps.toString());
+      formData.append('description', `${gameTitle} 게임 플레이 녹화 - ${new Date().toLocaleString()}`);
+
+      // 서버로 업로드
+      const response = await fetch('/api/videos/upload', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error(`서버 응답 오류: ${response.status} ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('✅ [GameRecorder] Upload completed successfully:', result);
+
+      return result;
+
+    } catch (error) {
+      console.error('❌ [GameRecorder] Upload failed:', error);
+      
+      let errorMessage = '서버 업로드에 실패했습니다.';
+      if (error instanceof Error) {
+        if (error.message.includes('fetch')) {
+          errorMessage = '네트워크 연결을 확인해주세요.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
+   * 리소스 정리
+   */
+  private cleanup(): void {
+    console.log('🧹 [GameRecorder] Cleaning up resources...');
+
+    // 스트림 정리
+    if (this.screenStream) {
+      this.screenStream.getTracks().forEach(track => track.stop());
+      this.screenStream = null;
+    }
+
+    if (this.audioStream) {
+      this.audioStream.getTracks().forEach(track => track.stop());
+      this.audioStream = null;
+    }
+
+    // 레코더 정리
+    this.screenRecorder = null;
+    this.audioRecorder = null;
+
+    // 청크 데이터 정리
+    this.screenChunks = [];
+    this.audioChunks = [];
+
+    console.log('✅ [GameRecorder] Cleanup completed');
+  }
+
+  /**
+   * 현재 녹화 상태 반환
+   */
+  public getRecordingState(): RecordingState {
+    if (this.state.isRecording) {
+      this.state.duration = Math.round((Date.now() - this.startTime) / 1000);
+    }
+    return { ...this.state };
+  }
+
+  /**
+   * 화면이 선택되었는지 확인
+   */
+  public isScreenSelected(): boolean {
+    return !!this.screenStream;
+  }
+
+  /**
+   * 비디오 메타데이터 반환
+   */
+  public getVideoMetadata(): VideoMetadata {
+    return { ...this.videoMetadata };
+  }
+}

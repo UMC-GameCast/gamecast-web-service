@@ -86,16 +86,12 @@ export const RoomPage = () => {
   const [showCharacterSetup, setShowCharacterSetup] = useState(false);
   const [showMicGuide, setShowMicGuide] = useState(false);
   
-  // 방 정보가 로드되면 초기 참여자 목록 설정
+  // REST API에서 초기 참여자 목록 설정 (Socket.IO 연결 전까지만)
   useEffect(() => {
-    if (currentRoom?.participants) {
-      console.log('🏠 방 정보 로드 완료, 초기 참여자 목록 설정:', {
-        participants: currentRoom.participants.length,
-        list: currentRoom.participants
-      });
+    if (currentRoom?.participants && realtimeParticipants.length === 0) {
       setRealtimeParticipants(currentRoom.participants);
     }
-  }, [currentRoom?.participants]);
+  }, [currentRoom?.participants, realtimeParticipants.length]);
   
   // 콜백 설정 완료 상태 추적
   const [callbacksSetup, setCallbacksSetup] = useState(false);
@@ -123,16 +119,18 @@ export const RoomPage = () => {
       return;
     }
 
-    console.log('📞 실시간 참여자 업데이트 콜백 설정 중...');
     setOnRealtimeParticipantsUpdate((participants) => {
-      console.log('🔄 실시간 참여자 업데이트 수신:', {
-        participantCount: Array.isArray(participants) ? participants.length : 0,
-        participants: participants
-      });
-      
-      // 참여자 목록 업데이트
       if (Array.isArray(participants)) {
-        setRealtimeParticipants(participants);
+        // WebRTC 백그라운드 참여자 필터링 및 중복 제거
+        const realParticipants = participants.filter((participant: any) => {
+          return !(participant.nickname || '').startsWith('WEBRTC_');
+        });
+
+        const uniqueParticipants = realParticipants.filter((participant: any, index: number, self: any[]) => {
+          return self.findIndex((p: any) => p.id === participant.id) === index;
+        });
+        
+        setRealtimeParticipants(uniqueParticipants);
       }
     });
     
@@ -159,8 +157,8 @@ export const RoomPage = () => {
   }, [joinError]);
 
 
-  // 준비하기 버튼 활성화 조건: 캐릭터 설정과 녹화화면 설정이 모두 완료된 경우
-  const isReadyEnabled = !!(currentPlayer?.preparationStatus?.characterSetup && currentPlayer?.preparationStatus?.screenSetup);
+  // 준비하기 버튼 활성화 조건: 녹화화면 설정만 완료된 경우 (캐릭터 설정은 현재 비활성화)
+  const isReadyEnabled = true; // 캐릭터 설정 비활성화로 인해 항상 활성화
 
   // 디버깅을 위한 콘솔 로그
   console.log('RoomPage 렌더링:', {

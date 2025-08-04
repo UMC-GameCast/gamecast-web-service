@@ -2,14 +2,14 @@ import React, { useState } from "react";
 import { RoomButton } from "./RoomButton";
 import NoticeIcon from "../../../assets/gamecast/Room/notice.svg?react";
 import { updateCurrentPlayer } from "../../../utils/roomManager";
-import { useRecording } from "../../../hooks/useRecording";
-import type { Player, RecodeRoom } from "../../../types/room";
+import { useGameRecording } from "../../../hooks/useGameRecording";
+import type { Player, Room } from "../../../types/room";
 
 
 interface ButtonContainerProps {
   isReadyEnabled?: boolean;
   onStateUpdate?: () => void;
-  currentRoom: RecodeRoom | null;
+  currentRoom: Room | null;
   currentPlayer: Player | null;
   onCharacterSetup?: () => void;
 }
@@ -26,6 +26,7 @@ export const ButtonContainer = ({
 }: ButtonContainerProps) => {
   const [isTooltipVisible, setIsTooltipVisible] = useState(false);
   const [isHoveringHostButton, setIsHoveringHostButton] = useState(false);
+  const [screenSelected, setScreenSelected] = useState(false);
   
   const {
     recordingStatus,
@@ -34,25 +35,62 @@ export const ButtonContainer = ({
     isHost,
     formatTime,
     setPlayerReady,
-    stopRecording
-    // startRecording은 자동 녹화로 변경되어 사용하지 않음
-  } = useRecording(currentRoom, currentPlayer);
+    stopRecording,
+    getGameRecorder
+  } = useGameRecording(currentRoom, currentPlayer);
 
-  // 현재 플레이어의 준비 상태를 서버 데이터에서 가져오기
-  const currentPlayerReadyStatus = playersReadyStatus.find(p => p.playerId === currentPlayer?.id);
+  // 현재 플레이어의 준비 상태를 서버 데이터에서 가져오기 (통합 ID 사용)
+  const unifiedPlayerId = currentPlayer?.guestUserId || currentPlayer?.id;
+  const currentPlayerReadyStatus = playersReadyStatus.find(p => 
+    p.playerId === unifiedPlayerId || p.playerId === currentPlayer?.id
+  );
   const isPlayerReady = currentPlayerReadyStatus?.isReady || false;
-  
-  // 캐릭터 설정 페이지로 이동
-  const handleCharacterSettings = () => {
-    onCharacterSetup?.();
+
+  // 통합된 준비 상태 업데이트 함수
+  const handleUnifiedReadyUpdate = async () => {
+    try {
+      // Socket.IO 실시간 업데이트 (주 시스템)
+      setPlayerReady(true);
+      
+      // REST API 백업 저장 (DB 영속성)
+      const restResult = await updateCurrentPlayer({ 
+        characterSetup: true, 
+        screenSetup: true 
+      });
+      
+      if (restResult.success) {
+        onStateUpdate?.();
+      } else {
+        console.warn("REST API 백업 저장 실패:", restResult.error);
+      }
+      
+    } catch (error) {
+      console.error("준비 상태 업데이트 오류:", error);
+    }
   };
   
-  const handleRecordingSettings = () => {
-    // 녹화화면 설정 완료로 변경
-    const result = updateCurrentPlayer({ recording: true });
-    if (result.success) {
-      // 상태 업데이트 함수 호출
-      onStateUpdate?.();
+  // 캐릭터 설정 페이지로 이동 (현재 비활성화)
+  const handleCharacterSettings = () => {
+    // TODO: 캐릭터 설정 기능 구현 후 활성화
+    console.log('캐릭터 설정 기능은 아직 구현되지 않았습니다.');
+    // onCharacterSetup?.();
+  };
+  
+  const handleRecordingSettings = async () => {
+    try {
+      const gameRecorder = getGameRecorder();
+      const result = await gameRecorder.selectScreen();
+      
+      if (result.success) {
+        setScreenSelected(true);
+        onStateUpdate?.();
+      } else {
+        console.error('화면 선택 실패:', result.error);
+        alert(result.error || '화면 선택에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('화면 선택 오류:', error);
+      alert('화면 선택 중 오류가 발생했습니다.');
     }
   };
   
@@ -61,25 +99,20 @@ export const ButtonContainer = ({
     switch (recordingStatus.state) {
       case 'idle':
         if (isReadyEnabled && !isPlayerReady) {
-          console.log("준비하기 클릭");
-          setPlayerReady(true);
+          handleUnifiedReadyUpdate();
         }
         break;
         
       case 'preparing':
-        // "녹화를 시작중입니다" 상태에서는 아무도 클릭할 수 없음 (3초 자동 시작 대기)
-        console.log("녹화 자동 시작 대기 중... 3초만 기다려주세요");
+      case 'starting':
+        // 녹화 시작 중에는 버튼 비활성화
         break;
         
       case 'recording':
         if (isHost) {
-          console.log("녹화 종료 클릭 (호스트)");
           stopRecording();
         }
         break;
-        
-      default:
-        console.log("현재 상태에서는 클릭할 수 없습니다:", recordingStatus.state);
     }
   };
 
@@ -174,7 +207,7 @@ export const ButtonContainer = ({
               className="absolute inset-0 flex items-center justify-center text-[14px] font-medium transform translate-x-[23px] -translate-y-[46px]"
               style={{ color: '#ffffff', zIndex: 10 }}
             >
-              캐릭터 설정과 녹화화면 설정이 필요합니다
+              녹화화면 설정이 필요합니다
             </div>
 
           </div>
@@ -183,7 +216,13 @@ export const ButtonContainer = ({
       
       {/* 버튼 컨테이너 */}
       <div className="w-full h-[64.6px] justify-between items-center inline-flex">
-        <RoomButton onClick={handleCharacterSettings}>캐릭터 설정</RoomButton>
+        <RoomButton 
+          onClick={handleCharacterSettings}
+          disabled={true}
+          style={{ opacity: 0.5, cursor: 'not-allowed' }}
+        >
+          캐릭터 설정 (준비중)
+        </RoomButton>
         <RoomButton onClick={handleRecordingSettings}>녹화화면 설정</RoomButton>
         <div
           onMouseEnter={() => {

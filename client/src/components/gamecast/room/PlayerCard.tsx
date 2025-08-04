@@ -35,11 +35,11 @@ export const PlayerCard = ({
   // 오디오 재생을 위한 ref
   const audioRef = useRef<HTMLAudioElement>(null);
   
-  // 준비상태 확인 (새로운 데이터 구조 사용)
-  const isReady = !!(player.preparationStatus?.characterSetup && player.preparationStatus?.screenSetup);
+  // 준비상태 확인 (캐릭터 설정 비활성화로 인해 isReady 필드 직접 사용)
+  const isReady = !!(player.isReady || player.preparationStatus?.isReady);
   
-  // 캐릭터 설정 여부
-  const hasCharacter = !!player.preparationStatus?.characterSetup;
+  // 캐릭터 설정 여부 (항상 true로 설정 - 캐릭터 설정 비활성화)
+  const hasCharacter = true;
   
   // 캐릭터 애니메이션 훅 사용
   const {

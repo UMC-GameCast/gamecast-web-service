@@ -9,6 +9,7 @@ export interface CharacterData {
 export interface PreparationStatus {
   characterSetup: boolean;
   screenSetup: boolean;
+  isReady?: boolean; // 준비 완료 상태 추가
 }
 
 export interface Player {
@@ -19,6 +20,7 @@ export interface Player {
   joinedAt: string;
   preparationStatus?: PreparationStatus; // 선택적 필드로 변경
   isHost?: boolean; // 선택적 필드로 변경
+  isReady?: boolean; // 준비 완료 상태 추가
 }
 
 export interface Room {
@@ -117,8 +119,7 @@ export interface ParticipantUpdateEvent {
   timestamp: string;
 }
 
-// 레거시 타입 (호환성을 위해 유지)
-export type RecodeRoom = Room;
+// RecodeRoom 타입은 제거됨 - Room 타입을 직접 사용
 
 // WebRTC 관련 타입들
 export interface WebRTCSocketEvent {

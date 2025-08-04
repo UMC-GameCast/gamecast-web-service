@@ -54,7 +54,7 @@ export class WebRTCManager {
   constructor(roomCode: string, nickname: string) {
     this.roomCode = roomCode;
     this.nickname = nickname;
-    this.guestUserId = getCurrentUserId();
+    this.guestUserId = getCurrentUserId() || null;
     
     // 연결 상태 초기화
     this.connectionState = {
@@ -528,21 +528,42 @@ export class WebRTCManager {
       }
     });
 
-    // 나머지 이벤트들...
+    // 채팅 메시지
     this.socket.on("chat-message", (data: unknown) => {
-      console.log("Chat message received:", data);
+      console.log("💬 [WebRTC] Chat message received:", data);
+    });
+
+    // 녹화 관련 이벤트들 (GameRecorder와 연동)
+    this.socket.on("recording-status-update", (data: any) => {
+      console.log("📊 [WebRTC] Recording status update:", data);
+    });
+
+    this.socket.on("players-ready-status", (data: any) => {
+      console.log("👥 [WebRTC] Players ready status:", data);
+    });
+
+    this.socket.on("all-players-ready", () => {
+      console.log("✅ [WebRTC] All players ready - recording will start soon!");
+    });
+
+    this.socket.on("recording-start-countdown", (data: { countdown: number }) => {
+      console.log(`⏰ [WebRTC] Recording starts in ${data.countdown} seconds...`);
     });
 
     this.socket.on("recording-started", (data: unknown) => {
-      console.log("Recording started:", data);
+      console.log("🎬 [WebRTC] Recording started by server:", data);
     });
 
     this.socket.on("recording-stopped", (data: unknown) => {
-      console.log("Recording stopped:", data);
+      console.log("⏹️ [WebRTC] Recording stopped by server:", data);
+    });
+
+    this.socket.on("recording-error", (data: any) => {
+      console.error("❌ [WebRTC] Recording error:", data);
     });
 
     this.socket.on("error", (error: { message: string }) => {
-      console.error("Socket error:", error);
+      console.error("❌ [WebRTC] Socket error:", error);
       this.onRealtimeConnectionStateChanged(false, error.message);
     });
   }
@@ -587,9 +608,13 @@ export class WebRTCManager {
       }
       
       setTimeout(() => {
-        this.guestUserId = getCurrentUserId();
+        this.guestUserId = getCurrentUserId() || null;
         if (this.guestUserId) {
           console.log('✅ [WebRTC] Guest user ID obtained, retrying join...');
+          this.joinRoom();
+        } else {
+          // 임시 ID 생성하여 연결 시도
+          this.guestUserId = `temp_${this.nickname}_${Date.now()}`;
           this.joinRoom();
         }
       }, 1000);
@@ -1343,6 +1368,36 @@ export class WebRTCManager {
     this.socket.emit("update-preparation-status", {
       characterSetup,
       screenSetup
+    });
+  }
+
+  // ✅ 새로 추가: 녹화 관련 메서드들
+  public updatePlayerReadyStatus(isReady: boolean, playerName: string, screenSetup: boolean = true) {
+    console.log(`🎯 [WebRTC] Updating player ready status: ${isReady}`);
+    this.socket.emit("update-preparation-status", {
+      roomCode: this.roomCode,
+      playerId: this.guestUserId,
+      playerName: playerName,
+      characterSetup: true, // 캐릭터 설정은 항상 true (현재 비활성화)
+      screenSetup: screenSetup, // 화면 설정 상태
+      isReady: isReady
+    });
+  }
+
+  public stopRecordingAsHost() {
+    console.log('⏹️ [WebRTC] Host stopping recording...');
+    this.socket.emit("stop-recording", {
+      roomCode: this.roomCode,
+      hostId: this.guestUserId
+    });
+  }
+
+  public reportRecordingError(error: string) {
+    console.error(`❌ [WebRTC] Reporting recording error: ${error}`);
+    this.socket.emit("recording-error", {
+      roomCode: this.roomCode,
+      playerId: this.guestUserId,
+      error: error
     });
   }
 

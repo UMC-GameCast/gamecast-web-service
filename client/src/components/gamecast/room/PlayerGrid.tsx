@@ -19,15 +19,17 @@ export const PlayerGrid: React.FC<PlayerGridProps> = ({
   remoteStreams = new Map(),
   voiceChatConnected = false,
 }) => {
-  // 실시간 참여자 데이터가 있으면 우선 사용, 없으면 REST API 데이터 사용
+  // [SINGLE SOURCE] Socket.IO 실시간 데이터가 유일한 진실 공급원, REST API는 초기화 전용
   const participants = realtimeParticipants.length > 0 ? realtimeParticipants : (currentRoom?.participants || []);
+  const isUsingSocketIO = realtimeParticipants.length > 0;
   
-  console.log('🎮 PlayerGrid 렌더링:', {
-    realtimeCount: realtimeParticipants.length,
-    restApiCount: currentRoom?.participants?.length || 0,
-    usingRealtime: realtimeParticipants.length > 0,
-    finalParticipantsCount: participants.length
-  });
+  // 개발 모드에서만 로깅
+  if (process.env.NODE_ENV === 'development') {
+    console.log('PlayerGrid:', {
+      source: isUsingSocketIO ? 'Socket.IO' : 'REST API',
+      count: participants.length
+    });
+  }
   
   // 서버에서 받은 participants를 클라이언트 형식으로 변환
   const convertedParticipants = participants.map(p => ({
