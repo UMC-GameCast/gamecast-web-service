@@ -32,9 +32,10 @@ npm run preview      # Preview production build
 ```
 
 ### Backend Realtime Server
+**NOTE: 백엔드 서버는 별도로 실행 중이며, 프론트엔드만 개발/수정합니다.**
 ```bash
-cd backend-realtime
-npm start            # Start with nodemon (auto-restart)
+# 백엔드 서버는 별도 환경에서 실행 중
+# 프론트엔드만 개발하므로 백엔드 서버 실행 불필요
 ```
 
 ### Audio Processing
@@ -96,17 +97,24 @@ python audio_highlight/generate_subtitle.py
 - Audio processing: `audio_highlight/` directory
 
 ### Development Setup
-1. Start backend realtime server: `cd backend-realtime && npm start`
+**프론트엔드 개발 환경만 설정:**
+1. ~~Start backend realtime server~~ (별도 환경에서 실행 중)
 2. Start frontend dev server: `cd client && npm run dev`
-3. For audio processing: Install Python requirements and run relevant scripts
+3. ~~For audio processing~~ (별도 환경에서 실행 중)
 
 The application focuses on real-time voice communication for gaming sessions with automatic highlight generation through audio analysis.
 
 ## Critical Rules for Code Modifications
 
+### FRONTEND-ONLY DEVELOPMENT
+- **백엔드 서버**: 별도 환경에서 실행 중이며 수정하지 않음
+- **프론트엔드만 개발**: `client/` 폴더 내의 React/TypeScript 코드만 수정
+- **서버 에러**: 백엔드에서 발생하는 에러(인원 초과 등)는 프론트엔드에서 적절히 처리
+- **API 통신**: Socket.IO 및 REST API는 기존 인터페이스 유지
+
 ### NEVER REMOVE: Real-time Participant Update System
-- **File**: `client/src/hooks/useRealTimeRoom.ts` - Socket.IO based real-time participant tracking
 - **File**: `client/src/pages/gamecast/room/RoomPage.tsx` - Real-time participant UI updates
+- **File**: `client/src/utils/webRTCManager.ts` - WebRTC 연결과 실시간 업데이트 통합
 - **Features**: 
   - Socket.IO events: `participant-update`, `user-joined`, `user-left`
   - Live participant list synchronization
@@ -114,3 +122,8 @@ The application focuses on real-time voice communication for gaming sessions wit
 - **Rule**: This functionality is ESSENTIAL and must NEVER be disabled or removed during debugging
 - **Debugging**: If errors occur, fix the errors while preserving real-time functionality
 - **Import Requirements**: Always ensure `useEffect` is imported in RoomPage.tsx
+
+### Backend Error Handling
+- **인원 초과 에러**: 서버에서 방 참여 제한 시 적절한 사용자 안내 메시지 표시
+- **연결 실패**: WebRTC/Socket.IO 연결 실패 시 재시도 로직 및 사용자 피드백
+- **권한 에러**: 마이크 권한 거부 등의 경우 명확한 해결 방법 안내

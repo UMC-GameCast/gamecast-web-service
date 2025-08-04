@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 interface VoiceIndicatorProps {
-  stream: MediaStream;
+  stream: MediaStream | null;
+  isMuted?: boolean;
+  isConnected?: boolean;
+  nickname?: string;
+  size?: 'small' | 'medium' | 'large';
 }
 
 // webkit 브라우저 호환성을 위한 타입 확장
@@ -66,18 +70,82 @@ const useIsSpeaking = (stream: MediaStream | null): boolean => {
 };
 
 
-export const VoiceIndicator: React.FC<VoiceIndicatorProps> = ({ stream }) => {
-  const isSpeaking = useIsSpeaking(stream);
+export const VoiceIndicator: React.FC<VoiceIndicatorProps> = ({ 
+  stream, 
+  isMuted = false, 
+  isConnected = true,
+  nickname = '',
+  size = 'medium'
+}) => {
+  const isSpeaking = useIsSpeaking(stream && !isMuted ? stream : null);
+
+  const sizeClasses = {
+    small: 'w-4 h-4',
+    medium: 'w-6 h-6', 
+    large: 'w-8 h-8'
+  };
+
+  const getIndicatorState = () => {
+    if (!isConnected) {
+      return {
+        bg: 'bg-gray-400',
+        opacity: 'opacity-50',
+        scale: 'scale-100',
+        shadow: '0 0 5px rgba(156, 163, 175, 0.5)',
+        icon: '❌'
+      };
+    }
+    
+    if (isMuted) {
+      return {
+        bg: 'bg-red-500',
+        opacity: 'opacity-75',
+        scale: 'scale-100',
+        shadow: '0 0 8px rgba(239, 68, 68, 0.6)',
+        icon: '🔇'
+      };
+    }
+    
+    if (isSpeaking) {
+      return {
+        bg: 'bg-green-500',
+        opacity: 'opacity-90',
+        scale: 'scale-110',
+        shadow: '0 0 12px rgba(74, 222, 128, 0.8)',
+        icon: '🎤'
+      };
+    }
+    
+    return {
+      bg: 'bg-blue-500',
+      opacity: 'opacity-60',
+      scale: 'scale-100',
+      shadow: '0 0 6px rgba(59, 130, 246, 0.5)',
+      icon: '🎧'
+    };
+  };
+
+  const state = getIndicatorState();
 
   return (
-    <div
-      className={`absolute w-6 h-6 rounded-full bg-green-500 transition-all duration-150 ${
-        isSpeaking ? 'opacity-75 scale-110' : 'opacity-0 scale-0'
-      }`}
-      style={{
-        boxShadow: '0 0 10px rgba(74, 222, 128, 0.7)',
-        // 위치는 부모 컴포넌트에서 설정합니다.
-      }}
-    />
+    <div className="relative inline-flex items-center">
+      <div
+        className={`${sizeClasses[size]} rounded-full ${state.bg} transition-all duration-200 ${state.opacity} ${state.scale} flex items-center justify-center`}
+        style={{
+          boxShadow: state.shadow
+        }}
+        title={nickname ? `${nickname} - ${isMuted ? 'Muted' : isConnected ? (isSpeaking ? 'Speaking' : 'Connected') : 'Disconnected'}` : undefined}
+      >
+        {size === 'large' && (
+          <span className="text-xs">{state.icon}</span>
+        )}
+      </div>
+      
+      {nickname && size === 'large' && (
+        <span className="ml-2 text-xs text-gray-600 dark:text-gray-300">
+          {nickname}
+        </span>
+      )}
+    </div>
   );
 }; 

@@ -5,9 +5,10 @@ import App from './App.tsx'
 import { BrowserRouter } from 'react-router-dom'
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
+  // StrictMode 임시 비활성화 - WebRTC 중복 연결 방지
+  // <StrictMode>
     <BrowserRouter>
     <App />
     </BrowserRouter>
-  </StrictMode>,
+  // </StrictMode>,
 )

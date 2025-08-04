@@ -120,6 +120,43 @@ export interface ParticipantUpdateEvent {
 // 레거시 타입 (호환성을 위해 유지)
 export type RecodeRoom = Room;
 
+// WebRTC 관련 타입들
+export interface WebRTCSocketEvent {
+  event: string; // Socket.IO 이벤트 타입
+  data: Record<string, unknown>; // 이벤트 데이터
+}
+
+export interface WebRTCOffer {
+  offer: RTCSessionDescriptionInit; // WebRTC Offer 데이터
+  targetSocketId: string; // 대상 소켓 ID
+}
+
+export interface WebRTCAnswer {
+  answer: RTCSessionDescriptionInit; // WebRTC Answer 데이터
+  targetSocketId: string; // 대상 소켓 ID
+}
+
+export interface WebRTCIceCandidate {
+  candidate: RTCIceCandidateInit; // ICE Candidate 데이터
+  targetSocketId: string; // 대상 소켓 ID
+}
+
+export interface PeerConnectionState {
+  socketId: string;
+  nickname: string;
+  connectionState: RTCPeerConnectionState;
+  hasAudio: boolean;
+  isMuted: boolean;
+}
+
+export interface VoiceChatState {
+  localStream: MediaStream | null;
+  remoteStreams: Map<string, MediaStream>;
+  peerConnections: Map<string, PeerConnectionState>;
+  isLocalMuted: boolean;
+  isConnected: boolean;
+}
+
 // 사용자 세션 관리
 export interface UserSession {
   sessionId: string;

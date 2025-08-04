@@ -24,17 +24,9 @@ export class WebRTCManager {
   // 연결 상태 관리
   private connectionState: VoiceChatState;
   
-  // 강화된 중복 방 참여 방지
+  // 중복 방 참여 방지
   private isJoiningRoom: boolean = false;
   private lastJoinAttempt: number = 0;
-  private joinTimeoutId: NodeJS.Timeout | null = null;
-  
-  // 재시도 로직
-  private reconnectionAttempts: Map<string, number> = new Map();
-  private maxReconnectionAttempts: number = 3;
-  
-  // 연결 품질 모니터링
-  private qualityCheckInterval: NodeJS.Timeout | null = null;
 
   public onRemoteStream: (sid: string, stream: MediaStream) => void = () => {};
   public onUserLeft: (sid: string) => void = () => {};
@@ -47,9 +39,6 @@ export class WebRTCManager {
   // 실시간 참가자 업데이트 콜백들
   public onRealtimeParticipantsUpdate: (participants: unknown[]) => void = () => {};
   public onRealtimeConnectionStateChanged: (isConnected: boolean, error?: string) => void = () => {};
-  
-  // 연결 품질 알림 콜백
-  public onConnectionQualityChanged: (socketId: string, quality: 'good' | 'poor' | 'bad') => void = () => {};
 
   constructor(roomCode: string, nickname: string) {
     this.roomCode = roomCode;
@@ -87,70 +76,6 @@ export class WebRTCManager {
     });
     
     this.initializeSocketListeners();
-    this.setupCleanupListeners();
-    this.startConnectionQualityMonitoring();
-  }
-
-  // ✅ 새로 추가: 정리 리스너 설정
-  private setupCleanupListeners() {
-    // 페이지 종료 시 자동 정리
-    const cleanup = () => {
-      console.log('🧹 [WebRTC] Auto cleanup triggered');
-      this.close();
-    };
-    
-    window.addEventListener('beforeunload', cleanup);
-    window.addEventListener('pagehide', cleanup);
-    
-    // 브라우저 탭 변경 감지
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        console.log('📱 [WebRTC] Tab hidden, reducing activity');
-      } else {
-        console.log('📱 [WebRTC] Tab visible, resuming activity');
-      }
-    });
-  }
-
-  // ✅ 새로 추가: 연결 품질 모니터링 시작
-  private startConnectionQualityMonitoring() {
-    this.qualityCheckInterval = setInterval(() => {
-      this.checkConnectionQuality();
-    }, 5000); // 5초마다 품질 체크
-  }
-
-  // ✅ 새로 추가: 연결 품질 체크
-  private checkConnectionQuality() {
-    this.peerConnections.forEach(async (pc, socketId) => {
-      try {
-        const stats = await pc.getStats();
-        stats.forEach(report => {
-          if (report.type === 'inbound-rtp' && report.kind === 'audio') {
-            const packetsLost = report.packetsLost || 0;
-            const packetsReceived = report.packetsReceived || 0;
-            const totalPackets = packetsReceived + packetsLost;
-            
-            if (totalPackets > 0) {
-              const lossRate = packetsLost / totalPackets;
-              let quality: 'good' | 'poor' | 'bad' = 'good';
-              
-              if (lossRate > 0.1) {
-                quality = 'bad';
-              } else if (lossRate > 0.05) {
-                quality = 'poor';
-              }
-              
-              if (quality !== 'good') {
-                console.warn(`⚠️ [WebRTC] Poor connection quality with ${socketId}: ${(lossRate * 100).toFixed(2)}% packet loss`);
-                this.onConnectionQualityChanged(socketId, quality);
-              }
-            }
-          }
-        });
-      } catch (error) {
-        console.error('❌ [WebRTC] Error checking connection quality:', error);
-      }
-    });
   }
 
   private initializeSocketListeners() {
@@ -176,9 +101,11 @@ export class WebRTCManager {
         console.log('✅ [WebRTC] Microphone initialized successfully');
       } catch (error) {
         console.warn('⚠️ [WebRTC] Microphone initialization failed, continuing without mic:', error);
+        // 마이크 초기화 실패를 콜백으로 알림
         this.onJoinRoomError({ 
           message: `마이크 초기화 실패: ${error instanceof Error ? error.message : '알 수 없는 에러'}` 
         });
+        // 마이크 실패해도 방 참여는 계속 진행
       }
       
       // 방 참여
@@ -193,9 +120,6 @@ export class WebRTCManager {
         serverUrl: SOCKET_SERVER_URL,
         timestamp: new Date().toISOString()
       });
-      
-      this.connectionState.isConnected = false;
-      this.onRealtimeConnectionStateChanged(false, error.message);
     });
 
     this.socket.on("disconnect", (reason) => {
@@ -216,36 +140,13 @@ export class WebRTCManager {
       }
     });
 
-    // ✅ 개선된 재연결 처리
+    // 재연결 시도
     this.socket.on("reconnect", (attemptNumber) => {
       console.log('🔄 [WebRTC] Socket.IO RECONNECTED:', {
         attemptNumber,
         socketId: this.socket.id,
         timestamp: new Date().toISOString()
       });
-      
-      // 재연결 시 상태 초기화
-      this.isJoiningRoom = false;
-      this.lastJoinAttempt = 0;
-      if (this.joinTimeoutId) {
-        clearTimeout(this.joinTimeoutId);
-        this.joinTimeoutId = null;
-      }
-      
-      // 기존 P2P 연결들 정리 후 재설정
-      this.peerConnections.forEach(pc => pc.close());
-      this.peerConnections.clear();
-      this.peerStates.clear();
-      this.reconnectionAttempts.clear();
-      
-      // 연결 상태 업데이트
-      this.connectionState.isConnected = true;
-      this.onRealtimeConnectionStateChanged(true);
-      
-      // 방 재참여
-      setTimeout(() => {
-        this.joinRoom();
-      }, 1000); // 1초 대기 후 재참여
     });
 
     this.socket.on("reconnect_error", (error) => {
@@ -253,11 +154,9 @@ export class WebRTCManager {
         error: error.message,
         timestamp: new Date().toISOString()
       });
-      
-      this.onRealtimeConnectionStateChanged(false, `재연결 실패: ${error.message}`);
     });
 
-    // 기존 이벤트 리스너들...
+    // room_status 이벤트 처리 - 서버 요구사항에 따른 방 상태 업데이트
     this.socket.on("room_status", (userList: unknown[]) => {
       console.log('📊 [WebRTC] Room status updated:', {
         userCount: Array.isArray(userList) ? userList.length : 'invalid',
@@ -268,6 +167,7 @@ export class WebRTCManager {
       this.onRoomUsers(userList);
     });
 
+    // 새 서버 이벤트: 방 참여 관련 (기존 이벤트 유지)
     this.socket.on("joined-room-success", (data: { roomCode: string; roomId: string; users: unknown[] }) => {
       console.log('🎉 [WebRTC] Room join SUCCESS:', {
         roomCode: data.roomCode,
@@ -277,12 +177,8 @@ export class WebRTCManager {
         timestamp: new Date().toISOString()
       });
       
-      // 방 참여 성공 시 플래그 및 타임아웃 해제
+      // 방 참여 성공 시 플래그 해제
       this.isJoiningRoom = false;
-      if (this.joinTimeoutId) {
-        clearTimeout(this.joinTimeoutId);
-        this.joinTimeoutId = null;
-      }
       
       this.onRoomUsers(data.users);
     });
@@ -295,36 +191,12 @@ export class WebRTCManager {
         timestamp: new Date().toISOString()
       });
       
-      // 방 참여 실패 시 플래그 및 타임아웃 해제
+      // 방 참여 실패 시 플래그 해제
       this.isJoiningRoom = false;
-      if (this.joinTimeoutId) {
-        clearTimeout(this.joinTimeoutId);
-        this.joinTimeoutId = null;
-      }
-      
-      // 인원 초과 에러인 경우 추가 처리
-      if (error.message.includes('인원') || error.message.includes('초과') || error.message.includes('찼습니다')) {
-        console.warn('⚠️ [WebRTC] Room capacity error detected, cleaning up existing connections...');
-        
-        // 기존 P2P 연결들 모두 정리
-        this.peerConnections.forEach((pc, socketId) => {
-          console.log(`🧹 [WebRTC] Cleaning up peer connection: ${socketId}`);
-          pc.close();
-        });
-        this.peerConnections.clear();
-        this.peerStates.clear();
-        this.reconnectionAttempts.clear();
-        
-        // 재시도 카운터 초기화
-        this.lastJoinAttempt = 0;
-        
-        console.log('🧹 [WebRTC] All peer connections cleaned up due to capacity error');
-      }
       
       this.onJoinRoomError(error);
     });
 
-    // 나머지 이벤트 리스너들은 기존과 동일...
     this.socket.on("room-users", (users: unknown[]) => {
       console.log('👥 [WebRTC] Room users updated:', {
         userCount: Array.isArray(users) ? users.length : 'invalid',
@@ -335,14 +207,18 @@ export class WebRTCManager {
       this.onRoomUsers(users);
     });
 
+    // 통합된 참여자 업데이트 이벤트
     this.socket.on("participant-update", (event: ParticipantUpdateEvent | unknown[]) => {
+      // 이벤트 타입 확인 - 객체 형태인지 배열 형태인지
       if (Array.isArray(event)) {
+        // 배열 형태 (실시간 업데이트)
         console.log(`👥 [WebRTC] Participant update received (array):`, {
           count: event.length,
           participants: event
         });
         this.onRealtimeParticipantsUpdate(event);
       } else if (event && typeof event === 'object' && 'eventType' in event) {
+        // 객체 형태 (구조화된 이벤트)
         const participantEvent = event as ParticipantUpdateEvent;
         console.log('👥 [WebRTC] Participant update received (event):', {
           eventType: participantEvent.eventType,
@@ -351,6 +227,7 @@ export class WebRTCManager {
           timestamp: new Date().toISOString()
         });
         this.onParticipantUpdate(participantEvent);
+        // 실시간 업데이트도 함께 처리
         if (participantEvent.participants) {
           this.onRealtimeParticipantsUpdate(participantEvent.participants);
         }
@@ -359,6 +236,7 @@ export class WebRTCManager {
       }
     });
 
+    // 사용자 참여/퇴장 이벤트
     this.socket.on("user-joined", async (data: { socketId: string; guestUserId: string; nickname: string; joinedAt: string }) => {
       console.log('👋 [WebRTC] NEW USER JOINED:', {
         nickname: data.nickname,
@@ -366,39 +244,10 @@ export class WebRTCManager {
         guestUserId: data.guestUserId,
         joinedAt: data.joinedAt,
         mySocketId: this.socket.id,
-        isSameAsMe: data.socketId === this.socket.id,
-        willCreatePeerConnection: data.socketId !== this.socket.id,
+        willCreatePeerConnection: true,
         timestamp: new Date().toISOString()
       });
-      
-      // 자신에게는 P2P 연결을 생성하지 않음
-      if (data.socketId === this.socket.id) {
-        console.log('⚠️ [WebRTC] Skipping peer connection - this is myself');
-        return;
-      }
-      
-      try {
-        console.log('🔄 [WebRTC] Attempting to create peer connection for new user:', {
-          socketId: data.socketId,
-          nickname: data.nickname,
-          isOfferer: true,
-          hasLocalStream: !!this.localStream,
-          localStreamTracks: this.localStream?.getTracks().length || 0
-        });
-        
-        await this.createPeerConnection(data.socketId, true, data.nickname);
-        
-        console.log('✅ [WebRTC] Peer connection created successfully for:', data.nickname);
-      } catch (error) {
-        console.error('❌ [WebRTC] Failed to create peer connection for new user:', {
-          nickname: data.nickname,
-          socketId: data.socketId,
-          error: error,
-          errorMessage: error instanceof Error ? error.message : 'Unknown error',
-          errorStack: error instanceof Error ? error.stack : undefined,
-          timestamp: new Date().toISOString()
-        });
-      }
+      await this.createPeerConnection(data.socketId, true, data.nickname);
     });
     
     this.socket.on("user-left", (data: { socketId: string; guestUserId: string; nickname: string }) => {
@@ -413,6 +262,7 @@ export class WebRTCManager {
       this.onUserLeft(data.socketId);
     });
 
+
     this.socket.on("room-participants", (participants: unknown[]) => {
       console.log(`👥 [WebRTC] Room participants received:`, {
         count: Array.isArray(participants) ? participants.length : 0,
@@ -421,7 +271,7 @@ export class WebRTCManager {
       this.onRealtimeParticipantsUpdate(participants);
     });
 
-    // WebRTC 시그널링 이벤트들
+    // WebRTC 시그널링 이벤트
     this.socket.on("offer", async (data: { fromSocketId: string; fromNickname: string; offer: RTCSessionDescriptionInit }) => {
       console.log('📞 [WebRTC] OFFER RECEIVED:', {
         from: data.fromNickname,
@@ -431,7 +281,6 @@ export class WebRTCManager {
         offerSdp: data.offer.sdp?.substring(0, 100) + '...',
         timestamp: new Date().toISOString()
       });
-      
       try {
         await this.createPeerConnection(data.fromSocketId, false, data.fromNickname);
         const pc = this.peerConnections.get(data.fromSocketId);
@@ -473,7 +322,6 @@ export class WebRTCManager {
         answerSdp: data.answer.sdp?.substring(0, 100) + '...',
         timestamp: new Date().toISOString()
       });
-      
       try {
         const pc = this.peerConnections.get(data.fromSocketId);
         if (pc) {
@@ -505,7 +353,6 @@ export class WebRTCManager {
         sdpMLineIndex: data.candidate?.sdpMLineIndex,
         timestamp: new Date().toISOString()
       });
-      
       try {
         const pc = this.peerConnections.get(data.fromSocketId);
         if (pc && data.candidate) {
@@ -528,11 +375,12 @@ export class WebRTCManager {
       }
     });
 
-    // 나머지 이벤트들...
+    // 채팅 메시지
     this.socket.on("chat-message", (data: unknown) => {
       console.log("Chat message received:", data);
     });
 
+    // 녹화 관련 이벤트
     this.socket.on("recording-started", (data: unknown) => {
       console.log("Recording started:", data);
     });
@@ -541,19 +389,18 @@ export class WebRTCManager {
       console.log("Recording stopped:", data);
     });
 
+    // 에러 처리
     this.socket.on("error", (error: { message: string }) => {
       console.error("Socket error:", error);
-      this.onRealtimeConnectionStateChanged(false, error.message);
     });
   }
 
-  // ✅ 개선된 방 참여 로직
   private joinRoom() {
     console.log('🚪 [WebRTC] Attempting to join room...');
     
-    // 강화된 중복 참여 방지 (5초로 연장)
+    // 중복 참여 방지 (1초 내)
     const now = Date.now();
-    if (this.isJoiningRoom || (now - this.lastJoinAttempt < 5000)) {
+    if (this.isJoiningRoom || (now - this.lastJoinAttempt < 1000)) {
       console.log('⚠️ [WebRTC] Join room attempt blocked - too frequent or already joining', {
         isJoiningRoom: this.isJoiningRoom,
         timeSinceLastAttempt: now - this.lastJoinAttempt,
@@ -565,27 +412,11 @@ export class WebRTCManager {
     this.isJoiningRoom = true;
     this.lastJoinAttempt = now;
     
-    // 타임아웃 설정으로 플래그 강제 해제
-    this.joinTimeoutId = setTimeout(() => {
-      if (this.isJoiningRoom) {
-        console.warn('⚠️ [WebRTC] Join room timeout, resetting flag');
-        this.isJoiningRoom = false;
-        this.joinTimeoutId = null;
-      }
-    }, 10000); // 10초 타임아웃
-    
     if (!this.guestUserId) {
       console.error('❌ [WebRTC] No guest user ID available, will retry...', {
         retryIn: '1000ms',
         timestamp: new Date().toISOString()
       });
-      
-      this.isJoiningRoom = false;
-      if (this.joinTimeoutId) {
-        clearTimeout(this.joinTimeoutId);
-        this.joinTimeoutId = null;
-      }
-      
       setTimeout(() => {
         this.guestUserId = getCurrentUserId();
         if (this.guestUserId) {
@@ -605,50 +436,39 @@ export class WebRTCManager {
         nickname: this.nickname,
         timestamp: new Date().toISOString()
       });
-      
-      this.isJoiningRoom = false;
-      if (this.joinTimeoutId) {
-        clearTimeout(this.joinTimeoutId);
-        this.joinTimeoutId = null;
-      }
       return;
     }
 
-    // WebRTC 매니저는 백그라운드용 고유 닉네임으로 방 참여 (UI에서 필터링됨)
-    const webrtcNickname = `WEBRTC_${this.nickname}_${this.guestUserId.slice(-8)}_${this.socket.id.slice(-8)}`;
+    const uniqueNickname = `${this.nickname}_${this.roomCode}_${this.guestUserId.slice(-8)}`;
     
-    console.log('🚀 [WebRTC] JOINING ROOM via Socket.IO (as background WebRTC manager):', {
+    console.log('🚀 [WebRTC] JOINING ROOM via Socket.IO:', {
       roomCode: this.roomCode,
       guestUserId: this.guestUserId,
       originalNickname: this.nickname,
-      webrtcNickname: webrtcNickname,
+      uniqueNickname: uniqueNickname,
       socketId: this.socket.id,
-      purpose: 'WebRTC signaling participant (will be filtered from UI)',
-      isReconnect: false,
+      isReconnect: true,
       timestamp: new Date().toISOString()
     });
 
     this.socket.emit("join-room", {
       roomCode: this.roomCode,
       guestUserId: this.guestUserId,
-      nickname: webrtcNickname, // 백그라운드용 고유 닉네임
-      isReconnect: false
+      nickname: uniqueNickname,
+      isReconnect: true
     });
   }
 
-  // ✅ 개선된 오디오 스트림 설정
   private async setupProcessedAudioStream(): Promise<MediaStream | null> {
     try {
-      // 1. 원본 마이크 스트림 획득 (설정 최적화)
+      // 1. 원본 마이크 스트림 획득
       const originalStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-          sampleRate: 44100, // 48000 → 44100으로 변경 (더 안정적)
-          channelCount: 1,
-          latency: 0.01, // 낮은 레이턴시
-          volume: 1.0
+          sampleRate: 48000,
+          channelCount: 1
         }
       });
 
@@ -717,12 +537,15 @@ export class WebRTCManager {
 
     try {
       // 1단계: 권한 상태 확인 (Chrome의 경우 정확하지 않을 수 있음)
+      let permissionGranted = false;
       if ('permissions' in navigator) {
         try {
           const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
           console.log('🔐 [WebRTC] Permission API status:', permissionStatus.state);
+          permissionGranted = permissionStatus.state === 'granted';
         } catch (permError) {
           console.warn('⚠️ [WebRTC] Permission API not available:', permError);
+          // Permission API 실패 시에도 직접 시도해봄
         }
       }
 
@@ -766,6 +589,7 @@ export class WebRTCManager {
         } catch (attemptError) {
           console.warn(`⚠️ [WebRTC] Attempt ${i + 1} failed:`, attemptError);
           if (i === attempts.length - 1) {
+            // 마지막 시도도 실패
             throw attemptError;
           }
         }
@@ -836,7 +660,144 @@ export class WebRTCManager {
     }
   }
 
-  // ✅ 강화된 Peer Connection 생성
+  // 레거시 메서드 (호환성 유지)
+  public async startLegacy(): Promise<MediaStream | null> {
+    console.log('🎵 [WebRTC] Starting local media stream (legacy)...');
+    
+    // 브라우저 호환성 확인
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      console.error('❌ [WebRTC] getUserMedia is not supported in this browser');
+      this.onJoinRoomError({ 
+        message: '이 브라우저는 마이크 기능을 지원하지 않습니다. Chrome, Firefox, Safari 등 최신 브라우저를 사용해주세요.' 
+      });
+      return null;
+    }
+
+    try {
+      // 마이크 권한 먼저 확인
+      console.log('🔍 [WebRTC] Checking microphone permissions...');
+      
+      // 권한 상태 확인 (지원하는 브라우저만)
+      if ('permissions' in navigator) {
+        try {
+          const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+          console.log('🔐 [WebRTC] Microphone permission status:', permissionStatus.state);
+          
+          if (permissionStatus.state === 'denied') {
+            console.error('❌ [WebRTC] Microphone permission denied');
+            this.onJoinRoomError({ 
+              message: '마이크 권한이 거부되었습니다. 브라우저 설정에서 마이크 권한을 허용해주세요.' 
+            });
+            return null;
+          }
+        } catch (permError) {
+          console.warn('⚠️ [WebRTC] Could not check permission status:', permError);
+        }
+      }
+
+      // 마이크 접근 시도 - 처리된 오디오 스트림 사용
+      console.log('🎤 [WebRTC] Requesting microphone access with audio processing...');
+      this.localStream = await this.setupProcessedAudioStream();
+
+      if (!this.localStream) {
+        console.error('❌ [WebRTC] Failed to obtain audio stream');
+        this.onJoinRoomError({ 
+          message: '오디오 스트림을 가져올 수 없습니다. 마이크 권한을 확인해주세요.' 
+        });
+        return null;
+      }
+      
+      console.log('✅ [WebRTC] LOCAL STREAM OBTAINED:', {
+        streamId: this.localStream.id,
+        audioTracks: this.localStream.getAudioTracks().length,
+        videoTracks: this.localStream.getVideoTracks().length,
+        tracks: this.localStream.getTracks().map(track => ({
+          kind: track.kind,
+          id: track.id,
+          label: track.label,
+          enabled: track.enabled,
+          readyState: track.readyState,
+          settings: track.getSettings ? track.getSettings() : 'N/A'
+        })),
+        timestamp: new Date().toISOString()
+      });
+      
+      // 오디오 트랙 상태 확인
+      const audioTracks = this.localStream.getAudioTracks();
+      if (audioTracks.length === 0) {
+        console.error('❌ [WebRTC] No audio tracks found in stream');
+        this.onJoinRoomError({ 
+          message: '마이크를 찾을 수 없습니다. 마이크가 연결되어 있는지 확인해주세요.' 
+        });
+        return null;
+      }
+
+      // 오디오 트랙 이벤트 리스너 추가
+      audioTracks.forEach((track, index) => {
+        console.log(`🎵 [WebRTC] Audio track ${index}:`, {
+          label: track.label,
+          enabled: track.enabled,
+          readyState: track.readyState
+        });
+
+        track.addEventListener('ended', () => {
+          console.warn(`⚠️ [WebRTC] Audio track ${index} ended`);
+        });
+
+        track.addEventListener('mute', () => {
+          console.warn(`🔇 [WebRTC] Audio track ${index} muted`);
+        });
+
+        track.addEventListener('unmute', () => {
+          console.log(`🔊 [WebRTC] Audio track ${index} unmuted`);
+        });
+      });
+      
+      return this.localStream;
+    } catch (error) {
+      const err = error as DOMException;
+      console.error('❌ [WebRTC] Error getting user media:', {
+        error: error,
+        name: err.name,
+        message: err.message,
+        timestamp: new Date().toISOString()
+      });
+
+      // 구체적인 에러 메시지 제공
+      let userMessage = '마이크 접근 중 오류가 발생했습니다.';
+      
+      switch (err.name) {
+        case 'NotAllowedError':
+        case 'PermissionDeniedError':
+          userMessage = '마이크 권한이 거부되었습니다. 브라우저 주소창 옆의 마이크 아이콘을 클릭하여 권한을 허용해주세요.';
+          break;
+        case 'NotFoundError':
+        case 'DevicesNotFoundError':
+          userMessage = '마이크를 찾을 수 없습니다. 마이크가 연결되어 있는지 확인해주세요.';
+          break;
+        case 'NotReadableError':
+        case 'TrackStartError':
+          userMessage = '마이크에 접근할 수 없습니다. 다른 앱에서 마이크를 사용 중일 수 있습니다.';
+          break;
+        case 'OverconstrainedError':
+        case 'ConstraintNotSatisfiedError':
+          userMessage = '마이크 설정에 문제가 있습니다. 브라우저를 새로고침 후 다시 시도해주세요.';
+          break;
+        case 'NotSupportedError':
+          userMessage = '이 브라우저는 마이크 기능을 지원하지 않습니다.';
+          break;
+        case 'TypeError':
+          userMessage = '마이크 설정 오류가 발생했습니다. 페이지를 새로고침해주세요.';
+          break;
+        default:
+          userMessage = `마이크 오류: ${err.message || '알 수 없는 오류'}`;
+      }
+
+      this.onJoinRoomError({ message: userMessage });
+      return null;
+    }
+  }
+
   private async createPeerConnection(targetSocketId: string, isOfferer: boolean, nickname: string = 'Unknown') {
     console.log('🔗 [WebRTC] CREATING PEER CONNECTION:', {
       targetNickname: nickname,
@@ -857,277 +818,168 @@ export class WebRTCManager {
       return;
     }
     
-    try {
-      const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: "stun:stun.l.google.com:19302" },
-          { urls: "stun:stun1.l.google.com:19302" }
-        ],
-      });
-      
-      console.log('⚙️ [WebRTC] RTCPeerConnection created with STUN servers');
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" }
+      ],
+    });
+    
+    console.log('⚙️ [WebRTC] RTCPeerConnection created with STUN servers');
 
-      // 연결 상태 추적
-      const peerState: PeerConnectionState = {
-        socketId: targetSocketId,
-        nickname,
-        connectionState: 'new',
-        hasAudio: false,
-        isMuted: false
-      };
-      this.peerStates.set(targetSocketId, peerState);
-      
-      console.log('📋 [WebRTC] Peer state initialized:', peerState);
+    // 연결 상태 추적
+    const peerState: PeerConnectionState = {
+      socketId: targetSocketId,
+      nickname,
+      connectionState: 'new',
+      hasAudio: false,
+      isMuted: false
+    };
+    this.peerStates.set(targetSocketId, peerState);
+    
+    console.log('📋 [WebRTC] Peer state initialized:', peerState);
 
-      // 연결 상태 변경 감지
-      pc.onconnectionstatechange = () => {
-        const state = this.peerStates.get(targetSocketId);
-        if (state) {
-          const prevState = state.connectionState;
-          state.connectionState = pc.connectionState;
-          console.log('🔄 [WebRTC] CONNECTION STATE CHANGED:', {
-            nickname,
-            targetSocketId,
-            previousState: prevState,
-            newState: pc.connectionState,
-            iceConnectionState: pc.iceConnectionState,
-            iceGatheringState: pc.iceGatheringState,
-            signalingState: pc.signalingState,
-            timestamp: new Date().toISOString()
-          });
-          this.notifyStateChanged();
-        }
-      };
-
-      pc.onicecandidate = (event) => {
-        if (event.candidate) {
-          const candidateData: WebRTCIceCandidate = {
-            targetSocketId: targetSocketId,
-            candidate: event.candidate,
-          };
-          this.socket.emit("ice-candidate", candidateData);
-          console.log('🧊 [WebRTC] ICE CANDIDATE SENT:', {
-            to: nickname,
-            targetSocketId,
-            candidate: event.candidate.candidate?.substring(0, 50) + '...',
-            sdpMid: event.candidate.sdpMid,
-            sdpMLineIndex: event.candidate.sdpMLineIndex,
-            timestamp: new Date().toISOString()
-          });
-        } else {
-          console.log('🏁 [WebRTC] ICE gathering complete for:', nickname);
-        }
-      };
-
-      pc.ontrack = (event) => {
-        console.log('🎵 [WebRTC] REMOTE STREAM RECEIVED:', {
-          from: nickname,
-          targetSocketId,
-          streamId: event.streams[0]?.id,
-          tracks: event.streams[0]?.getTracks().map(track => ({
-            kind: track.kind,
-            id: track.id,
-            enabled: track.enabled,
-            readyState: track.readyState
-          })),
-          audioTracks: event.streams[0]?.getAudioTracks().length || 0,
-          videoTracks: event.streams[0]?.getVideoTracks().length || 0,
-          timestamp: new Date().toISOString()
-        });
-        
-        const state = this.peerStates.get(targetSocketId);
-        if (state) {
-          state.hasAudio = event.streams[0].getAudioTracks().length > 0;
-          console.log('🔊 [WebRTC] Audio track status updated:', {
-            nickname,
-            hasAudio: state.hasAudio
-          });
-          this.notifyStateChanged();
-        }
-        this.onRemoteStream(targetSocketId, event.streams[0]);
-      };
-
-      // ✅ 개선된 ICE 연결 상태 처리
-      pc.oniceconnectionstatechange = () => {
-        console.log('❄️ [WebRTC] ICE CONNECTION STATE CHANGED:', {
+    // 연결 상태 변경 감지
+    pc.onconnectionstatechange = () => {
+      const state = this.peerStates.get(targetSocketId);
+      if (state) {
+        const prevState = state.connectionState;
+        state.connectionState = pc.connectionState;
+        console.log('🔄 [WebRTC] CONNECTION STATE CHANGED:', {
           nickname,
           targetSocketId,
+          previousState: prevState,
+          newState: pc.connectionState,
           iceConnectionState: pc.iceConnectionState,
-          connectionState: pc.connectionState,
+          iceGatheringState: pc.iceGatheringState,
+          signalingState: pc.signalingState,
+          timestamp: new Date().toISOString()
+        });
+        this.notifyStateChanged();
+      }
+    };
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        const candidateData: WebRTCIceCandidate = {
+          targetSocketId: targetSocketId,
+          candidate: event.candidate,
+        };
+        this.socket.emit("ice-candidate", candidateData);
+        console.log('🧊 [WebRTC] ICE CANDIDATE SENT:', {
+          to: nickname,
+          targetSocketId,
+          candidate: event.candidate.candidate?.substring(0, 50) + '...',
+          sdpMid: event.candidate.sdpMid,
+          sdpMLineIndex: event.candidate.sdpMLineIndex,
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        console.log('🏁 [WebRTC] ICE gathering complete for:', nickname);
+      }
+    };
+
+    pc.ontrack = (event) => {
+      console.log('🎵 [WebRTC] REMOTE STREAM RECEIVED:', {
+        from: nickname,
+        targetSocketId,
+        streamId: event.streams[0]?.id,
+        tracks: event.streams[0]?.getTracks().map(track => ({
+          kind: track.kind,
+          id: track.id,
+          enabled: track.enabled,
+          readyState: track.readyState
+        })),
+        audioTracks: event.streams[0]?.getAudioTracks().length || 0,
+        videoTracks: event.streams[0]?.getVideoTracks().length || 0,
+        timestamp: new Date().toISOString()
+      });
+      
+      const state = this.peerStates.get(targetSocketId);
+      if (state) {
+        state.hasAudio = event.streams[0].getAudioTracks().length > 0;
+        console.log('🔊 [WebRTC] Audio track status updated:', {
+          nickname,
+          hasAudio: state.hasAudio
+        });
+        this.notifyStateChanged();
+      }
+      this.onRemoteStream(targetSocketId, event.streams[0]);
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      console.log('❄️ [WebRTC] ICE CONNECTION STATE CHANGED:', {
+        nickname,
+        targetSocketId,
+        iceConnectionState: pc.iceConnectionState,
+        connectionState: pc.connectionState,
+        timestamp: new Date().toISOString()
+      });
+      
+      // ICE 연결 실패 시 로깅
+      if (pc.iceConnectionState === 'failed') {
+        console.error('❌ [WebRTC] ICE connection FAILED:', {
+          nickname,
+          targetSocketId,
+          allStates: {
+            connectionState: pc.connectionState,
+            iceConnectionState: pc.iceConnectionState,
+            iceGatheringState: pc.iceGatheringState,
+            signalingState: pc.signalingState
+          }
+        });
+      }
+    };
+
+    if (this.localStream) {
+      this.localStream.getTracks().forEach(track => {
+        pc.addTrack(track, this.localStream!);
+        console.log('➕ [WebRTC] LOCAL TRACK ADDED:', {
+          to: nickname,
+          trackKind: track.kind,
+          trackId: track.id,
+          enabled: track.enabled,
+          readyState: track.readyState,
+          timestamp: new Date().toISOString()
+        });
+      });
+    } else {
+      console.warn('⚠️ [WebRTC] No local stream available to add tracks');
+    }
+
+    this.peerConnections.set(targetSocketId, pc);
+
+    if (isOfferer) {
+      try {
+        console.log('📤 [WebRTC] Creating offer...');
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        
+        const offerData: WebRTCOffer = {
+          targetSocketId: targetSocketId, 
+          offer 
+        };
+        
+        console.log('📤 [WebRTC] OFFER CREATED & SENDING:', {
+          to: nickname,
+          targetSocketId,
+          offerType: offer.type,
+          offerSdp: offer.sdp?.substring(0, 100) + '...',
+          localDescription: {
+            type: pc.localDescription?.type,
+            sdp: pc.localDescription?.sdp?.substring(0, 100) + '...'
+          },
           timestamp: new Date().toISOString()
         });
         
-        // ICE 연결 실패 시 복구 로직
-        if (pc.iceConnectionState === 'failed') {
-          console.error('❌ [WebRTC] ICE connection FAILED, attempting recovery:', {
-            nickname,
-            targetSocketId,
-            allStates: {
-              connectionState: pc.connectionState,
-              iceConnectionState: pc.iceConnectionState,
-              iceGatheringState: pc.iceGatheringState,
-              signalingState: pc.signalingState
-            }
-          });
-          
-          // ICE 재시작 시도
-          try {
-            pc.restartIce();
-            console.log('🔄 [WebRTC] ICE restart initiated for:', nickname);
-          } catch (restartError) {
-            console.error('❌ [WebRTC] ICE restart failed:', restartError);
-          }
-          
-          // 재시도 횟수 확인
-          const attempts = this.reconnectionAttempts.get(targetSocketId) || 0;
-          if (attempts < this.maxReconnectionAttempts) {
-            this.reconnectionAttempts.set(targetSocketId, attempts + 1);
-            
-            // 3초 후에도 실패하면 연결 재생성
-            setTimeout(() => {
-              if (pc.iceConnectionState === 'failed') {
-                console.log('🔄 [WebRTC] Attempting peer connection recreation for:', nickname);
-                this.closePeerConnection(targetSocketId);
-                this.createPeerConnection(targetSocketId, true, nickname);
-              }
-            }, 3000);
-          } else {
-            console.error('❌ [WebRTC] Max reconnection attempts reached for:', nickname);
-            this.onJoinRoomError({
-              message: `${nickname}와의 연결을 복구할 수 없습니다. 새로고침을 시도해주세요.`
-            });
-          }
-        } else if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
-          // 연결 성공 시 재시도 횟수 초기화
-          this.reconnectionAttempts.delete(targetSocketId);
-        }
-      };
-
-      if (this.localStream) {
-        this.localStream.getTracks().forEach(track => {
-          pc.addTrack(track, this.localStream!);
-          console.log('➕ [WebRTC] LOCAL TRACK ADDED:', {
-            to: nickname,
-            trackKind: track.kind,
-            trackId: track.id,
-            enabled: track.enabled,
-            readyState: track.readyState,
-            timestamp: new Date().toISOString()
-          });
+        this.socket.emit("offer", offerData);
+      } catch (error) {
+        console.error('❌ [WebRTC] Error creating OFFER:', {
+          to: nickname,
+          error: error,
+          timestamp: new Date().toISOString()
         });
-      } else {
-        console.warn('⚠️ [WebRTC] No local stream available to add tracks - will retry after stream initialization');
-        
-        // 로컬 스트림이 준비될 때까지 대기하고 나중에 트랙 추가
-        const waitForLocalStream = async () => {
-          let attempts = 0;
-          const maxAttempts = 50; // 5초 대기
-          
-          while (!this.localStream && attempts < maxAttempts) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-            attempts++;
-          }
-          
-          if (this.localStream && this.peerConnections.has(targetSocketId)) {
-            const connection = this.peerConnections.get(targetSocketId);
-            if (connection) {
-              console.log('🔄 [WebRTC] Adding local tracks to existing peer connection:', {
-                to: nickname,
-                targetSocketId,
-                streamId: this.localStream.id,
-                audioTracks: this.localStream.getAudioTracks().length
-              });
-              
-              this.localStream.getTracks().forEach(track => {
-                connection.addTrack(track, this.localStream!);
-                console.log('➕ [WebRTC] DELAYED LOCAL TRACK ADDED:', {
-                  to: nickname,
-                  trackKind: track.kind,
-                  trackId: track.id,
-                  enabled: track.enabled,
-                  readyState: track.readyState,
-                  timestamp: new Date().toISOString()
-                });
-              });
-              
-              // 새로운 offer 생성하여 변경사항 전달
-              if (isOfferer) {
-                try {
-                  const newOffer = await connection.createOffer();
-                  await connection.setLocalDescription(newOffer);
-                  
-                  const offerData: WebRTCOffer = {
-                    targetSocketId: targetSocketId,
-                    offer: newOffer
-                  };
-                  
-                  this.socket.emit("offer", offerData);
-                  console.log('📤 [WebRTC] NEW OFFER SENT after adding tracks:', {
-                    to: nickname,
-                    targetSocketId,
-                    timestamp: new Date().toISOString()
-                  });
-                } catch (error) {
-                  console.error('❌ [WebRTC] Error creating new offer after adding tracks:', error);
-                }
-              }
-            }
-          } else {
-            console.error('❌ [WebRTC] Failed to add tracks - local stream or peer connection not available');
-          }
-        };
-        
-        waitForLocalStream();
       }
-
-      this.peerConnections.set(targetSocketId, pc);
-
-      if (isOfferer) {
-        try {
-          console.log('📤 [WebRTC] Creating offer...');
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-          
-          const offerData: WebRTCOffer = {
-            targetSocketId: targetSocketId, 
-            offer 
-          };
-          
-          console.log('📤 [WebRTC] OFFER CREATED & SENDING:', {
-            to: nickname,
-            targetSocketId,
-            offerType: offer.type,
-            offerSdp: offer.sdp?.substring(0, 100) + '...',
-            localDescription: {
-              type: pc.localDescription?.type,
-              sdp: pc.localDescription?.sdp?.substring(0, 100) + '...'
-            },
-            timestamp: new Date().toISOString()
-          });
-          
-          this.socket.emit("offer", offerData);
-        } catch (error) {
-          console.error('❌ [WebRTC] Error creating OFFER:', {
-            to: nickname,
-            error: error,
-            timestamp: new Date().toISOString()
-          });
-          throw error;
-        }
-      }
-    } catch (error) {
-      console.error('❌ [WebRTC] Peer connection creation failed:', error);
-      
-      // 실패한 연결 정리
-      this.peerConnections.delete(targetSocketId);
-      this.peerStates.delete(targetSocketId);
-      
-      // 사용자에게 알림
-      this.onJoinRoomError({ 
-        message: `${nickname}와의 연결에 실패했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}` 
-      });
-      
-      throw error;
     }
   }
 
@@ -1156,13 +1008,9 @@ export class WebRTCManager {
       this.notifyStateChanged();
     }
     
-    // 재시도 횟수도 정리
-    this.reconnectionAttempts.delete(sid);
-    
     console.log('✅ [WebRTC] Peer connection cleanup completed for:', state?.nickname || sid);
   }
 
-  // ✅ 개선된 상태 알림
   private notifyStateChanged() {
     const state: VoiceChatState = {
       localStream: this.localStream,
@@ -1238,45 +1086,8 @@ export class WebRTCManager {
     return new Map(this.peerStates);
   }
 
-  // ✅ 새로 추가: 진단 정보 제공
-  public getConnectionDiagnostics() {
-    return {
-      socketConnected: this.socket.connected,
-      socketId: this.socket.id,
-      localStreamActive: !!this.localStream,
-      localStreamTracks: this.localStream?.getTracks().length || 0,
-      totalPeerConnections: this.peerConnections.size,
-      connectedPeers: this.getConnectedPeersCount(),
-      roomCode: this.roomCode,
-      guestUserId: this.guestUserId,
-      nickname: this.nickname,
-      isJoining: this.isJoiningRoom,
-      lastJoinAttempt: new Date(this.lastJoinAttempt).toISOString(),
-      reconnectionAttempts: Object.fromEntries(this.reconnectionAttempts),
-      peerStates: Array.from(this.peerStates.entries()).map(([id, state]) => ({
-        socketId: id,
-        nickname: state.nickname,
-        connectionState: state.connectionState,
-        hasAudio: state.hasAudio,
-        isMuted: state.isMuted
-      }))
-    };
-  }
-
-  // ✅ 강화된 종료 로직
   public close() {
-    console.log("🧹 [WebRTC] Closing all connections and leaving room.");
-    
-    // 타이머들 정리
-    if (this.joinTimeoutId) {
-      clearTimeout(this.joinTimeoutId);
-      this.joinTimeoutId = null;
-    }
-    
-    if (this.qualityCheckInterval) {
-      clearInterval(this.qualityCheckInterval);
-      this.qualityCheckInterval = null;
-    }
+    console.log("Closing all connections and leaving room.");
     
     // 방 나가기 이벤트 emit (roomCode 포함)
     if (this.socket.connected && this.roomCode) {
@@ -1286,39 +1097,19 @@ export class WebRTCManager {
     }
     
     // 로컬 스트림 정리
-    if (this.localStream) {
-      this.localStream.getTracks().forEach(track => {
-        track.stop();
-        console.log('🛑 [WebRTC] Local track stopped:', track.kind);
-      });
-      this.localStream = null;
-    }
+    this.localStream?.getTracks().forEach(track => track.stop());
     
     // P2P 연결 정리
-    this.peerConnections.forEach((pc, socketId) => {
-      console.log('🔌 [WebRTC] Closing peer connection:', socketId);
-      pc.close();
-    });
+    this.peerConnections.forEach(pc => pc.close());
     this.peerConnections.clear();
     this.peerStates.clear();
-    this.reconnectionAttempts.clear();
     
     // Socket.IO 연결 해제
     this.socket.disconnect();
-    
-    // 상태 초기화
-    this.isJoiningRoom = false;
-    this.lastJoinAttempt = 0;
-    
-    // 연결 상태 업데이트
-    this.connectionState.isConnected = false;
-    this.connectionState.localStream = null;
-    this.onRealtimeConnectionStateChanged(false);
-    
-    console.log("✅ [WebRTC] WebRTC Manager cleanup 완료");
+    console.log("✅ WebRTC Manager cleanup 완료");
   }
 
-  // 기존 메서드들 유지...
+  // 추가 메서드들
   public sendChatMessage(message: string) {
     this.socket.emit("chat-message", {
       roomCode: this.roomCode,
@@ -1383,4 +1174,4 @@ export class WebRTCManager {
       .filter(state => state.hasAudio && !state.isMuted)
       .map(state => state.nickname);
   }
-}
+} 

@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import type { Player } from "../../../types/room";
 import HostSmallIcon from "../../../assets/gamecast/Room/Host_small.svg?react";
+import { VoiceIndicator } from "../common/VoiceIndicator";
 import CardTop from "../../../assets/gamecast/Room/Card_top.svg?react";
 import CardBottomUnready from "../../../assets/gamecast/Room/Card_bottom_unready.svg?react";
 import CardBottomReady from "../../../assets/gamecast/Room/Card_bottom_ready.svg?react";
@@ -14,6 +15,9 @@ import { useCharacterAnimation } from "../../../hooks/useCharacterAnimation";
 interface PlayerCardProps {
   player: Player;
   isHost: boolean;
+  stream?: MediaStream | null;
+  isLocalPlayer?: boolean;
+  voiceChatConnected?: boolean;
 }
 
 /**
@@ -21,7 +25,16 @@ interface PlayerCardProps {
  * @param player - 플레이어 정보
  * @param isHost - 방장 여부
  */
-export const PlayerCard = ({ player, isHost }: PlayerCardProps) => {
+export const PlayerCard = ({ 
+  player, 
+  isHost, 
+  stream = null, 
+  isLocalPlayer = false,
+  voiceChatConnected = false 
+}: PlayerCardProps) => {
+  // 오디오 재생을 위한 ref
+  const audioRef = useRef<HTMLAudioElement>(null);
+  
   // 준비상태 확인 (새로운 데이터 구조 사용)
   const isReady = !!(player.preparationStatus?.characterSetup && player.preparationStatus?.screenSetup);
   
@@ -35,6 +48,77 @@ export const PlayerCard = ({ player, isHost }: PlayerCardProps) => {
     characterImageStyle,
     loadingIconStyle
   } = useCharacterAnimation(hasCharacter, isReady);
+
+  // 원격 오디오 스트림 재생 처리
+  useEffect(() => {
+    const audioElement = audioRef.current;
+    
+    if (audioElement && stream && !isLocalPlayer) {
+      console.log(`🔊 [PlayerCard] Setting up audio for ${player.nickname}:`, {
+        streamId: stream.id,
+        audioTracks: stream.getAudioTracks().length,
+        hasAudioElement: !!audioElement
+      });
+      
+      try {
+        // 스트림을 오디오 엘리먼트에 연결
+        audioElement.srcObject = stream;
+        audioElement.autoplay = true;
+        audioElement.playsInline = true;
+        audioElement.muted = false; // 음소거 해제
+        
+        // 볼륨 설정
+        audioElement.volume = 0.8; // 80% 볼륨으로 설정
+        
+        // 오디오 트랙 활성화 확인
+        const audioTracks = stream.getAudioTracks();
+        audioTracks.forEach(track => {
+          if (!track.enabled) {
+            console.warn(`⚠️ [PlayerCard] Audio track disabled for ${player.nickname}`);
+          }
+        });
+        
+        // 재생 시작 시도
+        const playPromise = audioElement.play();
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            console.log(`✅ [PlayerCard] Audio playing for ${player.nickname}`);
+          }).catch(error => {
+            console.warn(`⚠️ [PlayerCard] Auto-play failed for ${player.nickname}:`, error);
+            
+            // 사용자 인터랙션이 필요한 경우, 전역 이벤트 리스너 추가
+            const enableAudio = () => {
+              audioElement.play()
+                .then(() => {
+                  console.log(`✅ [PlayerCard] Audio enabled after user interaction for ${player.nickname}`);
+                  document.removeEventListener('click', enableAudio);
+                  document.removeEventListener('touchstart', enableAudio);
+                })
+                .catch(err => console.error(`❌ [PlayerCard] Failed to enable audio:`, err));
+            };
+            
+            document.addEventListener('click', enableAudio, { once: true });
+            document.addEventListener('touchstart', enableAudio, { once: true });
+          });
+        }
+        
+        console.log(`✅ [PlayerCard] Audio setup completed for ${player.nickname}`);
+      } catch (error) {
+        console.error(`❌ [PlayerCard] Audio setup failed for ${player.nickname}:`, error);
+      }
+    } else if (audioElement && !stream) {
+      // 스트림이 없으면 오디오 정리
+      audioElement.srcObject = null;
+      console.log(`🧹 [PlayerCard] Audio cleaned up for ${player.nickname}`);
+    }
+    
+    // 정리 함수
+    return () => {
+      if (audioElement) {
+        audioElement.srcObject = null;
+      }
+    };
+  }, [stream, isLocalPlayer, player.nickname]);
 
   return (
     <div className="w-[230px] h-[288px] flex flex-col items-center justify-between">
@@ -82,6 +166,18 @@ export const PlayerCard = ({ player, isHost }: PlayerCardProps) => {
           >
             {player.nickname}
           </span>
+          
+          {/* 음성 표시기 */}
+          {voiceChatConnected && (
+            <div className="ml-2">
+              <VoiceIndicator
+                stream={stream}
+                isConnected={voiceChatConnected}
+                nickname={player.nickname}
+                size="small"
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -150,6 +246,16 @@ export const PlayerCard = ({ player, isHost }: PlayerCardProps) => {
           {player.name}
         </div>
       </div>
+      
+      {/* 원격 오디오 재생을 위한 숨겨진 audio 엘리먼트 */}
+      {!isLocalPlayer && (
+        <audio 
+          ref={audioRef}
+          style={{ display: 'none' }}
+          autoPlay
+          playsInline
+        />
+      )}
     </div>
   );
 };

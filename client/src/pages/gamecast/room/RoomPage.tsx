@@ -10,10 +10,9 @@ import { NicknameContainer } from "../../../components/gamecast/room/NicknameCon
 import SettingIcon from "../../../assets/gamecast/Room/setting.svg?react";
 import { useRoom } from "../../../hooks/useRoom.ts";
 import { PlayerGrid } from "../../../components/gamecast/room/PlayerGrid.tsx";
-// import { useVoiceChat } from "../../../hooks/useVoiceChat.ts"; // 음성채팅 기능 비활성화
-import { useRealTimeRoom } from "../../../hooks/useRealTimeRoom.ts";
-import { VoiceStatusOverlay } from "../../../components/gamecast/room/VoiceStatusOverlay.tsx";
-import type { PlayerWithStream } from "../../../components/gamecast/room/VoiceStatusOverlay.tsx";
+import { useVoiceChat } from "../../../hooks/useVoiceChat.ts";
+import { MicrophonePermissionGuide } from "../../../components/gamecast/common/MicrophonePermissionGuide";
+import { MicrophoneStatusIndicator } from "../../../components/gamecast/common/MicrophoneStatusIndicator";
 import { CharacterSetupPage } from "../character-setup/CharacterSetupPage";
 
 interface ErrorBoundaryState {
@@ -56,104 +55,109 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 export const RoomPage = () => {
   const { currentRoom, currentPlayer, loading, error, refreshRoomState, handleLeaveRoom } = useRoom();
   
-  // 음성채팅 및 WebRTC 기능 완전 비활성화 - REST API 테스트를 위해
-  const localStream = null;
-  const remoteStreams = new Map<string, MediaStream>();
-  const joinError = null;
+  // 실시간 참여자 업데이트 상태 (초기값을 현재 방 참여자로 설정)
+  const [realtimeParticipants, setRealtimeParticipants] = useState<Player[]>(currentRoom?.participants || []);
   
-  // 실시간 참여자 업데이트 기능
-  const [realtimeParticipants, setRealtimeParticipants] = useState<Player[]>([]);
-  const realTimeRoom = useRealTimeRoom({
-    roomCode: currentRoom?.roomCode || null,
-    currentPlayer: currentPlayer,
-    enabled: !!(currentRoom && currentPlayer) // 방과 플레이어 정보가 있을 때만 활성화
-  });
+  // 음성채팅 및 실시간 업데이트 기능 (통합된 Socket.IO 연결)
+  const {
+    localStream,
+    remoteStreams,
+    joinError, // 방 입장 관련 에러
+    microphoneError, // 마이크 권한 관련 에러
+    voiceChatState,
+    peerStates, // 피어 연결 상태
+    muteLocalAudio,
+    unmuteLocalAudio,
+    toggleLocalAudio,
+    isLocalMuted,
+    getConnectedPeersCount,
+    // 새로 추가된 실시간 업데이트 기능
+    setOnRealtimeParticipantsUpdate,
+    setOnRealtimeConnectionStateChanged,
+    // 디버깅용
+    hasWebRTCManager,
+    hasGlobalManager
+  } = useVoiceChat(
+    currentRoom?.roomCode || null,
+    currentPlayer?.nickname || '',
+    !!(currentRoom && currentPlayer) // 방과 플레이어 정보가 있을 때만 활성화
+  );
   
   const [showCharacterSetup, setShowCharacterSetup] = useState(false);
+  const [showMicGuide, setShowMicGuide] = useState(false);
   
-  // 실시간 참여자 업데이트 콜백 설정 - refreshRoomState 제거로 무한루프 방지
+  // 방 정보가 로드되면 초기 참여자 목록 설정
   useEffect(() => {
-    console.log('🔧 실시간 참여자 업데이트 콜백 설정 시도:', {
-      hasRealTimeRoom: !!realTimeRoom,
-      hasSetOnParticipantsUpdate: !!realTimeRoom?.setOnParticipantsUpdate
-    });
-    
-    if (realTimeRoom?.setOnParticipantsUpdate) {
-      realTimeRoom.setOnParticipantsUpdate((participants) => {
-        console.log('🔄 실시간 참여자 업데이트 수신:', {
-          participantCount: participants.length,
-          participants: participants
-        });
-        console.log('🎯 setRealtimeParticipants 호출 전 상태:', realtimeParticipants.length);
-        setRealtimeParticipants(participants);
-        console.log('✅ setRealtimeParticipants 호출 완료');
-        // refreshRoomState() 제거 - 무한루프 방지
-        // 실시간 데이터가 이미 최신이므로 추가 조회 불필요
+    if (currentRoom?.participants) {
+      console.log('🏠 방 정보 로드 완료, 초기 참여자 목록 설정:', {
+        participants: currentRoom.participants.length,
+        list: currentRoom.participants
       });
-      console.log('✅ 실시간 참여자 업데이트 콜백 설정 완료');
-    } else {
-      console.warn('⚠️ realTimeRoom.setOnParticipantsUpdate가 없음');
+      setRealtimeParticipants(currentRoom.participants);
     }
-  }, [realTimeRoom?.setOnParticipantsUpdate]);
+  }, [currentRoom?.participants]);
   
-  // Hook들을 항상 같은 순서로 호출하기 위해 여기서 모든 데이터 준비
-  const playersWithStreams = useMemo((): PlayerWithStream[] => {
-    console.log('🎮 playersWithStreams 계산 시작:', {
+  // 콜백 설정 완료 상태 추적
+  const [callbacksSetup, setCallbacksSetup] = useState(false);
+
+  // 실시간 참여자 업데이트 콜백 설정 (WebRTCManager 통합)
+  useEffect(() => {
+    console.log('🔧 실시간 콜백 설정 시도:', {
       hasCurrentRoom: !!currentRoom,
       hasCurrentPlayer: !!currentPlayer,
-      realtimeParticipantsCount: realtimeParticipants.length,
-      initialParticipantsCount: currentRoom?.participants?.length || 0
+      hasSetOnRealtimeParticipantsUpdate: !!setOnRealtimeParticipantsUpdate,
+      hasWebRTCManager: hasWebRTCManager,
+      hasGlobalManager: hasGlobalManager,
+      callbacksSetup: callbacksSetup
     });
-    
-    if (!currentRoom || !currentPlayer) return [];
 
-    // 실시간으로 받은 참여자 정보가 있으면 우선 사용, 없으면 초기 방 정보 사용
-    const participantsSource = realtimeParticipants.length > 0 ? realtimeParticipants : (currentRoom.participants || []);
-    
-    console.log('📊 사용할 participantsSource:', {
-      source: realtimeParticipants.length > 0 ? 'realtime' : 'initial',
-      count: participantsSource.length,
-      data: participantsSource
-    });
-    
-    // 서버에서 받은 participants를 클라이언트 형식으로 변환
-    const convertedParticipants = participantsSource.map(p => ({
-      ...p,
-      guestUserId: p.guestUserId || p.id, // 실시간 데이터는 guestUserId가 있을 수 있음
-      preparationStatus: p.preparationStatus || {
-        characterSetup: false,
-        screenSetup: false
-      },
-      isHost: p.role === 'host'
-    }));
-    
-    // 현재 플레이어가 이미 participants에 있는지 확인
-    const currentPlayerInParticipants = convertedParticipants.find(p => p.id === currentPlayer.id);
-    
-    let allPlayers: Player[];
-    if (currentPlayerInParticipants) {
-      // 현재 플레이어가 이미 participants에 있으면 participants만 사용
-      allPlayers = convertedParticipants;
-      console.log('✅ 현재 플레이어가 participants에 포함됨');
-    } else {
-      // 현재 플레이어가 participants에 없으면 추가
-      allPlayers = [currentPlayer, ...convertedParticipants];
-      console.log('➕ 현재 플레이어를 participants에 추가');
+    // 기본 조건 확인
+    if (!currentRoom || !currentPlayer) {
+      console.log('⏳ 방/플레이어 정보 없음, 콜백 설정 지연');
+      return;
     }
-    
-    const result = allPlayers.map(player => {
-      const isLocalPlayer = player.id === currentPlayer.id;
-      const stream = isLocalPlayer ? localStream : remoteStreams.get(player.id) || null;
-      return { player, stream, isLocalPlayer };
+
+    // WebRTC 매니저와 콜백 함수 확인
+    if (!setOnRealtimeParticipantsUpdate || (!hasWebRTCManager && !hasGlobalManager)) {
+      console.log('⏳ WebRTC 매니저 또는 콜백 함수 없음, 콜백 설정 지연');
+      return;
+    }
+
+    console.log('📞 실시간 참여자 업데이트 콜백 설정 중...');
+    setOnRealtimeParticipantsUpdate((participants) => {
+      console.log('🔄 실시간 참여자 업데이트 수신:', {
+        participantCount: Array.isArray(participants) ? participants.length : 0,
+        participants: participants
+      });
+      
+      // 참여자 목록 업데이트
+      if (Array.isArray(participants)) {
+        setRealtimeParticipants(participants);
+      }
     });
     
-    console.log('🎯 최종 playersWithStreams:', {
-      count: result.length,
-      players: result.map(p => ({ id: p.player.id, nickname: p.player.nickname, isHost: p.player.isHost }))
-    });
-    
-    return result;
-  }, [currentRoom, currentPlayer, localStream, remoteStreams, realtimeParticipants]);
+    if (!callbacksSetup) {
+      setCallbacksSetup(true);
+    }
+    console.log('✅ 실시간 참여자 업데이트 콜백 설정 완료');
+  }, [setOnRealtimeParticipantsUpdate, currentRoom, currentPlayer, hasWebRTCManager, hasGlobalManager]);
+
+  // 마이크 에러 모니터링 (마이크 권한 관련 에러만)
+  useEffect(() => {
+    if (microphoneError) {
+      console.warn('🎤 Microphone error detected:', microphoneError);
+      setShowMicGuide(true);
+    }
+  }, [microphoneError]);
+
+  // 방 입장 에러 모니터링 (별도 처리)
+  useEffect(() => {
+    if (joinError) {
+      console.warn('🚪 Room join error detected:', joinError);
+      // 방 입장 에러는 마이크 가이드를 띄우지 않음
+    }
+  }, [joinError]);
+
 
   // 준비하기 버튼 활성화 조건: 캐릭터 설정과 녹화화면 설정이 모두 완료된 경우
   const isReadyEnabled = !!(currentPlayer?.preparationStatus?.characterSetup && currentPlayer?.preparationStatus?.screenSetup);
@@ -170,17 +174,14 @@ export const RoomPage = () => {
     playerNickname: currentPlayer?.nickname,
     participantsCount: currentRoom?.participants?.length || 0,
     realtimeParticipantsCount: realtimeParticipants.length,
-    playersWithStreamsCount: playersWithStreams.length,
     currentPlayerId: currentPlayer?.id,
-    realtimeConnected: realTimeRoom?.isConnected || false,
-    realtimeError: realTimeRoom?.connectionError || null
+    voiceChatConnected: voiceChatState.isConnected
   });
   
   console.log('👥 플레이어 목록 상세:', {
     initialParticipants: currentRoom?.participants,
     realtimeParticipants: realtimeParticipants,
-    currentPlayer: currentPlayer,
-    playersWithStreams: playersWithStreams
+    currentPlayer: currentPlayer
   });
 
   // 로딩 중 처리
@@ -199,7 +200,7 @@ export const RoomPage = () => {
         <p className="text-white text-lg mb-4">오류가 발생했습니다</p>
         <p className="text-red-400 mb-4">{error}</p>
         <button 
-          onClick={() => handleLeaveRoom(realTimeRoom?.leaveRoom)}
+          onClick={() => handleLeaveRoom()}
           className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
         >
           메인으로 돌아가기
@@ -242,9 +243,9 @@ export const RoomPage = () => {
         </div>
       )}
 
+
       {/* 메인 룸 페이지 */}
       <div className={showCharacterSetup ? 'hidden' : ''}>
-        <VoiceStatusOverlay playersWithStreams={playersWithStreams} />
         
         <div className="min-h-screen w-full flex flex-col justify-between bg-[linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,6,72,1)_100%)] relative overflow-hidden">
 
@@ -267,10 +268,63 @@ export const RoomPage = () => {
             {/* 백버튼 - 메인 콘텐츠 기준 위치 */}
             <div className="absolute z-50 left-[230px] top-[-20px]">
               <BackButton1
-                onClick={() => handleLeaveRoom(realTimeRoom?.leaveRoom)}
+                onClick={() => handleLeaveRoom()}
               />
             </div>
             
+            {/* 마이크 상태 표시 - 좌상단 (항상 표시) */}
+            <div 
+              className="fixed left-4 top-4 z-[9999]" 
+              style={{ 
+                position: 'fixed', 
+                left: '16px', 
+                top: '16px', 
+                zIndex: 9999,
+                backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                color: 'white',
+                padding: '8px 12px',
+                borderRadius: '6px',
+                border: '2px solid white',
+                fontSize: '12px'
+              }}
+            >
+              <div>마이크: {localStream ? '✅' : '❌'}</div>
+              <div>연결: {voiceChatState.isConnected ? '✅' : '❌'}</div>
+              <div>음소거: {isLocalMuted() ? '🔇' : '🔊'}</div>
+              {microphoneError && <div style={{color: 'red'}}>에러: {microphoneError}</div>}
+              {joinError && <div style={{color: 'orange'}}>방: {joinError}</div>}
+            </div>
+
+            {/* 기존 마이크 상태 표시 */}
+            <div className="fixed left-4 top-32 z-[9999]">
+              <MicrophoneStatusIndicator
+                hasPermission={!microphoneError && !!localStream}
+                isConnected={voiceChatState.isConnected}
+                isLocalMuted={isLocalMuted()}
+                error={microphoneError}
+                onRequestPermission={() => setShowMicGuide(true)}
+              />
+            </div>
+
+            {/* 음성 채팅 컨트롤 */}
+            {localStream && (
+              <div className="absolute z-50 left-[230px] top-[120px] flex flex-col space-y-2">
+                <button
+                  onClick={toggleLocalAudio}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    isLocalMuted() 
+                      ? 'bg-red-500 text-white hover:bg-red-600' 
+                      : 'bg-green-500 text-white hover:bg-green-600'
+                  }`}
+                >
+                  {isLocalMuted() ? '🔇 음소거' : '🎤 음성'}
+                </button>
+                <div className="text-xs text-white bg-black bg-opacity-50 px-2 py-1 rounded">
+                  연결: {getConnectedPeersCount()}명
+                </div>
+              </div>
+            )}
+
             {/* 설정 버튼 */}
             <div 
               className="absolute z-50 cursor-pointer left-[230px] bottom-[10px] w-[59.7px] h-[59.7px]"
@@ -289,6 +343,9 @@ export const RoomPage = () => {
                 <MyCharacterContainer 
                   isHost={currentRoom.hostGuestId === currentPlayer.guestUserId} 
                   currentPlayer={currentPlayer}
+                  localStream={localStream}
+                  isLocalMuted={isLocalMuted()}
+                  voiceChatConnected={voiceChatState.isConnected}
                 />
                 {/* 닉네임 표기 컨테이너 */}
                 <NicknameContainer nickname={currentPlayer.nickname} />
@@ -301,6 +358,8 @@ export const RoomPage = () => {
                   currentRoom={currentRoom} 
                   currentPlayer={currentPlayer}
                   realtimeParticipants={realtimeParticipants}
+                  remoteStreams={remoteStreams}
+                  voiceChatConnected={voiceChatState.isConnected}
                 />
                 {/* 버튼 컨테이너 */}
                 <ButtonContainer 
@@ -319,6 +378,33 @@ export const RoomPage = () => {
           <Footer />
         </div>
       </div>
+
+      {/* 마이크 권한 가이드 모달 */}
+      <MicrophonePermissionGuide
+        error={microphoneError}
+        isVisible={showMicGuide && !!microphoneError}
+        onRetry={() => {
+          console.log('🔄 Retrying microphone access...');
+          window.location.reload(); // 페이지 새로고침으로 다시 시도
+        }}
+        onClose={() => setShowMicGuide(false)}
+      />
+
+      {/* 방 입장 에러 표시 (별도) */}
+      {joinError && (
+        <div className="fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-md shadow-lg z-50">
+          <div className="flex items-center space-x-2">
+            <span>⚠️</span>
+            <span className="text-sm">{joinError}</span>
+            <button 
+              onClick={() => window.location.reload()}
+              className="ml-2 text-xs underline hover:no-underline"
+            >
+              새로고침
+            </button>
+          </div>
+        </div>
+      )}
     </React.Fragment>
   );
 }; 

@@ -2,7 +2,7 @@ import React from "react";
 import type { Player } from "../../../types/room";
 import HostBig from "../../../assets/gamecast/Room/Host_big.svg?react";
 import { CharacterRenderer } from "../../../utils/characterRenderer";
-// import { VoiceIndicator } from "../common/VoiceIndicator"; // <- 제거
+import { VoiceIndicator } from "../common/VoiceIndicator";
 
 /**
  * MyCharacterContainer Props 인터페이스
@@ -10,12 +10,21 @@ import { CharacterRenderer } from "../../../utils/characterRenderer";
 interface MyCharacterContainerProps {
   isHost: boolean;
   currentPlayer: Player | null;
+  localStream?: MediaStream | null;
+  isLocalMuted?: boolean;
+  voiceChatConnected?: boolean;
 }
 
 /**
  * 내 캐릭터와 관련된 UI 요소들을 포함하는 컨테이너 컴포넌트
  */
-export const MyCharacterContainer: React.FC<MyCharacterContainerProps> = ({ isHost, currentPlayer }) => {
+export const MyCharacterContainer: React.FC<MyCharacterContainerProps> = ({ 
+  isHost, 
+  currentPlayer,
+  localStream = null,
+  isLocalMuted = false,
+  voiceChatConnected = false
+}) => {
   const hasCharacter = !!(currentPlayer?.character);
 
   return (
@@ -79,6 +88,26 @@ export const MyCharacterContainer: React.FC<MyCharacterContainerProps> = ({ isHo
           />
         </div>
       </div>
+      {/* 음성 표시기 */}
+      {voiceChatConnected && (
+        <div
+          style={{
+            position: 'absolute',
+            right: '20px',
+            top: '20px',
+            zIndex: 10
+          }}
+        >
+          <VoiceIndicator
+            stream={localStream}
+            isMuted={isLocalMuted}
+            isConnected={voiceChatConnected}
+            nickname={currentPlayer?.nickname || ''}
+            size="large"
+          />
+        </div>
+      )}
+
       {/* 현재 플레이어가 방장일 때만 아이콘 표시 */}
       {isHost && (
         <div
