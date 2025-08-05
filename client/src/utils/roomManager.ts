@@ -161,10 +161,10 @@ const apiRequest = async <T>(
 // 방 생성
 export const createRoom = async (request: CreateRoomRequest): Promise<{ success: boolean; room?: Room; error?: string }> => {
   try {
-    const session = getUserSession();
+    // const session = getUserSession(); // createRoom에서는 세션 불필요
     
     // 로컬 세션 ID 사용 (서버 세션 초기화 제거)
-    const sessionId = session.sessionId;
+    // const sessionId = session.sessionId; // 향후 세션 기반 인증시 사용
 
     const requestData = {
       roomName: request.roomName,
@@ -229,8 +229,8 @@ export const createRoom = async (request: CreateRoomRequest): Promise<{ success:
 export const joinRoom = async (request: JoinRoomRequest): Promise<{ success: boolean; room?: Room; error?: string }> => {
   try {
     // 로컬 세션 ID 사용
-    const session = getUserSession();
-    const sessionId = session.sessionId;
+    // const session = getUserSession(); // joinRoom에서는 세션 불필요
+    // const sessionId = session.sessionId; // 향후 세션 기반 인증용
 
     const requestData = {
       roomCode: request.roomCode,
@@ -377,16 +377,43 @@ export const updatePreparationStatus = async (
   try {
     const session = getUserSession();
     
+    console.log('🎯 [updatePreparationStatus] 세션 정보 확인:', {
+      session,
+      localStorage: localStorage.getItem('gamecast_user_session'),
+      updates
+    });
+    
     if (!session.guestUserId) {
-      return { success: false, error: '사용자 정보를 찾을 수 없습니다.' };
+      console.error('❌ [updatePreparationStatus] guestUserId가 없음:', {
+        session,
+        sessionKeys: Object.keys(session),
+        localStorageRaw: localStorage.getItem('gamecast_user_session')
+      });
+      return { success: false, error: '사용자 정보를 찾을 수 없습니다. 페이지를 새로고침해주세요.' };
     }
+
+    // 서버 API 형식에 맞게 요청 데이터 구성
+    const requestBody: any = {
+      guestUserId: session.guestUserId  // camelCase로 변경
+    };
+
+    // characterSetup이 객체인 경우 (실제 캐릭터 데이터)
+    if (typeof updates.characterSetup === 'object' && updates.characterSetup !== null) {
+      requestBody.characterSetup = updates.characterSetup;
+    } else if (updates.characterSetup !== undefined) {
+      // boolean 값인 경우 빈 객체로 전송 (서버가 객체를 기대함)
+      requestBody.characterSetup = {};
+    }
+    
+    if (updates.screenSetup !== undefined) {
+      requestBody.screenSetup = updates.screenSetup;
+    }
+
+    console.log('🎯 [updatePreparationStatus] 최종 요청 데이터:', requestBody);
 
     const response = await apiRequest('/rooms/preparation', {
       method: 'PATCH',
-      body: JSON.stringify({
-        guestUserId: session.guestUserId,
-        ...updates
-      })
+      body: JSON.stringify(requestBody)
     });
 
     if (response.resultType === 'SUCCESS') {
@@ -440,10 +467,29 @@ export const updateRoom = (_roomId: string): Room | null => {
 
 // 플레이어 정보 업데이트 (준비 상태용)
 export const updateCurrentPlayer = async (updates: { 
-  characterSetup?: boolean; 
+  characterSetup?: boolean | any; 
   screenSetup?: boolean; 
 }): Promise<{ success: boolean; error?: string }> => {
-  return await updatePreparationStatus(updates);
+  // 준비 상태 업데이트
+  const result = await updatePreparationStatus(updates);
+  
+  // 성공한 경우 로컬 세션의 currentPlayer도 업데이트
+  if (result.success) {
+    const session = getUserSession();
+    if (session.currentPlayer) {
+      session.currentPlayer = {
+        ...session.currentPlayer,
+        preparationStatus: {
+          ...session.currentPlayer.preparationStatus,
+          characterSetup: typeof updates.characterSetup === 'boolean' ? updates.characterSetup : true,
+          screenSetup: updates.screenSetup ?? session.currentPlayer.preparationStatus?.screenSetup ?? false
+        }
+      };
+      updateUserSession({ currentPlayer: session.currentPlayer });
+    }
+  }
+  
+  return result;
 };
 
 // 디버깅용 함수들

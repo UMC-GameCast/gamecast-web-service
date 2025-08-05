@@ -1,20 +1,20 @@
 import { Footer } from "../../../components/gamecast/common/Footer";
-import { ParticipationCodeCard } from "../../../components/gamecast/participate/ParticipationCodeCard";
+// import { ParticipationCodeCard } from "../../../components/gamecast/participate/ParticipationCodeCard"; // 향후 참여 코드 기능용
 import { BackButton1 } from "../../../components/gamecast/common/BackButton1";
 import { useNavigate } from 'react-router-dom'
 import { Navigation } from "../../../components/gamecast/common/Navigation";
-import fiStar from '../../../assets/gamecast/participate/fi_star.svg'
-import Framenotready from '../../../assets/gamecast/participate/Framenotready.png'
-import Frameready from '../../../assets/gamecast/participate/Frameready.png'
-import button2_default from '../../../assets/gamecast/common/button/button2_default.png'
+// import fiStar from '../../../assets/gamecast/participate/fi_star.svg' // 향후 별 아이콘용
+// import Framenotready from '../../../assets/gamecast/participate/Framenotready.png' // 향후 준비 안됨 프레임용
+// import Frameready from '../../../assets/gamecast/participate/Frameready.png' // 향후 준비됨 프레임용
+// import button2_default from '../../../assets/gamecast/common/button/button2_default.png' // 향후 버튼용
 import { useState } from "react";
-import ready1 from '../../../assets/gamecast/participate/frame/ready-1.png';
-import ready2 from '../../../assets/gamecast/participate/frame/ready-2.png';
-import ready3 from '../../../assets/gamecast/participate/frame/ready-3.png';
-import ready4 from '../../../assets/gamecast/participate/frame/ready-4.png';
-import ready5 from '../../../assets/gamecast/participate/frame/ready-5.png';
-import roomnameUnderline from '../../../assets/gamecast/participate/underline/roomname.png';
-import nameUnderline from '../../../assets/gamecast/participate/underline/name.png';
+// import ready1 from '../../../assets/gamecast/participate/frame/ready-1.png'; // 향후 준비 프레임용
+// import ready2 from '../../../assets/gamecast/participate/frame/ready-2.png'; // 향후 준비 프레임용
+// import ready3 from '../../../assets/gamecast/participate/frame/ready-3.png'; // 향후 준비 프레임용
+// import ready4 from '../../../assets/gamecast/participate/frame/ready-4.png'; // 향후 준비 프레임용
+// import ready5 from '../../../assets/gamecast/participate/frame/ready-5.png'; // 향후 준비 프레임용
+// import roomnameUnderline from '../../../assets/gamecast/participate/underline/roomname.png'; // 향후 밑줄용
+// import nameUnderline from '../../../assets/gamecast/participate/underline/name.png'; // 향후 밑줄용
 import { ApplicationSelectModal } from './Modal';
 import { FrameAndButtons } from './FrameAndButtons';
 import { CodeCardAndName } from './CodeCardAndName';
@@ -29,10 +29,10 @@ export const WatingPage = () => {
   const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
   
-  // 방 참여 성공 핸들러
-  const handleJoinSuccess = () => {
-    navigate('/waiting');ㄴ
-  };
+  // 방 참여 성공 핸들러 (향후 네비게이션용)
+  // const handleJoinSuccess = () => {
+  //   navigate('/waiting');
+  // };
 
   return (
     <div className="h-full flex flex-col justify-between bg-[linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,6,72,1)_100%)] relative">

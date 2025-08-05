@@ -28,7 +28,8 @@ const colorMap: Record<string, string> = {
   '43': '#8B6F47'  // 가장 어두운 살색
 };
 
-// 한글 색상 이름 매핑
+// 한글 색상 이름 매핑 (향후 다국어 지원용)
+/*
 const koreanColorMap: Record<string, string> = {
   '그린': 'green',
   '레드': 'red',
@@ -36,8 +37,10 @@ const koreanColorMap: Record<string, string> = {
   '옐로우': 'yellow',
   '화이트': 'white'
 };
+*/
 
-// 파일명에서 색상 추출
+// 파일명에서 색상 추출 (향후 캐릭터 커스터마이징용)
+/*
 const extractColorFromFilename = (filename: string): { name: string; value: string } => {
   const name = filename.toLowerCase().replace(/\.(png|jpg|jpeg)$/i, '');
   
@@ -55,6 +58,7 @@ const extractColorFromFilename = (filename: string): { name: string; value: stri
   
   return { name: 'default', value: colorMap.default };
 };
+*/
 
 // 에셋 데이터 생성
 export const generateAssetData = (): CharacterAsset[] => {
@@ -166,7 +170,7 @@ export const generateAssetData = (): CharacterAsset[] => {
 
   // 얼굴 에셋
   for (let i = 1; i <= 3; i++) {
-    const faceColors = ['default', 'angry', 'excited', 'sad', 'surprise'];
+    // const faceColors = ['default', 'angry', 'excited', 'sad', 'surprise']; // 향후 표정 에셋용
     
     assets.push({
       id: `face${i}`,

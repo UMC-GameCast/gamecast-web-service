@@ -16,17 +16,37 @@ export interface Player {
   id: string; // participant ID (서버에서 받는 필드)
   guestUserId?: string; // guest user ID (클라이언트 전용)
   nickname: string;
-  role: 'host' | 'guest'; // 서버 API 응답에 맞게 'guest'로 변경
+  name?: string; // 캐릭터 이름 (선택적)
+  role: 'host' | 'participant'; // 서버와 일치: 'participant' 사용
   joinedAt: string;
   preparationStatus?: PreparationStatus; // 선택적 필드로 변경
   isHost?: boolean; // 선택적 필드로 변경
   isReady?: boolean; // 준비 완료 상태 추가
+  character?: CharacterData; // 레거시 캐릭터 데이터 (선택적)
+  characterInfo?: {
+    selectedOptions: {
+      face: string;
+      hair: string;
+      top: string;
+      bottom: string;
+      accessory: string;
+    } | null;
+    selectedColors: {
+      face: string;
+      hair: string;
+      top: string;
+      bottom: string;
+      accessory: string;
+    } | null;
+    isCustomized: boolean;
+  } | null;
 }
 
 export interface Room {
   id: string;
   roomCode: string; // 6자리 입장코드
   roomName: string;
+  gameTitle?: string; // 게임 제목 (선택적)
   maxCapacity: number; // 최대 인원
   currentCapacity: number; // 현재 인원
   roomState: 'waiting' | 'active' | 'recording' | 'expired';

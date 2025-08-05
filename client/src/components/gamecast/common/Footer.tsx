@@ -1,4 +1,3 @@
-import React from "react";
 import FooterDesign from "../../../assets/gamecast/common/footer/design.svg?react";
 
 export const Footer = () => {

@@ -1,5 +1,6 @@
-import React, { useMemo, useState, useEffect, Component } from "react";
+import React, { useState, useEffect, Component } from "react";
 import type { ErrorInfo } from "react";
+import type { Player } from "../../../types/room";
 import { Navigation } from "../../../components/gamecast/common/Navigation";
 import { Footer } from "../../../components/gamecast/common/Footer";
 import { BackButton1 } from "../../../components/gamecast/common/BackButton1";
@@ -11,6 +12,8 @@ import SettingIcon from "../../../assets/gamecast/Room/setting.svg?react";
 import { useRoom } from "../../../hooks/useRoom.ts";
 import { PlayerGrid } from "../../../components/gamecast/room/PlayerGrid.tsx";
 import { useVoiceChat } from "../../../hooks/useVoiceChat.ts";
+import { useCharacter } from "../../../hooks/useCharacter.ts";
+import { useGameRecording } from "../../../hooks/useGameRecording.ts"; // PlayerGrid에 preparation status 전달용
 import { MicrophonePermissionGuide } from "../../../components/gamecast/common/MicrophonePermissionGuide";
 import { MicrophoneStatusIndicator } from "../../../components/gamecast/common/MicrophoneStatusIndicator";
 import { CharacterSetupPage } from "../character-setup/CharacterSetupPage";
@@ -58,6 +61,87 @@ export const RoomPage = () => {
   // 실시간 참여자 업데이트 상태 (초기값을 현재 방 참여자로 설정)
   const [realtimeParticipants, setRealtimeParticipants] = useState<Player[]>(currentRoom?.participants || []);
   
+  // 캐릭터 상태 관리
+  const { playersCharacters, getPlayerCharacter } = useCharacter();
+  
+  // 준비 상태 관리 (PlayerGrid에 preparation status 전달용)
+  const { playersReadyStatus } = useGameRecording(currentRoom, currentPlayer);
+  
+  // 🎯 현재 플레이어의 캐릭터 정보 조회 - 올바른 ID 사용
+  const currentPlayerCharacter = currentPlayer ? getPlayerCharacter(currentPlayer.guestUserId || currentPlayer.id) : undefined;
+  
+  // 🎯 최종 내 캐릭터 데이터: Socket.IO 실시간 > 서버 characterInfo > 레거시 character
+  // 서버 characterInfo를 더 우선적으로 처리하여 안정성 확보
+  const myCharacterData = currentPlayerCharacter?.character || 
+    (currentPlayer?.characterInfo?.isCustomized && 
+     currentPlayer.characterInfo.selectedOptions && 
+     currentPlayer.characterInfo.selectedColors ? {
+      selectedOptions: currentPlayer.characterInfo.selectedOptions,
+      selectedColors: currentPlayer.characterInfo.selectedColors,
+      nickname: currentPlayer.nickname
+    } : null) || 
+    currentPlayer?.character || null;
+  
+  // 🔧 디버깅: 내 캐릭터 데이터 상태 (ID 매칭 중심으로 강화된 로깅)
+  console.log('🏠 [RoomPage] 내 캐릭터 데이터 상세 분석:', {
+    // 플레이어 ID 정보
+    currentPlayerId: currentPlayer?.guestUserId || currentPlayer?.id,
+    currentPlayerNickname: currentPlayer?.nickname,
+    
+    // ID 매칭 분석
+    queryId: currentPlayer?.guestUserId || currentPlayer?.id,
+    playersCharactersMapSize: playersCharacters.size,
+    playersCharactersKeys: Array.from(playersCharacters.keys()),
+    isMyIdInMap: playersCharacters.has(currentPlayer?.guestUserId || currentPlayer?.id),
+    
+    // Socket.IO 실시간 데이터 (1순위)
+    hasSocketIOData: !!currentPlayerCharacter?.character,
+    socketIOCharacterData: currentPlayerCharacter?.character,
+    
+    // 서버 REST API 데이터 (2순위)  
+    hasServerCharacterInfo: !!currentPlayer?.characterInfo?.isCustomized,
+    serverCharacterInfo: currentPlayer?.characterInfo,
+    
+    // 레거시 데이터 (3순위)
+    hasLegacyCharacter: !!currentPlayer?.character,
+    legacyCharacter: currentPlayer?.character,
+    
+    // 최종 결과
+    finalMyCharacterData: myCharacterData,
+    hasFinalData: !!myCharacterData,
+    
+    // 문제 진단
+    diagnosis: {
+      socketIODataMissing: !currentPlayerCharacter?.character,
+      serverDataMissing: !currentPlayer?.characterInfo?.isCustomized,
+      idMismatch: !playersCharacters.has(currentPlayer?.guestUserId || currentPlayer?.id),
+      totalIssues: [
+        !currentPlayerCharacter?.character,
+        !currentPlayer?.characterInfo?.isCustomized,
+        !playersCharacters.has(currentPlayer?.guestUserId || currentPlayer?.id)
+      ].filter(Boolean).length
+    }
+  });
+  
+  // 디버깅용 전역 변수 설정
+  if (import.meta.env.DEV) {
+    (window as any).__DEBUG_playersCharacters__ = playersCharacters;
+    (window as any).__DEBUG_currentPlayerCharacter__ = currentPlayerCharacter;
+    (window as any).__DEBUG_myCharacterData__ = myCharacterData;
+    (window as any).__DEBUG_currentPlayer__ = currentPlayer;
+  }
+  
+  // 닉네임 및 참여자 디버깅
+  console.log('🏷️ [RoomPage] 닉네임 디버깅:', {
+    currentPlayerNickname: currentPlayer?.nickname,
+    realtimeParticipantsCount: realtimeParticipants.length,
+    realtimeParticipants: realtimeParticipants.map(p => ({ 
+      id: p.id, 
+      nickname: p.nickname,
+      characterInfo: p.characterInfo?.isCustomized 
+    }))
+  });
+  
   // 음성채팅 및 실시간 업데이트 기능 (통합된 Socket.IO 연결)
   const {
     localStream,
@@ -65,15 +149,11 @@ export const RoomPage = () => {
     joinError, // 방 입장 관련 에러
     microphoneError, // 마이크 권한 관련 에러
     voiceChatState,
-    peerStates, // 피어 연결 상태
-    muteLocalAudio,
-    unmuteLocalAudio,
     toggleLocalAudio,
     isLocalMuted,
     getConnectedPeersCount,
     // 새로 추가된 실시간 업데이트 기능
     setOnRealtimeParticipantsUpdate,
-    setOnRealtimeConnectionStateChanged,
     // 디버깅용
     hasWebRTCManager,
     hasGlobalManager
@@ -85,6 +165,10 @@ export const RoomPage = () => {
   
   const [showCharacterSetup, setShowCharacterSetup] = useState(false);
   const [showMicGuide, setShowMicGuide] = useState(false);
+
+  // 설정 상태를 RoomPage에서 직접 관리 (상태 동기화 문제 해결)
+  const [characterSetupComplete, setCharacterSetupComplete] = useState(false);
+  const [screenSetupComplete, setScreenSetupComplete] = useState(false);
   
   // REST API에서 초기 참여자 목록 설정 (Socket.IO 연결 전까지만)
   useEffect(() => {
@@ -130,7 +214,7 @@ export const RoomPage = () => {
           return self.findIndex((p: any) => p.id === participant.id) === index;
         });
         
-        setRealtimeParticipants(uniqueParticipants);
+        setRealtimeParticipants(uniqueParticipants as Player[]);
       }
     });
     
@@ -157,8 +241,8 @@ export const RoomPage = () => {
   }, [joinError]);
 
 
-  // 준비하기 버튼 활성화 조건: 녹화화면 설정만 완료된 경우 (캐릭터 설정은 현재 비활성화)
-  const isReadyEnabled = true; // 캐릭터 설정 비활성화로 인해 항상 활성화
+  // 준비하기 버튼 활성화 조건: 캐릭터 설정과 녹화화면 설정이 모두 완료된 경우
+  const isReadyEnabled = characterSetupComplete && screenSetupComplete;
 
   // 디버깅을 위한 콘솔 로그
   console.log('RoomPage 렌더링:', {
@@ -173,7 +257,11 @@ export const RoomPage = () => {
     participantsCount: currentRoom?.participants?.length || 0,
     realtimeParticipantsCount: realtimeParticipants.length,
     currentPlayerId: currentPlayer?.id,
-    voiceChatConnected: voiceChatState.isConnected
+    voiceChatConnected: voiceChatState.isConnected,
+    // 준비 상태 정보 추가
+    isReadyEnabled,
+    characterSetupComplete,
+    screenSetupComplete
   });
   
   console.log('👥 플레이어 목록 상세:', {
@@ -341,10 +429,46 @@ export const RoomPage = () => {
                 <MyCharacterContainer 
                   isHost={currentRoom.hostGuestId === currentPlayer.guestUserId} 
                   currentPlayer={currentPlayer}
+                  characterData={myCharacterData}
                   localStream={localStream}
                   isLocalMuted={isLocalMuted()}
                   voiceChatConnected={voiceChatState.isConnected}
                 />
+                
+                {/* 🔧 개선된 디버깅 패널: 캐릭터 데이터 흐름 실시간 모니터링 */}
+                {import.meta.env.DEV && (
+                  <div className="fixed bottom-4 left-4 bg-gray-900 text-white p-3 rounded-lg text-xs z-[10000] max-w-md border border-gray-600">
+                    <div className="font-bold text-green-400 mb-2">🔧 캐릭터 데이터 디버깅</div>
+                    
+                    {/* ID 매칭 정보 */}
+                    <div className="mb-2 pb-2 border-b border-gray-600">
+                      <div className={`font-semibold ${(currentRoom.hostGuestId === currentPlayer.guestUserId) ? 'text-yellow-400' : 'text-blue-400'}`}>
+                        {(currentRoom.hostGuestId === currentPlayer.guestUserId) ? '👑 방장' : '👤 게스트'}
+                      </div>
+                      <div>방장 ID: <span className="text-yellow-300">{currentRoom.hostGuestId}</span></div>
+                      <div>내 Guest ID: <span className="text-blue-300">{currentPlayer.guestUserId}</span></div>
+                      <div>내 ID: <span className="text-blue-300">{currentPlayer.id}</span></div>
+                    </div>
+                    
+                    {/* 캐릭터 데이터 상태 */}
+                    <div className="mb-2 pb-2 border-b border-gray-600">
+                      <div className="font-semibold text-purple-400">캐릭터 데이터 상태</div>
+                      <div>최종 데이터: <span className={myCharacterData ? 'text-green-400' : 'text-red-400'}>{myCharacterData ? '✅ 있음' : '❌ 없음'}</span></div>
+                      <div>Socket.IO: <span className={currentPlayerCharacter?.character ? 'text-green-400' : 'text-orange-400'}>{currentPlayerCharacter?.character ? '✅ 있음' : '⚠️ 없음'}</span></div>
+                      <div>서버 DB: <span className={currentPlayer?.characterInfo?.isCustomized ? 'text-green-400' : 'text-orange-400'}>{currentPlayer?.characterInfo?.isCustomized ? '✅ 있음' : '⚠️ 없음'}</span></div>
+                    </div>
+                    
+                    {/* ID 매칭 진단 */}
+                    <div className="mb-2">
+                      <div className="font-semibold text-cyan-400">ID 매칭 진단</div>
+                      <div>Map 크기: <span className="text-cyan-300">{playersCharacters.size}</span></div>
+                      <div>Map 키: <span className="text-cyan-300">[{Array.from(playersCharacters.keys()).join(', ')}]</span></div>
+                      <div>내 ID 매칭: <span className={playersCharacters.has(currentPlayer.guestUserId || currentPlayer.id) ? 'text-green-400' : 'text-red-400'}>
+                        {playersCharacters.has(currentPlayer.guestUserId || currentPlayer.id) ? '✅ 성공' : '❌ 실패'}
+                      </span></div>
+                    </div>
+                  </div>
+                )}
                 {/* 닉네임 표기 컨테이너 */}
                 <NicknameContainer nickname={currentPlayer.nickname} />
               </div>
@@ -358,6 +482,8 @@ export const RoomPage = () => {
                   realtimeParticipants={realtimeParticipants}
                   remoteStreams={remoteStreams}
                   voiceChatConnected={voiceChatState.isConnected}
+                  playersCharacters={playersCharacters}
+                  playersReadyStatus={playersReadyStatus}
                 />
                 {/* 버튼 컨테이너 */}
                 <ButtonContainer 
@@ -365,8 +491,27 @@ export const RoomPage = () => {
                   onStateUpdate={refreshRoomState}
                   currentRoom={currentRoom}
                   currentPlayer={currentPlayer}
-                  onCharacterSetup={() => setShowCharacterSetup(true)}
+                  // 설정 상태 props 전달
+                  characterSetupComplete={characterSetupComplete}
+                  screenSetupComplete={screenSetupComplete}
+                  setCharacterSetup={setCharacterSetupComplete}
+                  setScreenSetup={setScreenSetupComplete}
+                  // 캐릭터 설정 페이지 이동 콜백
+                  onCharacterSetupClick={() => setShowCharacterSetup(true)}
                 />
+
+                {/* 개발용 상태 표시 */}
+                <div className="mt-4 p-4 bg-gray-800 rounded-lg text-white text-sm">
+                  <h3 className="font-bold mb-2">🔧 개발 상태 정보</h3>
+                  <div className="space-y-1">
+                    <div>캐릭터 설정: {characterSetupComplete ? '✅ 완료' : '❌ 미완료'}</div>
+                    <div>화면 설정: {screenSetupComplete ? '✅ 완료' : '❌ 미완료'}</div>
+                    <div>준비 버튼: {isReadyEnabled ? '✅ 활성화' : '❌ 비활성화'}</div>
+                    <div className="mt-2 text-xs text-gray-400">
+                      준비 조건: 캐릭터 설정 ({characterSetupComplete ? 'OK' : 'X'}) && 화면 설정 ({screenSetupComplete ? 'OK' : 'X'}) = {isReadyEnabled ? 'OK' : 'X'}
+                    </div>
+                  </div>
+                </div>
 
               </div>
             </div>

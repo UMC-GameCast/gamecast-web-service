@@ -72,7 +72,7 @@ export const CreateRoomCard = ({ onCreateSuccess }: Props) => {
     try {
       const result = await createRoom({
         roomName: roomName.trim(),
-        hostNickname: "방장", // 기본 방장 닉네임
+        hostNickname: "Nickname1", // 방장은 항상 Nickname1
         maxCapacity: playerCount
       });
       

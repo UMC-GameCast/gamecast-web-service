@@ -1,7 +1,8 @@
 import React from "react";
 import type { Player } from "../../../types/room";
 import HostBig from "../../../assets/gamecast/Room/Host_big.svg?react";
-import { CharacterRenderer } from "../../../utils/characterRenderer";
+import { renderCharacterLayers } from "../../../utils/characterRenderer";
+import type { CharacterData } from "../../../types/room";
 import { VoiceIndicator } from "../common/VoiceIndicator";
 
 /**
@@ -13,6 +14,8 @@ interface MyCharacterContainerProps {
   localStream?: MediaStream | null;
   isLocalMuted?: boolean;
   voiceChatConnected?: boolean;
+  // 🎯 실시간 캐릭터 데이터 추가
+  characterData?: CharacterData | null;
 }
 
 /**
@@ -23,9 +26,78 @@ export const MyCharacterContainer: React.FC<MyCharacterContainerProps> = ({
   currentPlayer,
   localStream = null,
   isLocalMuted = false,
-  voiceChatConnected = false
+  voiceChatConnected = false,
+  characterData = null // 🎯 실시간 캐릭터 데이터
 }) => {
-  const hasCharacter = !!(currentPlayer?.character);
+  // 🎯 캐릭터 데이터 우선순위: 실시간 props > 서버 characterInfo > 서버 character
+  const finalCharacterData = characterData || 
+    (currentPlayer?.characterInfo?.isCustomized ? {
+      selectedOptions: currentPlayer.characterInfo.selectedOptions!,
+      selectedColors: currentPlayer.characterInfo.selectedColors!,
+      nickname: currentPlayer.nickname
+    } : null) || 
+    currentPlayer?.character;
+  
+  // 🛡️ 안전한 캐릭터 데이터 검증
+  const hasValidCharacterData = !!(finalCharacterData && 
+    finalCharacterData.selectedOptions && 
+    finalCharacterData.selectedColors &&
+    typeof finalCharacterData.selectedOptions === 'object' &&
+    typeof finalCharacterData.selectedColors === 'object' &&
+    Object.keys(finalCharacterData.selectedOptions).length > 0 &&
+    Object.keys(finalCharacterData.selectedColors).length > 0
+  );
+  
+  const hasCharacter = hasValidCharacterData;
+  
+  // 🔧 디버깅: 캐릭터 데이터 상태 (표준화된 로깅)
+  console.log('🏠 [MyCharacterContainer] 캐릭터 데이터 상세 분석:', {
+    // 현재 플레이어 ID 정보
+    currentPlayerInfo: {
+      guestUserId: currentPlayer?.guestUserId,
+      id: currentPlayer?.id,
+      nickname: currentPlayer?.nickname
+    },
+    
+    // 데이터 우선순위별 분석 (표준화된 순서)
+    dataSource1_socketIOProps: {
+      available: !!characterData,
+      data: characterData,
+      valid: !!(characterData?.selectedOptions && characterData?.selectedColors)
+    },
+    
+    dataSource2_serverCharacterInfo: {
+      available: !!currentPlayer?.characterInfo?.isCustomized,
+      data: currentPlayer?.characterInfo,
+      valid: !!(currentPlayer?.characterInfo?.selectedOptions && currentPlayer?.characterInfo?.selectedColors)
+    },
+    
+    dataSource3_legacyCharacter: {
+      available: !!currentPlayer?.character,
+      data: currentPlayer?.character,
+      valid: !!(currentPlayer?.character?.selectedOptions && currentPlayer?.character?.selectedColors)
+    },
+    
+    // 최종 결정된 데이터 분석
+    finalDecision: {
+      selectedDataSource: characterData ? 'socketIO-props' : 
+                         (currentPlayer?.characterInfo?.isCustomized ? 'server-characterInfo' : 
+                         (currentPlayer?.character ? 'legacy-character' : 'none')),
+      finalData: finalCharacterData,
+      isValid: hasValidCharacterData,
+      willRenderCharacter: hasCharacter
+    },
+    
+    // 상세 검증 정보
+    validation: {
+      hasSelectedOptions: !!finalCharacterData?.selectedOptions,
+      hasSelectedColors: !!finalCharacterData?.selectedColors,
+      selectedOptionsKeys: finalCharacterData?.selectedOptions ? Object.keys(finalCharacterData.selectedOptions) : [],
+      selectedColorsKeys: finalCharacterData?.selectedColors ? Object.keys(finalCharacterData.selectedColors) : [],
+      selectedOptionsCount: finalCharacterData?.selectedOptions ? Object.keys(finalCharacterData.selectedOptions).length : 0,
+      selectedColorsCount: finalCharacterData?.selectedColors ? Object.keys(finalCharacterData.selectedColors).length : 0
+    }
+  });
 
   return (
     <div className="w-[579px] h-[499px] pl-[30px] justify-end items-center inline-flex relative">
@@ -57,8 +129,8 @@ export const MyCharacterContainer: React.FC<MyCharacterContainerProps> = ({
             </div>
           )}
           
-          {/* 캐릭터가 설정되었을 때 - 저장된 캐릭터 표시 */}
-          {hasCharacter && currentPlayer?.character && (
+          {/* 캐릭터가 설정되었을 때 - 안전한 실시간 캐릭터 표시 */}
+          {hasCharacter && (
             <div 
               className="absolute"
               style={{
@@ -70,10 +142,27 @@ export const MyCharacterContainer: React.FC<MyCharacterContainerProps> = ({
                 overflow: 'hidden'
               }}
             >
-              <CharacterRenderer 
-                characterData={currentPlayer.character}
-                className="relative w-full h-full"
-              />
+              {/* 🎨 안전한 캐립터 렌더링 */}
+              <div className="relative w-full h-full">
+                {(() => {
+                  try {
+                    return renderCharacterLayers({
+                      selectedOptions: finalCharacterData!.selectedOptions,
+                      selectedColors: finalCharacterData!.selectedColors,
+                      nickname: finalCharacterData!.nickname || currentPlayer?.nickname || 'Me'
+                    });
+                  } catch (error) {
+                    if (import.meta.env.DEV) {
+                      console.error('❌ [MyCharacterContainer] 캐릭터 렌더링 오류:', error);
+                    }
+                    return (
+                      <div className="flex items-center justify-center w-full h-full text-white opacity-50">
+                        캐릭터 렌더링 오류
+                      </div>
+                    );
+                  }
+                })()}
+              </div>
             </div>
           )}
         </div>

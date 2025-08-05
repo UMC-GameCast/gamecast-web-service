@@ -10,13 +10,26 @@ import type {
 let globalWebRTCManager: WebRTCManager | null = null;
 let currentManagerRoomCode: string | null = null;
 let hookInstanceCounter = 0;
-let activeHookInstances = new Set<string>();
+const activeHookInstances = new Set<string>();
+
+// WebRTC 매니저를 전역으로 노출 (useGameRecording에서 접근)
+declare global {
+  var __webRTCManager__: WebRTCManager | null;
+}
+globalThis.__webRTCManager__ = null;
+
+// 중복 실행 방지용 전역 변수들
+let globalLock = false;
+let lockTimeout: ReturnType<typeof setTimeout> | null = null;
+let managerInitPromise: Promise<WebRTCManager> | null = null;
+let isInitializing = false;
+let lastInitTimestamp = 0;
 
 // HMR 시 정리
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     if (globalWebRTCManager) {
-      globalWebRTCManager.close();
+      (globalWebRTCManager as any).close();
       globalWebRTCManager = null;
       currentManagerRoomCode = null;
     }
@@ -24,7 +37,7 @@ if (import.meta.hot) {
   });
 }
 
-export const useVoiceChat = (roomCode: string | null, nickname: string = "사용자", enabled: boolean = true) => {
+export const useVoiceChat = (roomCode: string | null, nickname: string = "", enabled: boolean = true) => {
   // 훅 인스턴스 고유 ID 생성
   const hookInstanceId = useRef<string>(`hook_${++hookInstanceCounter}_${Date.now()}`);
   
@@ -198,7 +211,7 @@ export const useVoiceChat = (roomCode: string | null, nickname: string = "사용
     // 다른 방의 기존 연결이 있으면 정리
     if (globalWebRTCManager && currentManagerRoomCode !== roomCode) {
       console.log('🧹 다른 방의 WebRTC 매니저 정리:', { oldRoom: currentManagerRoomCode, newRoom: roomCode });
-      globalWebRTCManager.close();
+      (globalWebRTCManager as any).close();
       globalWebRTCManager = null;
       currentManagerRoomCode = null;
       managerInitPromise = null;
@@ -216,7 +229,7 @@ export const useVoiceChat = (roomCode: string | null, nickname: string = "사용
     // 이미 초기화 중이면 대기
     if (managerInitPromise) {
       console.log('⏳ WebRTC 매니저 초기화 대기 중...');
-      managerInitPromise.then(manager => {
+      (managerInitPromise as Promise<WebRTCManager>).then((manager: WebRTCManager) => {
         if (isMounted) {
           webRTCManagerRef.current = manager;
           if (manager.localStream) {
@@ -239,6 +252,9 @@ export const useVoiceChat = (roomCode: string | null, nickname: string = "사용
         globalWebRTCManager = manager;
         currentManagerRoomCode = roomCode;
         webRTCManagerRef.current = manager;
+        
+        // 전역 변수에 할당 (useGameRecording에서 접근)
+        globalThis.__webRTCManager__ = manager;
         
         // 초기화 완료 후 플래그 해제
         isInitializing = false;

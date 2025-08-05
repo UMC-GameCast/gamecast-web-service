@@ -69,7 +69,7 @@ python audio_highlight/generate_subtitle.py
 ### Frontend Structure
 - **Pages**: Main navigation between different app states (create, join, room, etc.)
 - **Components**: Reusable UI components organized by feature (gamecast/common, gamecast/room)
-- **Hooks**: Custom hooks for WebRTC (`useVoiceChat`), recording (`useRecording`), and room management (`useRoom`)
+- **Hooks**: Custom hooks for WebRTC (`useVoiceChat`), recording (`useGameRecording`), room management (`useRoom`), character system (`useCharacter`), and animations (`useCharacterAnimation`)
 - **Utils**: Core managers for WebRTC connections, room state, and subtitle generation
 
 ### Data Flow
@@ -127,3 +127,89 @@ The application focuses on real-time voice communication for gaming sessions wit
 - **인원 초과 에러**: 서버에서 방 참여 제한 시 적절한 사용자 안내 메시지 표시
 - **연결 실패**: WebRTC/Socket.IO 연결 실패 시 재시도 로직 및 사용자 피드백
 - **권한 에러**: 마이크 권한 거부 등의 경우 명확한 해결 방법 안내
+
+### Performance Optimization Rules
+- **Logging**: Use probabilistic logging (`Math.random() < 0.01`) to prevent console spam
+- **Component Optimization**: Avoid infinite re-renders with proper `useMemo` and `useCallback` dependencies
+- **Event Filtering**: Always filter WebRTC Manager events to prevent unnecessary processing
+
+## CRITICAL: Socket.IO Connection Management
+
+### 단일 연결 원칙 (NEVER VIOLATE)
+- **한 방당 하나의 Socket.IO 연결만 유지**: 중복 연결은 인원 초과 문제 발생
+- **WebRTC 매니저 중심**: 모든 Socket.IO 통신은 `webRTCManager.ts`를 통해 처리
+- **중복 연결 절대 금지**: `useGameRecording`, `useRoom` 등에서 별도 Socket.IO 연결 생성 금지
+- **글로벌 매니저 접근**: `globalThis.__webRTCManager__`를 통해 WebRTC 매니저 재사용
+
+### Socket.IO 연결 생성 규칙
+```typescript
+// ❌ 잘못된 방법 - 별도 Socket.IO 연결 생성
+const socket = io(SOCKET_SERVER_URL);
+socket.emit('join-room', { roomCode, guestUserId });
+
+// ✅ 올바른 방법 - WebRTC 매니저 재사용
+const manager = getWebRTCManager();
+if (manager) {
+  manager.emitUpdatePreparationStatus(data);
+}
+```
+
+### 이벤트 콜백 시스템
+- **WebRTC 매니저에서 이벤트 수신**: Socket.IO 이벤트를 매니저에서 처리
+- **React 컴포넌트로 콜백 전달**: 매니저 → 콜백 → React 상태 → UI 업데이트
+- **콜백 정리**: 컴포넌트 언마운트 시 콜백 함수 초기화
+
+### Auto-Recording System Architecture
+- **Core Manager**: `webRTCManager.ts`가 모든 Socket.IO 이벤트 처리
+- **React Integration**: `useGameRecording.ts`는 WebRTC 매니저의 래퍼 역할
+- **State Flow**: WebRTC Manager → Callbacks → React State → UI Update  
+- **Event Types**: `preparation-status-updated`, `recording-started`, `recording-stopped`
+- **WebRTC 필터링**: `WEBRTC_` 접두사 연결은 실제 참가자 수에서 제외
+
+### 문제 발생 시 점검사항
+1. **인원 초과 문제**: Socket.IO 연결이 중복되었는지 확인
+2. **이벤트 미수신**: WebRTC 매니저 콜백이 올바르게 설정되었는지 확인  
+3. **상태 동기화 문제**: `globalThis.__webRTCManager__`에 접근 가능한지 확인
+4. **퇴행 방지**: 기존 WebRTC 음성 통신 기능이 정상 작동하는지 확인
+
+## Character System Architecture
+
+### Real-time Character Data Flow
+- **Single Source of Truth**: Only `RoomPage.tsx` uses `useCharacter` hook to prevent callback conflicts
+- **Data Priority**: Socket.IO real-time data > Server characterInfo > Legacy character data
+- **Props-based Distribution**: Character data flows from RoomPage → PlayerGrid → PlayerCard and MyCharacterContainer
+
+### Character Data Structure
+```typescript
+interface CharacterData {
+  selectedOptions: Record<string, string>; // 캐릭터 외형 선택사항
+  selectedColors: Record<string, string>;  // 색상 선택사항
+  nickname: string;                        // 플레이어 닉네임
+}
+```
+
+### Character Setup Flow
+1. **CharacterSetupPage**: User customizes character → Sends complete data via Socket.IO
+2. **Socket.IO Events**: `update-character-status` + `update-preparation-status` transmitted
+3. **RoomPage useCharacter**: Receives events, updates local state
+4. **UI Components**: PlayerCard animations + MyCharacterContainer preview updated
+
+### CRITICAL: WebRTC Manager Event Filtering
+- **Problem**: WebRTC Manager connections use `WEBRTC_` prefix but share same `guestUserId`
+- **Solution**: Filter out events where `playerName.startsWith('WEBRTC_')` to prevent duplicate processing
+- **Rule**: WebRTC Manager events must NEVER be processed as real player events
+
+### Hook Usage Restrictions
+- **useCharacter**: ONLY use in `RoomPage.tsx` to prevent callback overwrites
+- **useGameRecording**: ONLY use in `RoomPage.tsx` and `ButtonContainer.tsx`
+- **Other Components**: Receive character data via props, never direct hook usage
+
+### Rendering System
+- **Unified Rendering**: All components use `renderCharacterLayers()` from `characterRenderer.tsx`
+- **Consistent Data**: Same CharacterData interface across PlayerCard, MyCharacterContainer
+- **Animation Integration**: `useCharacterAnimation` hook handles card opening animations based on `preparationStatus.characterSetup`
+
+### Character Data Sources (Priority Order)
+1. **Real-time Socket.IO**: `useCharacter` hook managed data
+2. **Server characterInfo**: From REST API responses
+3. **Legacy character**: Fallback compatibility data

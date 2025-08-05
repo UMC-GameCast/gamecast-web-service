@@ -4,7 +4,7 @@ import participateLogo from "../../../assets/gamecast/participate/participateLog
 import participatetextinputcardD1 from "../../../assets/gamecast/participate/participateTextInputCard_D1.png";
 import { Button1 } from "../common/Button1";
 import { ErrorMessage } from "../common/ErrorMessage";
-import { joinRoom } from "../../../utils/roomManager";
+import { joinRoom, getRoomInfo } from "../../../utils/roomManager";
 
 interface Props {
   onJoinSuccess?: () => void;
@@ -61,9 +61,28 @@ export const ParticipationCodeCard = ({ onJoinSuccess }: Props) => {
     setError("");
     
     try {
+      // 1단계: 방 정보 조회하여 현재 참여자 수 확인
+      const roomInfo = await getRoomInfo(entryCode.trim().toUpperCase());
+      
+      if (!roomInfo.success || !roomInfo.room) {
+        const errorMessage = roomInfo.error || "방을 찾을 수 없습니다.";
+        console.log("🔴 RoomInfo error:", errorMessage);
+        setError(errorMessage);
+        triggerExternalError();
+        return;
+      }
+      
+      // 2단계: 현재 참여자 수에 따라 순차적 닉네임 생성
+      const currentCapacity = roomInfo.room.currentCapacity || 0;
+      const nextNicknameNumber = currentCapacity + 1;
+      const nickname = `Nickname${nextNicknameNumber}`;
+      
+      console.log(`🏷️ 자동 닉네임 생성: ${nickname} (현재 참여자: ${currentCapacity}명)`);
+      
+      // 3단계: 생성된 닉네임으로 방 참여
       const result = await joinRoom({
         roomCode: entryCode.trim().toUpperCase(),
-        nickname: "참가자" // 기본 참가자 닉네임
+        nickname: nickname // 순차적 닉네임 (Nickname2, Nickname3, ...)
       });
       
       if (result.success) {
