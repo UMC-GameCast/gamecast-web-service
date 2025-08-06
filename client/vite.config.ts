@@ -9,6 +9,6 @@ export default defineConfig({
     svgr()
   ],
   server: {
-    port: 5173
+    port: 3000
   }
 })

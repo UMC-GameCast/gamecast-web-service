@@ -12,8 +12,7 @@ import type {
   PreparationStatusRequest,
   PreparationStatusResponse
 } from '../types/api';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://3.37.34.211:8888';
+import { API_BASE_URL } from '../config/server.config';
 
 class APIService {
   private async fetchAPI<T>(

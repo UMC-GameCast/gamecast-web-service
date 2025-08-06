@@ -114,9 +114,22 @@ export const useVoiceChat = (
   useEffect(() => {
     const instanceId = hookInstanceId.current;
 
+    // 🔧 더 적극적인 초기화 조건: roomCode만 있으면 시작 (nickname은 나중에 설정 가능)
     if (!roomCode || !enabled) {
+      console.log('🔍 [useVoiceChat] WebRTC Manager 초기화 건너뜀:', {
+        hasRoomCode: !!roomCode,
+        enabled: enabled,
+        nickname: nickname || '(empty)'
+      });
       return;
     }
+    
+    console.log('🔍 [useVoiceChat] WebRTC Manager 초기화 조건 충족:', {
+      roomCode,
+      nickname: nickname || 'Unknown',
+      enabled,
+      instanceId
+    });
 
     // 🚨 강제 중복 방지: 이미 같은 방의 매니저가 있으면 무조건 재사용
     if (globalWebRTCManager && currentManagerRoomCode === roomCode) {
@@ -272,8 +285,14 @@ export const useVoiceChat = (
     // 새 연결 생성 (Promise로 래핑하여 중복 방지)
     managerInitPromise = new Promise<WebRTCManager>((resolve, reject) => {
       try {
-        console.log(`🔧 [${timestamp}] 새 WebRTC 매니저 생성:`, { roomCode, nickname });
-        const manager = new WebRTCManager(roomCode, nickname);
+        // 🔧 nickname이 없으면 기본값 사용
+        const effectiveNickname = nickname || 'Unknown';
+        console.log(`🔧 [${timestamp}] 새 WebRTC 매니저 생성:`, { 
+          roomCode, 
+          originalNickname: nickname,
+          effectiveNickname 
+        });
+        const manager = new WebRTCManager(roomCode, effectiveNickname);
         globalWebRTCManager = manager;
         currentManagerRoomCode = roomCode;
         webRTCManagerRef.current = manager;

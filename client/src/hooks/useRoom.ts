@@ -87,6 +87,7 @@ export const useRoom = () => {
             
             const playerInfo: Player = {
               ...serverPlayer,
+              id: serverPlayer.id || serverPlayer.guestUserId, // 🔧 ID 필드 보장
               guestUserId: serverPlayer.guestUserId || serverPlayer.id,
               preparationStatus: serverPlayer.preparationStatus || {
                 characterSetup: false,
@@ -169,6 +170,7 @@ export const useRoom = () => {
           if (serverPlayer) {
             const playerInfo: Player = {
               ...serverPlayer,
+              id: serverPlayer.id || serverPlayer.guestUserId, // 🔧 ID 필드 보장
               guestUserId: serverPlayer.guestUserId || serverPlayer.id,
               preparationStatus: serverPlayer.preparationStatus || {
                 characterSetup: false,
@@ -191,7 +193,7 @@ export const useRoom = () => {
           } else {
             // 폴백: 로컬 정보 생성 (서버 데이터 우선, 없을 때만 사용)
             const fallbackPlayer: Player = {
-              id: userId,
+              id: userId, // 🔧 ID 필드 명시적 설정
               guestUserId: userId,
               nickname: room.hostGuestId === userId ? "Nickname1" : "Nickname2", // 역할에 따른 기본 닉네임
               role: room.hostGuestId === userId ? 'host' : 'participant',

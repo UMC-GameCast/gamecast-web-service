@@ -10,8 +10,7 @@ import type {
   JoinRoomResponse,
   UserSession
 } from '../types/room';
-
-const API_BASE_URL = 'http://3.37.34.211:8889/api';
+import { API_BASE_URL } from '../config/server.config';
 const SESSION_ID_KEY = 'gamecast_session_id';
 const USER_SESSION_KEY = 'gamecast_user_session';
 
@@ -36,27 +35,69 @@ export const testServerConnection = async (): Promise<{ success: boolean; messag
   }
 };
 
-// 세션 ID 생성 및 관리
+// 🔧 강화된 세션 ID 관리: 새로고침 후에도 유지
 const getSessionId = (): string => {
-  let sessionId = sessionStorage.getItem(SESSION_ID_KEY);
+  // 1. 먼저 localStorage에서 확인 (새로고침 후에도 유지)
+  let sessionId = localStorage.getItem(SESSION_ID_KEY);
+  
   if (!sessionId) {
+    // 2. sessionStorage에서 확인 (브라우저 세션 동안만 유지)
+    sessionId = sessionStorage.getItem(SESSION_ID_KEY);
+  }
+  
+  if (!sessionId) {
+    // 3. 둘 다 없으면 새로 생성
     sessionId = 'session_' + Math.random().toString(36).substring(2, 15) + Date.now();
+    
+    // 4. 새로고침 후에도 유지되도록 localStorage에 저장
+    localStorage.setItem(SESSION_ID_KEY, sessionId);
+    sessionStorage.setItem(SESSION_ID_KEY, sessionId);
+    
+    console.log('🆕 새로운 세션 ID 생성:', sessionId);
+  } else {
+    console.log('✅ 기존 세션 ID 사용:', sessionId);
+    
+    // localStorage와 sessionStorage 동기화
+    localStorage.setItem(SESSION_ID_KEY, sessionId);
     sessionStorage.setItem(SESSION_ID_KEY, sessionId);
   }
+  
   return sessionId;
 };
 
-// 사용자 세션 관리
+// 🔧 강화된 사용자 세션 관리: guestUserId 영속성 보장
 const getUserSession = (): UserSession => {
   const sessionData = localStorage.getItem(USER_SESSION_KEY);
   if (sessionData) {
-    return JSON.parse(sessionData);
+    try {
+      const session = JSON.parse(sessionData);
+      
+      // 기존 세션이 있으면 세션 ID 동기화
+      if (session.sessionId) {
+        localStorage.setItem(SESSION_ID_KEY, session.sessionId);
+        sessionStorage.setItem(SESSION_ID_KEY, session.sessionId);
+      }
+      
+      console.log('✅ [getUserSession] 기존 세션 복구:', {
+        sessionId: session.sessionId,
+        guestUserId: session.guestUserId,
+        hasCurrentRoom: !!session.currentRoom
+      });
+      
+      return session;
+    } catch (error) {
+      console.error('❌ [getUserSession] 세션 데이터 파싱 오류:', error);
+      // 파싱 오류 시 새 세션 생성
+    }
   }
   
   const newSession: UserSession = {
     sessionId: getSessionId()
   };
   localStorage.setItem(USER_SESSION_KEY, JSON.stringify(newSession));
+  
+  console.log('🆕 [getUserSession] 새로운 세션 생성:', newSession);
+  
   return newSession;
 };
 
@@ -442,10 +483,31 @@ export const getCurrentPlayer = (): Player | null => {
   return session.currentPlayer || null;
 };
 
-// 현재 사용자 ID 조회
+// 🔧 강화된 현재 사용자 ID 조회: 영속성 보장
 export const getCurrentUserId = (): string | null => {
   const session = getUserSession();
-  return session.guestUserId || null;
+  
+  console.log('🔍 [getCurrentUserId] Session debug:', {
+    hasSession: !!session,
+    sessionKeys: Object.keys(session),
+    guestUserId: session.guestUserId,
+    currentRoom: !!session.currentRoom,
+    currentPlayer: !!session.currentPlayer
+  });
+  
+  // guestUserId가 있으면 반환
+  if (session.guestUserId) {
+    console.log('✅ [getCurrentUserId] 기존 guestUserId 사용:', session.guestUserId);
+    return session.guestUserId;
+  }
+  
+  // guestUserId가 없으면 sessionId 기반으로 생성할 수도 있지만
+  // 현재는 서버에서 할당받은 guestUserId만 사용
+  console.log('⚠️ [getCurrentUserId] guestUserId 없음, 새로 할당 필요', {
+    sessionData: session,
+    localStorage: localStorage.getItem('gamecast_user_session')
+  });
+  return null;
 };
 
 // 레거시 함수들 (호환성을 위해 유지)
@@ -518,4 +580,32 @@ export const debugLogRoomData = (): void => {
   console.log('Session:', data.session);
   console.log('Current Room:', data.currentRoom);
   console.log('Current Player:', data.currentPlayer);
+};
+
+// 🔧 새로운 디버깅 함수: 영속성 상태 확인
+export const debugPersistentSession = (): {
+  localStorage: any;
+  sessionStorage: any;
+  currentSession: any;
+  sessionIdMatch: boolean;
+} => {
+  const localStorageSession = localStorage.getItem(USER_SESSION_KEY);
+  const sessionStorageSessionId = sessionStorage.getItem(SESSION_ID_KEY);
+  const localStorageSessionId = localStorage.getItem(SESSION_ID_KEY);
+  const currentSession = getUserSession();
+  
+  const result = {
+    localStorage: {
+      userSession: localStorageSession ? JSON.parse(localStorageSession) : null,
+      sessionId: localStorageSessionId
+    },
+    sessionStorage: {
+      sessionId: sessionStorageSessionId
+    },
+    currentSession: currentSession,
+    sessionIdMatch: localStorageSessionId === sessionStorageSessionId
+  };
+  
+  console.log('🔍 [debugPersistentSession] 영속성 상태:', result);
+  return result;
 }; 

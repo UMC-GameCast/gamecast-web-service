@@ -7,7 +7,7 @@ import CardEmpty from "../../../assets/gamecast/Room/Card_empty.svg?react";
 interface PlayerGridProps {
   currentRoom: Room;
   currentPlayer: Player;
-  realtimeParticipants?: Player[];
+  realtimeParticipants?: Player[]; // 🎯 통합된 참여자 데이터 (이름 유지하되 내용은 통합됨)
   remoteStreams?: Map<string, MediaStream>;
   voiceChatConnected?: boolean;
   playersReadyStatus?: Array<{
@@ -28,10 +28,17 @@ export const PlayerGrid: React.FC<PlayerGridProps> = ({
   playersReadyStatus = [],
 }) => {
   
-  // ✨ 단순화된 디버깅 (필요시만)
+  // ✨ 통합된 참여자 디버깅 (필요시만)
   if (import.meta.env.DEV && Math.random() < 0.01) {
-    console.log('✨ [PlayerGrid] 단순화된 상태:', {
+    console.log('✨ [PlayerGrid] 통합된 참여자 상태:', {
       participantsCount: realtimeParticipants.length || (currentRoom?.participants?.length || 0),
+      unifiedParticipants: realtimeParticipants.map(p => ({
+        nickname: p.nickname,
+        socketId: p.socketId,
+        isConnected: p.isConnected,
+        hasWebRTCConnection: p.hasWebRTCConnection,
+        hasRemoteStream: !!p.remoteStream
+      })),
       timestamp: Date.now()
     });
   }
@@ -64,11 +71,49 @@ export const PlayerGrid: React.FC<PlayerGridProps> = ({
 
   // 중복 제거 및 필터링이 강화된 참가자 목록
   const otherPlayers = (() => {
-    // 현재 플레이어만 제외 (WebRTC Manager는 완전히 분리됨)
+    // 🔍 필터링 전 상세 로깅
+    console.log('🔍 [PlayerGrid] 필터링 전 참여자 상세:', {
+      currentPlayerId: currentPlayer.id,
+      currentPlayerGuestUserId: currentPlayer.guestUserId,
+      totalParticipants: convertedParticipants.length,
+      participantDetails: convertedParticipants.map(p => ({
+        id: p.id,
+        guestUserId: p.guestUserId,
+        nickname: p.nickname,
+        role: p.role,
+        isCurrentPlayer: p.id === currentPlayer.id || p.guestUserId === currentPlayer.guestUserId,
+        isWebRTCConnection: p.nickname?.startsWith('WEBRTC_')
+      }))
+    });
+    
+    // 1. 🔧 강화된 플레이어 필터링 (ID 안전성 보장)
     let filtered = convertedParticipants.filter((p) => {
-      const isDifferentPlayer = p.id !== currentPlayer.id && p.guestUserId !== currentPlayer.guestUserId;
+      // 🔧 다중 ID 비교로 안전성 확보
+      const isSameById = p.id && currentPlayer.id && p.id === currentPlayer.id;
+      const isSameByGuestUserId = p.guestUserId && currentPlayer.guestUserId && p.guestUserId === currentPlayer.guestUserId;
+      const isSameByNickname = p.nickname === currentPlayer.nickname; // 추가 안전장치
       
-      return isDifferentPlayer;
+      const isCurrentPlayer = isSameById || isSameByGuestUserId || isSameByNickname;
+      const isNotWebRTCConnection = !p.nickname?.startsWith('WEBRTC_');
+      
+      const shouldInclude = !isCurrentPlayer && isNotWebRTCConnection;
+      
+      console.log(`🔍 [PlayerGrid] 참여자 필터링:`, {
+        participant: p.nickname,
+        participantId: p.id,
+        participantGuestUserId: p.guestUserId,
+        currentPlayerId: currentPlayer.id,
+        currentPlayerGuestUserId: currentPlayer.guestUserId,
+        isSameById,
+        isSameByGuestUserId,
+        isSameByNickname,
+        isCurrentPlayer,
+        isNotWebRTCConnection,
+        shouldInclude,
+        reason: isCurrentPlayer ? '현재 플레이어' : !isNotWebRTCConnection ? 'WebRTC 연결' : '포함'
+      });
+      
+      return shouldInclude;
     });
     
     // 2. 중복 제거: ID 또는 guestUserId가 같은 참가자 제거
@@ -116,59 +161,24 @@ export const PlayerGrid: React.FC<PlayerGridProps> = ({
         }
 
         if (player) {
-          // ✅ 개선된 스트림 매칭 로직
-          let playerStream = null;
+          // 🎯 통합 Player 데이터에서 스트림 정보 우선 사용, 없으면 기존 remoteStreams에서 조회
+          const unifiedStream = player.remoteStream;
+          const fallbackStream = remoteStreams.get(player.guestUserId);
+          const playerStream = unifiedStream || fallbackStream;
           
-          console.log(`🔍 [PlayerGrid] Searching stream for ${player.nickname}:`, {
-            availableStreamKeys: Array.from(remoteStreams.keys()),
-            totalStreams: remoteStreams.size,
-            playerId: player.id,
-            guestUserId: player.guestUserId
-          });
-          
-          // 방법 1: 원격 스트림이 1개뿐이라면 그것을 사용 (2명만 있는 경우)
-          if (remoteStreams.size === 1) {
-            const [firstStreamKey, firstStream] = Array.from(remoteStreams.entries())[0];
-            playerStream = firstStream;
-            console.log(`🎯 [PlayerGrid] Using single remote stream for ${player.nickname}:`, {
-              streamKey: firstStreamKey,
-              streamId: firstStream.id
-            });
-          } else {
-            // 방법 2: 모든 가능한 매칭 시도
-            const possibleKeys = [
-              player.id,
-              player.guestUserId,
-              player.socketId, // 혹시 있다면
-              ...Array.from(remoteStreams.keys()).filter(key => 
-                key.includes(player.nickname) || 
-                key.includes(player.guestUserId || '') ||
-                key.includes(player.id || '')
-              )
-            ].filter(Boolean);
-            
-            console.log(`🎯 [PlayerGrid] Trying to match stream for ${player.nickname}:`, {
-              possibleKeys,
-              availableKeys: Array.from(remoteStreams.keys())
-            });
-            
-            for (const key of possibleKeys) {
-              playerStream = remoteStreams.get(key);
-              if (playerStream) {
-                console.log(`✅ [PlayerGrid] Found stream for ${player.nickname} with key:`, key);
-                break;
+          if (import.meta.env.DEV && Math.random() < 0.1) {
+            console.log(`🔍 [PlayerGrid] 통합 스트림 조회 for ${player.nickname}:`, {
+              guestUserId: player.guestUserId,
+              hasUnifiedStream: !!unifiedStream,
+              hasFallbackStream: !!fallbackStream,
+              usingStream: unifiedStream ? 'unified' : fallbackStream ? 'fallback' : 'none',
+              streamId: playerStream?.id,
+              playerConnectionStatus: {
+                isConnected: player.isConnected,
+                hasWebRTCConnection: player.hasWebRTCConnection,
+                socketId: player.socketId
               }
-            }
-            
-            // 방법 3: 첫 번째 스트림 사용 (임시 해결책)
-            if (!playerStream && remoteStreams.size > 0) {
-              const [firstKey, firstStream] = Array.from(remoteStreams.entries())[0];
-              playerStream = firstStream;
-              console.warn(`⚠️ [PlayerGrid] Using first available stream for ${player.nickname}:`, {
-                streamKey: firstKey,
-                streamId: firstStream.id
-              });
-            }
+            });
           }
           
           // 방장 여부 판단 로직 개선 (중복 방지)

@@ -1,5 +1,6 @@
 import { io, Socket } from "socket.io-client";
 import { getCurrentUserId } from './roomManager';
+import { SOCKET_URL } from '../config/server.config';
 import type { 
   ParticipantUpdateEvent, 
   WebRTCOffer, 
@@ -9,12 +10,13 @@ import type {
   VoiceChatState
 } from '../types/room';
 
-const SOCKET_SERVER_URL = "http://3.37.34.211:8889";
-
 export class WebRTCManager {
   private socket: Socket;
   private peerConnections: Map<string, RTCPeerConnection> = new Map();
   private peerStates: Map<string, PeerConnectionState> = new Map();
+  // 🔧 Socket ID <-> guestUserId 매핑 추가
+  private socketToUserIdMapping: Map<string, string> = new Map();
+  private userIdToSocketMapping: Map<string, string> = new Map();
   public localStream: MediaStream | null = null;
   private roomCode: string;
   private guestUserId: string | null = null;
@@ -83,9 +85,18 @@ export class WebRTCManager {
   constructor(roomCode: string, nickname: string) {
     this.roomCode = roomCode;
     this.nickname = nickname;
-    // 🔄 롤백: 실제 사용자와 동일한 ID 사용 (중복 처리로 해결)
+    
+    // 🔧 강화된 guestUserId 초기화
     const realPlayerId = getCurrentUserId();
     this.guestUserId = realPlayerId || null;
+    
+    console.log('🔧 [WebRTC] Constructor initialization:', {
+      roomCode: this.roomCode,
+      nickname: this.nickname,
+      guestUserId: this.guestUserId,
+      hasGuestUserId: !!this.guestUserId,
+      realPlayerId: realPlayerId
+    });
     
     // 연결 상태 초기화
     this.connectionState = {
@@ -101,12 +112,12 @@ export class WebRTCManager {
       roomCode,
       nickname,
       guestUserId: this.guestUserId,
-      serverUrl: SOCKET_SERVER_URL,
+      serverUrl: SOCKET_URL,
       timestamp: new Date().toISOString()
     });
     
     // WebSocket 전용 연결 설정 (enhanced retry logic)
-    this.socket = io(SOCKET_SERVER_URL, {
+    this.socket = io(SOCKET_URL, {
       transports: ['websocket'], // WebSocket만 사용
       upgrade: false, // polling으로 자동 업그레이드 방지
       rememberUpgrade: false,
@@ -216,7 +227,7 @@ export class WebRTCManager {
     this.socket.on("connect", async () => {
       console.log('🟢 [WebRTC] Socket.IO CONNECTED:', {
         socketId: this.socket.id,
-        serverUrl: SOCKET_SERVER_URL,
+        serverUrl: SOCKET_URL,
         roomCode: this.roomCode,
         nickname: this.nickname,
         isReconnection: !!this.socket.recovered,
@@ -258,7 +269,7 @@ export class WebRTCManager {
         error: error.message,
         type: (error as any).type,
         description: (error as any).description,
-        serverUrl: SOCKET_SERVER_URL,
+        serverUrl: SOCKET_URL,
         timestamp: new Date().toISOString(),
         userFriendlyMessage: errorMessage
       });
@@ -346,6 +357,79 @@ export class WebRTCManager {
         users: data.users,
         timestamp: new Date().toISOString()
       });
+      
+      // 🔧 기존 방 참여자들의 매핑 정보 수집 (WebRTC 연결 구분)
+      if (Array.isArray(data.users)) {
+        data.users.forEach((user: any) => {
+          if (user.socketId && user.socketId !== this.socket.id) {
+            // WebRTC 연결인 경우 parentGuestUserId 사용, 아니면 guestUserId 사용
+            const targetUserId = user.parentGuestUserId || user.guestUserId;
+            
+            if (targetUserId) {
+              this.socketToUserIdMapping.set(user.socketId, targetUserId);
+              this.userIdToSocketMapping.set(targetUserId, user.socketId);
+              
+              console.log('🗺️ [WebRTC] Collected initial mapping:', {
+                socketId: user.socketId,
+                originalGuestUserId: user.guestUserId,
+                targetUserId: targetUserId,
+                nickname: user.nickname,
+                isWebRTCConnection: !!user.parentGuestUserId
+              });
+            }
+          }
+        });
+        
+        console.log('🗺️ [WebRTC] Total initial mappings:', this.socketToUserIdMapping.size);
+      }
+      
+      // 🔧 해결 방안: joined-room-success에서는 기존 사용자와 P2P 연결 시도하지 않음
+      // 대신 기존 사용자들이 새로운 사용자 참여를 감지하면 user-joined 이벤트로 P2P 연결 시작
+      if (Array.isArray(data.users)) {
+        console.log('🔍 [P2P DEBUG] 🚀 Processing existing users - socketId availability check:', {
+          totalUsers: data.users.length,
+          mySocketId: this.socket.id,
+          users: data.users.map(u => ({
+            socketId: u.socketId,
+            nickname: u.nickname,
+            guestUserId: u.guestUserId,
+            hasSocketId: !!u.socketId,
+            isMe: u.socketId === this.socket.id,
+            isWebRTC: u.nickname?.startsWith('WEBRTC_'),
+            canConnect: u.socketId && u.socketId !== this.socket.id && !u.nickname?.startsWith('WEBRTC_')
+          }))
+        });
+        
+        // socketId가 없는 사용자들 카운트
+        const usersWithoutSocketId = data.users.filter(u => !u.socketId && !u.nickname?.startsWith('WEBRTC_'));
+        if (usersWithoutSocketId.length > 0) {
+          console.log('🔍 [P2P DEBUG] ⚠️ Found users without socketId (cannot create P2P):', {
+            count: usersWithoutSocketId.length,
+            users: usersWithoutSocketId.map(u => ({
+              nickname: u.nickname,
+              guestUserId: u.guestUserId
+            })),
+            reason: 'Server provided REST API data without active Socket.IO connection info'
+          });
+          
+          console.log('🔍 [P2P DEBUG] 💡 Solution: These users will connect via user-joined events when they start their WebRTC managers');
+        }
+        
+        // 🔧 SKIP P2P connections in joined-room-success
+        // 문제: 기존 사용자들의 socketId가 없어서 P2P 연결 불가능
+        // 해결책: user-joined 이벤트에서만 P2P 연결 수행
+        console.log('🔍 [P2P DEBUG] ⏭️ Skipping P2P connections in joined-room-success');
+        console.log('🔍 [P2P DEBUG] 💡 P2P connections will be established via user-joined events');
+        
+        // 기존 사용자 중 socketId가 있는 사용자들만 카운트 (통계용)
+        const usersWithSocketId = data.users.filter(u => u.socketId && u.socketId !== this.socket.id && !u.nickname?.startsWith('WEBRTC_'));
+        console.log('🔍 [P2P DEBUG] 📊 Statistics:', {
+          totalUsersInResponse: data.users.length,
+          usersWithSocketId: usersWithSocketId.length,
+          mySocketId: this.socket.id,
+          note: 'P2P connections will happen when other users receive user-joined events'
+        });
+      }
       
       // 방 참여 성공 시 플래그 및 타임아웃 해제
       this.isJoiningRoom = false;
@@ -452,7 +536,13 @@ export class WebRTCManager {
       if (Array.isArray(event)) {
         console.log(`👥 [WebRTC] Participant update received (array):`, {
           count: event.length,
-          participants: event
+          participants: event.map((p: any) => ({
+            id: p.id,
+            guestUserId: p.guestUserId,
+            nickname: p.nickname,
+            role: p.role,
+            isWebRTCConnection: p.nickname?.startsWith('WEBRTC_')
+          }))
         });
         this.onRealtimeParticipantsUpdate(event);
       } else if (event && typeof event === 'object' && 'eventType' in event) {
@@ -461,6 +551,13 @@ export class WebRTCManager {
           eventType: participantEvent.eventType,
           roomCode: participantEvent.roomCode,
           participantCount: participantEvent.participants?.length || 0,
+          participantDetails: participantEvent.participants?.map((p: any) => ({
+            id: p.id,
+            guestUserId: p.guestUserId,
+            nickname: p.nickname,
+            role: p.role,
+            isWebRTCConnection: p.nickname?.startsWith('WEBRTC_')
+          })),
           timestamp: new Date().toISOString()
         });
         this.onParticipantUpdate(participantEvent);
@@ -493,11 +590,13 @@ export class WebRTCManager {
       }
     });
 
-    this.socket.on("user-joined", async (data: { socketId: string; guestUserId: string; nickname: string; joinedAt: string }) => {
-      console.log('👋 [WebRTC] NEW USER JOINED:', {
+    this.socket.on("user-joined", async (data: { socketId: string; guestUserId: string; nickname: string; joinedAt: string; parentGuestUserId?: string; parentNickname?: string }) => {
+      console.log('🔍 [P2P DEBUG] 👋 NEW USER JOINED - 상세 분석:', {
         nickname: data.nickname,
         socketId: data.socketId,
         guestUserId: data.guestUserId,
+        parentGuestUserId: data.parentGuestUserId,
+        parentNickname: data.parentNickname,
         joinedAt: data.joinedAt,
         mySocketId: this.socket.id,
         isSameAsMe: data.socketId === this.socket.id,
@@ -505,51 +604,117 @@ export class WebRTCManager {
         timestamp: new Date().toISOString()
       });
       
+      // 🔧 Socket ID <-> guestUserId 매핑 저장 (WebRTC 연결은 parentGuestUserId 사용)
+      const targetUserId = data.parentGuestUserId || data.guestUserId;
+      this.socketToUserIdMapping.set(data.socketId, targetUserId);
+      this.userIdToSocketMapping.set(targetUserId, data.socketId);
+      
+      console.log('🔍 [P2P DEBUG] 🗺️ Updated user mapping:', {
+        socketId: data.socketId,
+        originalGuestUserId: data.guestUserId,
+        targetUserId: targetUserId,
+        isWebRTCConnection: !!data.parentGuestUserId,
+        totalMappings: this.socketToUserIdMapping.size,
+        allMappings: Array.from(this.socketToUserIdMapping.entries())
+      });
+      
+      // 🔧 핵심 해결책: 새로운 실제 사용자가 참여했을 때 양방향 연결 보장
+      // 만약 이것이 실제 사용자(WebRTC가 아닌)라면, 그들도 나와 P2P 연결을 시작해야 함
+      if (!data.parentGuestUserId && !data.nickname?.startsWith('WEBRTC_')) {
+        console.log('🔍 [P2P DEBUG] 💡 Real user joined - they should also start WebRTC manager');
+        // 이 경우는 실제 사용자가 방에 입장한 것이므로, 그들의 WebRTC Manager도 곧 시작될 것임
+        // 우리는 P2P 연결을 시도하고, 그들도 user-joined 이벤트를 통해 우리와 연결을 시도할 것임
+      }
+      
       // 자신에게는 P2P 연결을 생성하지 않음
       if (data.socketId === this.socket.id) {
-        console.log('⚠️ [WebRTC] Skipping peer connection - this is myself');
+        console.log('🔍 [P2P DEBUG] ⚠️ Skipping peer connection - this is myself');
         return;
       }
       
+      // 🔧 WebRTC 연결인 사용자는 P2P 연결 생성하지 않음
+      if (data.nickname?.startsWith('WEBRTC_')) {
+        console.log('🔍 [P2P DEBUG] ⚠️ Skipping peer connection - this is another WebRTC connection:', data.nickname);
+        return;
+      }
+      
+      // 🔍 P2P 연결 생성 전 상태 체크
+      console.log('🔍 [P2P DEBUG] 🔄 Pre-connection state check:', {
+        nickname: data.nickname,
+        socketId: data.socketId,
+        hasLocalStream: !!this.localStream,
+        localStreamTracks: this.localStream?.getTracks().length || 0,
+        localStreamId: this.localStream?.id,
+        currentPeerConnections: this.peerConnections.size,
+        existingConnections: Array.from(this.peerConnections.keys()),
+        socketConnected: this.socket.connected,
+        isJoiningRoom: this.isJoiningRoom
+      });
+      
       try {
-        console.log('🔄 [WebRTC] Attempting to create peer connection for new user:', {
-          socketId: data.socketId,
-          nickname: data.nickname,
-          isOfferer: true,
-          hasLocalStream: !!this.localStream,
-          localStreamTracks: this.localStream?.getTracks().length || 0
-        });
+        console.log('🔍 [P2P DEBUG] 🚀 Starting peer connection creation for:', data.nickname);
         
         await this.createPeerConnection(data.socketId, true, data.nickname);
         
-        console.log('✅ [WebRTC] Peer connection created successfully for:', data.nickname);
+        // 연결 생성 후 상태 확인
+        const createdConnection = this.peerConnections.get(data.socketId);
+        console.log('🔍 [P2P DEBUG] ✅ Peer connection creation result:', {
+          nickname: data.nickname,
+          socketId: data.socketId,
+          connectionExists: !!createdConnection,
+          connectionState: createdConnection?.connectionState,
+          iceConnectionState: createdConnection?.iceConnectionState,
+          signalingState: createdConnection?.signalingState,
+          totalConnections: this.peerConnections.size,
+          timestamp: new Date().toISOString()
+        });
       } catch (error) {
-        console.error('❌ [WebRTC] Failed to create peer connection for new user:', {
+        console.error('🔍 [P2P DEBUG] ❌ Failed to create peer connection for new user:', {
           nickname: data.nickname,
           socketId: data.socketId,
           error: error,
           errorMessage: error instanceof Error ? error.message : 'Unknown error',
           errorStack: error instanceof Error ? error.stack : undefined,
+          currentState: {
+            hasLocalStream: !!this.localStream,
+            socketConnected: this.socket.connected,
+            isJoiningRoom: this.isJoiningRoom,
+            peerConnectionCount: this.peerConnections.size
+          },
           timestamp: new Date().toISOString()
         });
       }
     });
     
-    this.socket.on("user-left", (data: { socketId: string; guestUserId: string; nickname: string }) => {
+    this.socket.on("user-left", (data: { socketId: string; guestUserId: string; nickname: string; parentGuestUserId?: string }) => {
       console.log('👋 [WebRTC] USER LEFT:', {
         nickname: data.nickname,
         socketId: data.socketId,
         guestUserId: data.guestUserId,
+        parentGuestUserId: data.parentGuestUserId,
         willClosePeerConnection: true,
         currentPeerConnections: this.peerConnections.size,
         timestamp: new Date().toISOString()
       });
       
+      // 🔧 Socket ID <-> guestUserId 매핑 정리 (WebRTC는 parent 기준)
+      const targetUserId = data.parentGuestUserId || data.guestUserId;
+      this.socketToUserIdMapping.delete(data.socketId);
+      this.userIdToSocketMapping.delete(targetUserId);
+      
+      console.log('🗺️ [WebRTC] Cleaned user mapping:', {
+        removedSocketId: data.socketId,
+        removedOriginalUserId: data.guestUserId,
+        removedTargetUserId: targetUserId,
+        remainingMappings: this.socketToUserIdMapping.size
+      });
+      
       // P2P 연결 정리
       this.closePeerConnection(data.socketId);
       
-      // 사용자 나가기 콜백 호출
-      this.onUserLeft(data.socketId);
+      // 사용자 나가기 콜백 호출 - 매핑된 사용자 ID로 전달
+      const mappedUserId = targetUserId || this.socketToUserIdMapping.get(data.socketId);
+      this.onUserLeft(mappedUserId || data.socketId);
       
       // 추가: 방 사용자 목록 갱신 요청
       setTimeout(() => {
@@ -798,15 +963,31 @@ export class WebRTCManager {
       return;
     }
 
-    if (!this.roomCode || !this.nickname) {
+    if (!this.roomCode || !this.nickname || !this.guestUserId) {
       console.error('❌ [WebRTC] Missing required values for room join:', {
         hasRoomCode: !!this.roomCode,
         hasGuestUserId: !!this.guestUserId,
         hasNickname: !!this.nickname,
         roomCode: this.roomCode,
         nickname: this.nickname,
+        guestUserId: this.guestUserId,
         timestamp: new Date().toISOString()
       });
+      
+      // guestUserId가 없으면 재시도 로직 실행
+      if (!this.guestUserId) {
+        console.warn('⚠️ [WebRTC] No guestUserId available, attempting to obtain...');
+        const realPlayerId = getCurrentUserId();
+        if (realPlayerId) {
+          this.guestUserId = realPlayerId;
+          console.log('✅ [WebRTC] guestUserId obtained, retrying join:', this.guestUserId);
+          // 재귀 호출로 다시 시도
+          setTimeout(() => this.joinRoom(), 500);
+        } else {
+          console.error('❌ [WebRTC] Cannot obtain guestUserId, join failed');
+          this.onJoinRoomError({ message: '사용자 정보를 찾을 수 없습니다. 페이지를 새로고침해주세요.' });
+        }
+      }
       
       this.isJoiningRoom = false;
       if (this.joinTimeoutId) {
@@ -816,26 +997,37 @@ export class WebRTCManager {
       return;
     }
 
-    // 🔄 롤백: WebRTC 매니저는 구분 가능한 닉네임으로 방 참여 (중복 처리용)
-    const webrtcNickname = `WEBRTC_${this.nickname}_${this.guestUserId?.slice(-8) || 'unknown'}_${this.socket.id?.slice(-8) || 'unknown'}`;
+    // 🔧 Socket ID 매핑: WebRTC 전용 닉네임으로 구분하되 부모 사용자 정보 포함
+    const webrtcIdentifier = `WEBRTC_${this.nickname}_${Date.now()}`;
     
-    console.log('🚀 [WebRTC] JOINING ROOM via Socket.IO (as background WebRTC manager):', {
+    console.log('🚀 [WebRTC] JOINING ROOM via Socket.IO (WebRTC connection with parent user info):', {
       roomCode: this.roomCode,
-      guestUserId: this.guestUserId,
-      originalNickname: this.nickname,
-      webrtcNickname: webrtcNickname,
+      parentGuestUserId: this.guestUserId,
+      parentNickname: this.nickname,
+      webrtcIdentifier: webrtcIdentifier,
       socketId: this.socket.id,
-      purpose: 'WebRTC signaling participant (will be filtered from UI)',
+      purpose: 'WebRTC signaling connection (mapped to parent user)',
       isReconnect: false,
       timestamp: new Date().toISOString()
     });
 
-    // Socket.IO 방 참여 실행 - WEBRTC_ 접두사로 구분
-    this.socket.emit("join-room", {
+    // Socket.IO 방 참여 실행 - WebRTC 전용 식별자 사용하되 부모 정보 포함
+    const joinRoomData = {
       roomCode: this.roomCode,
-      nickname: webrtcNickname,
-      guestUserId: this.guestUserId
-    });
+      nickname: webrtcIdentifier,
+      guestUserId: `${webrtcIdentifier}_${Date.now()}`, // WebRTC 전용 ID (중복 방지)
+      parentGuestUserId: this.guestUserId, // 🔧 실제 사용자 ID (매핑용)
+      parentNickname: this.nickname, // 🔧 실제 사용자 닉네임 (매핑용)
+      connectionType: 'webrtc',
+      metadata: {
+        isWebRTCConnection: true,
+        parentUserId: this.guestUserId,
+        timestamp: Date.now()
+      }
+    };
+    
+    console.log('📤 [WebRTC] Sending join-room data:', joinRoomData);
+    this.socket.emit("join-room", joinRoomData);
     
     this.isJoiningRoom = false; // 플래그 해제
   }
@@ -1043,7 +1235,7 @@ export class WebRTCManager {
 
   // ✅ 강화된 Peer Connection 생성
   private async createPeerConnection(targetSocketId: string, isOfferer: boolean, nickname: string = 'Unknown') {
-    console.log('🔗 [WebRTC] CREATING PEER CONNECTION:', {
+    console.log('🔍 [P2P DEBUG] 🔗 CREATING PEER CONNECTION - Entry Point:', {
       targetNickname: nickname,
       targetSocketId: targetSocketId,
       mySocketId: this.socket.id,
@@ -1054,7 +1246,7 @@ export class WebRTCManager {
     
     // 이미 연결이 있는지 확인
     if (this.peerConnections.has(targetSocketId)) {
-      console.warn('⚠️ [WebRTC] Peer connection already exists:', {
+      console.warn('🔍 [P2P DEBUG] ⚠️ Peer connection already exists:', {
         targetSocketId,
         nickname,
         connectionState: this.peerConnections.get(targetSocketId)?.connectionState
@@ -1062,7 +1254,11 @@ export class WebRTCManager {
       return;
     }
     
+    console.log('🔍 [P2P DEBUG] ✅ Pre-creation validation passed, starting peer connection creation...');
+    
     try {
+      console.log('🔍 [P2P DEBUG] 🛠️ Creating RTCPeerConnection with STUN servers...');
+      
       const pc = new RTCPeerConnection({
         iceServers: [
           { urls: "stun:stun.l.google.com:19302" },
@@ -1075,7 +1271,11 @@ export class WebRTCManager {
         rtcpMuxPolicy: 'require'
       });
       
-      console.log('⚙️ [WebRTC] RTCPeerConnection created with STUN servers');
+      console.log('🔍 [P2P DEBUG] ✅ RTCPeerConnection created successfully:', {
+        connectionState: pc.connectionState,
+        iceConnectionState: pc.iceConnectionState,
+        signalingState: pc.signalingState
+      });
 
       // 연결 상태 추적
       const peerState: PeerConnectionState = {
@@ -1130,9 +1330,15 @@ export class WebRTCManager {
       };
 
       pc.ontrack = (event) => {
+        // 🔧 Socket ID를 guestUserId로 매핑하여 전달
+        const mappedGuestUserId = this.socketToUserIdMapping.get(targetSocketId);
+        const streamIdentifier = mappedGuestUserId || targetSocketId;
+        
         console.log('🎵 [WebRTC] REMOTE STREAM RECEIVED:', {
           from: nickname,
           targetSocketId,
+          mappedGuestUserId,
+          streamIdentifier: streamIdentifier,
           streamId: event.streams[0]?.id,
           tracks: event.streams[0]?.getTracks().map(track => ({
             kind: track.kind,
@@ -1154,7 +1360,8 @@ export class WebRTCManager {
           });
           this.notifyStateChanged();
         }
-        this.onRemoteStream(targetSocketId, event.streams[0]);
+        // 🔧 매핑된 guestUserId로 스트림 전달
+        this.onRemoteStream(streamIdentifier, event.streams[0]);
       };
 
       // ✅ 개선된 ICE 연결 상태 처리
@@ -1213,10 +1420,16 @@ export class WebRTCManager {
         }
       };
 
+      console.log('🔍 [P2P DEBUG] 🎵 Adding local stream tracks...', {
+        hasLocalStream: !!this.localStream,
+        localStreamId: this.localStream?.id,
+        trackCount: this.localStream?.getTracks().length || 0
+      });
+      
       if (this.localStream) {
         this.localStream.getTracks().forEach(track => {
           pc.addTrack(track, this.localStream!);
-          console.log('➕ [WebRTC] LOCAL TRACK ADDED:', {
+          console.log('🔍 [P2P DEBUG] ➕ LOCAL TRACK ADDED:', {
             to: nickname,
             trackKind: track.kind,
             trackId: track.id,
@@ -1225,6 +1438,7 @@ export class WebRTCManager {
             timestamp: new Date().toISOString()
           });
         });
+        console.log('🔍 [P2P DEBUG] ✅ All local tracks added successfully');
       } else {
         console.warn('⚠️ [WebRTC] No local stream available to add tracks - will retry after stream initialization');
         
@@ -1290,20 +1504,40 @@ export class WebRTCManager {
         waitForLocalStream();
       }
 
+      console.log('🔍 [P2P DEBUG] 💾 Storing peer connection in map...', {
+        targetSocketId,
+        nickname,
+        mapSize: this.peerConnections.size
+      });
+      
       this.peerConnections.set(targetSocketId, pc);
+      
+      console.log('🔍 [P2P DEBUG] ✅ Peer connection stored, map size:', this.peerConnections.size);
 
       if (isOfferer) {
         try {
-          console.log('📤 [WebRTC] Creating offer...');
+          console.log('🔍 [P2P DEBUG] 📤 Creating offer as offerer...', {
+            nickname,
+            targetSocketId,
+            hasLocalStream: !!this.localStream,
+            pcState: pc.signalingState
+          });
+          
           const offer = await pc.createOffer();
+          console.log('🔍 [P2P DEBUG] ✅ Offer created, setting local description...', {
+            offerType: offer.type,
+            offerSdpLength: offer.sdp?.length || 0
+          });
+          
           await pc.setLocalDescription(offer);
+          console.log('🔍 [P2P DEBUG] ✅ Local description set, preparing to send offer...');
           
           const offerData: WebRTCOffer = {
             targetSocketId: targetSocketId, 
             offer 
           };
           
-          console.log('📤 [WebRTC] OFFER CREATED & SENDING:', {
+          console.log('🔍 [P2P DEBUG] 📤 OFFER CREATED & SENDING:', {
             to: nickname,
             targetSocketId,
             offerType: offer.type,
@@ -1316,19 +1550,40 @@ export class WebRTCManager {
           });
           
           this.socket.emit("offer", offerData);
+          console.log('🔍 [P2P DEBUG] ✅ Offer emission completed');
         } catch (error) {
-          console.error('❌ [WebRTC] Error creating OFFER:', {
+          console.error('🔍 [P2P DEBUG] ❌ Error creating OFFER:', {
             to: nickname,
             error: error,
+            errorMessage: error instanceof Error ? error.message : 'Unknown error',
             timestamp: new Date().toISOString()
           });
           throw error;
         }
+      } else {
+        console.log('🔍 [P2P DEBUG] ⏭️ Not offerer, waiting for offer from remote peer:', nickname);
       }
+      
+      console.log('🔍 [P2P DEBUG] ✅ createPeerConnection completed successfully:', {
+        nickname,
+        targetSocketId,
+        isOfferer,
+        totalConnections: this.peerConnections.size,
+        connectionStored: this.peerConnections.has(targetSocketId),
+        stateStored: this.peerStates.has(targetSocketId)
+      });
+      
     } catch (error) {
-      console.error('❌ [WebRTC] Peer connection creation failed:', error);
+      console.error('🔍 [P2P DEBUG] ❌ Peer connection creation failed:', {
+        nickname,
+        targetSocketId,
+        error: error,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        errorStack: error instanceof Error ? error.stack : undefined
+      });
       
       // 실패한 연결 정리
+      console.log('🔍 [P2P DEBUG] 🧹 Cleaning up failed connection...');
       this.peerConnections.delete(targetSocketId);
       this.peerStates.delete(targetSocketId);
       

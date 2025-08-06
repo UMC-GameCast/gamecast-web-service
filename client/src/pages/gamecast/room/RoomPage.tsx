@@ -10,6 +10,7 @@ import { MyCharacterContainer } from "../../../components/gamecast/room/MyCharac
 import { NicknameContainer } from "../../../components/gamecast/room/NicknameContainer";
 import SettingIcon from "../../../assets/gamecast/Room/setting.svg?react";
 import { useRoom } from "../../../hooks/useRoom.ts";
+import { useUnifiedRoom } from "../../../hooks/useUnifiedRoom.ts"; // 🎯 새로운 통합 훅
 import { PlayerGrid } from "../../../components/gamecast/room/PlayerGrid.tsx";
 import { useVoiceChat } from "../../../hooks/useVoiceChat.ts";
 // import { useCharacter } from "../../../hooks/useCharacter.ts"; // 🗑️ 제거: 단순한 방식으로 리팩토링
@@ -17,6 +18,7 @@ import { useGameRecording } from "../../../hooks/useGameRecording.ts"; // Player
 import { MicrophonePermissionGuide } from "../../../components/gamecast/common/MicrophonePermissionGuide";
 import { MicrophoneStatusIndicator } from "../../../components/gamecast/common/MicrophoneStatusIndicator";
 import { CharacterSetupPage } from "../character-setup/CharacterSetupPage";
+import { debugPersistentSession } from "../../../utils/roomManager";
 // 롤백 완료: appSocketManager 제거
 
 interface ErrorBoundaryState {
@@ -57,10 +59,14 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
  * 입장코드, 방이름, 참여자 목록을 표시합니다
  */
 export const RoomPage = () => {
+  // 🎯 새로운 통합 상태 관리 (기존 훅과 병행 사용하며 점진적 전환)
+  const unifiedRoom = useUnifiedRoom();
+  
+  // 기존 훅 (호환성 유지)
   const { currentRoom, currentPlayer, loading, error, refreshRoomState, handleLeaveRoom } = useRoom();
   
-  // 실시간 참여자 업데이트 상태 (초기값을 현재 방 참여자로 설정)
-  const [realtimeParticipants, setRealtimeParticipants] = useState<Player[]>(currentRoom?.participants || []);
+  // 🎯 통합된 참여자 상태 사용 (기존 realtimeParticipants 대체)
+  const realtimeParticipants = unifiedRoom.participants.length > 0 ? unifiedRoom.participants : (currentRoom?.participants || []);
   
   // 준비 상태 관리 (PlayerGrid에 preparation status 전달용)
   const { playersReadyStatus } = useGameRecording(currentRoom, currentPlayer);
@@ -79,13 +85,18 @@ export const RoomPage = () => {
     selectedColors: currentPlayer?.characterInfo?.selectedColors
   });
   
-  // 닉네임 및 참여자 디버깅
-  console.log('🏷️ [RoomPage] 닉네임 디버깅:', {
+  // 🎯 통합 참여자 디버깅
+  console.log('🏷️ [RoomPage] 통합 참여자 디버깅:', {
     currentPlayerNickname: currentPlayer?.nickname,
-    realtimeParticipantsCount: realtimeParticipants.length,
-    realtimeParticipants: realtimeParticipants.map(p => ({ 
+    unifiedParticipantsCount: unifiedRoom.participants.length,
+    fallbackParticipantsCount: currentRoom?.participants?.length || 0,
+    usingUnified: unifiedRoom.participants.length > 0,
+    participants: realtimeParticipants.map(p => ({ 
       id: p.id, 
       nickname: p.nickname,
+      socketId: p.socketId,
+      isConnected: p.isConnected,
+      hasWebRTCConnection: p.hasWebRTCConnection,
       characterInfo: p.characterInfo?.isCustomized 
     }))
   });
@@ -108,12 +119,38 @@ export const RoomPage = () => {
   } = useVoiceChat(
     currentRoom?.roomCode || null,
     currentPlayer?.nickname || '',
-    !!(currentRoom?.roomCode && currentPlayer?.nickname), // 실제 방 정보가 있을 때만 활성화
+    true, // 🔧 항상 활성화 - 방 정보가 있으면 즉시 WebRTC Manager 시작
     refreshRoomState // ✨ 실시간 참가자 업데이트 시 방 상태 새로고침
   );
+
+  // ✅ Socket ID 통합 완료: WebRTC Manager가 직접 guestUserId로 스트림 전달
+  // Enhanced stream mapping 로직 제거됨
   
   const [showCharacterSetup, setShowCharacterSetup] = useState(false);
   const [showMicGuide, setShowMicGuide] = useState(false);
+  
+  // 🔧 영속적 세션 상태 추적
+  const [persistentSessionInfo, setPersistentSessionInfo] = useState<any>(null);
+  
+  // 🔧 영속적 세션 정보 주기적 업데이트
+  useEffect(() => {
+    const updatePersistentInfo = () => {
+      try {
+        const info = debugPersistentSession();
+        setPersistentSessionInfo(info);
+      } catch (error) {
+        console.error('영속 세션 정보 업데이트 실패:', error);
+      }
+    };
+    
+    // 초기 업데이트
+    updatePersistentInfo();
+    
+    // 5초마다 업데이트
+    const interval = setInterval(updatePersistentInfo, 5000);
+    
+    return () => clearInterval(interval);
+  }, []);
   
   // ✨ 디버깅: 방/플레이어 정보 확인
   useEffect(() => {
@@ -136,12 +173,8 @@ export const RoomPage = () => {
   const [characterSetupComplete, setCharacterSetupComplete] = useState(false);
   const [screenSetupComplete, setScreenSetupComplete] = useState(false);
   
-  // REST API에서 초기 참여자 목록 설정 (Socket.IO 연결 전까지만)
-  useEffect(() => {
-    if (currentRoom?.participants && realtimeParticipants.length === 0) {
-      setRealtimeParticipants(currentRoom.participants);
-    }
-  }, [currentRoom?.participants, realtimeParticipants.length]);
+  // 🎯 통합 상태 사용으로 인해 제거 (participants는 이미 통합된 상태)
+  // useEffect로 별도 설정 불필요
   
   // 콜백 설정 완료 상태 추적
   const [callbacksSetup, setCallbacksSetup] = useState(false);
@@ -175,7 +208,7 @@ export const RoomPage = () => {
       if (Array.isArray(participants)) {
         console.log('👥 [RoomPage] Realtime participants update:', {
           newCount: participants.length,
-          previousCount: realtimeParticipants.length,
+          previousCount: participants.length, // 🎯 통합 상태 사용
           participants: participants.map((p: any) => ({ 
             id: p.id, 
             nickname: p.nickname,
@@ -186,11 +219,9 @@ export const RoomPage = () => {
         // 중복 제거만 수행 (WebRTC Manager는 완전히 독립적)
         const realParticipants = participants;
 
-        const uniqueParticipants = realParticipants.filter((participant: any, index: number, self: any[]) => {
-          return self.findIndex((p: any) => p.id === participant.id) === index;
-        });
-        
-        setRealtimeParticipants(uniqueParticipants as Player[]);
+        // 🎯 통합 상태 사용 - 별도 setState 불필요 (unifiedRoom에서 자동 관리)
+        // 중복 제거는 unifiedRoom.refreshRoomState()에서 처리됨
+        refreshRoomState(); // 서버 상태와 동기화
       }
     });
     
@@ -231,7 +262,7 @@ export const RoomPage = () => {
     roomCode: currentRoom?.roomCode,
     playerNickname: currentPlayer?.nickname,
     participantsCount: currentRoom?.participants?.length || 0,
-    realtimeParticipantsCount: realtimeParticipants.length,
+    realtimeParticipantsCount: realtimeParticipants.length, // 🎯 통합 상태 사용
     currentPlayerId: currentPlayer?.id,
     voiceChatConnected: voiceChatState.isConnected,
     // 준비 상태 정보 추가
@@ -242,7 +273,7 @@ export const RoomPage = () => {
   
   console.log('👥 플레이어 목록 상세:', {
     initialParticipants: currentRoom?.participants,
-    realtimeParticipants: realtimeParticipants,
+    unifiedParticipants: realtimeParticipants, // 🎯 통합 상태 사용
     currentPlayer: currentPlayer
   });
 
@@ -357,6 +388,63 @@ export const RoomPage = () => {
               {joinError && <div style={{color: '#f97316', fontWeight: 'bold'}}>⚠️ 방 에러: {joinError}</div>}
             </div>
 
+            {/* 🔧 영속 세션 정보 패널 - 좌측 중앙 */}
+            {import.meta.env.DEV && persistentSessionInfo && (
+              <div style={{ 
+                position: 'fixed', 
+                left: '16px', 
+                top: '200px', 
+                zIndex: 9998,
+                background: 'rgba(0,50,100,0.95)',
+                color: '#ffffff',
+                padding: '16px',
+                borderRadius: '8px',
+                border: '2px solid #4ade80',
+                fontSize: '12px',
+                fontFamily: 'monospace',
+                fontWeight: 'bold',
+                lineHeight: '1.4',
+                maxWidth: '400px'
+              }}>
+                <div style={{color: '#4ade80', marginBottom: '8px', fontSize: '14px'}}>🔄 영속 세션 상태</div>
+                
+                <div style={{marginBottom: '8px'}}>
+                  <div style={{color: '#ffffff', marginBottom: '2px'}}>세션 ID 동기화: {persistentSessionInfo.sessionIdMatch ? '✅' : '❌'}</div>
+                  <div style={{color: '#ffffff', fontSize: '10px'}}>
+                    localStorage: {persistentSessionInfo.localStorage.sessionId?.slice(-8) || 'None'}
+                  </div>
+                  <div style={{color: '#ffffff', fontSize: '10px'}}>
+                    sessionStorage: {persistentSessionInfo.sessionStorage.sessionId?.slice(-8) || 'None'}
+                  </div>
+                </div>
+
+                <div style={{marginBottom: '8px'}}>
+                  <div style={{color: '#ffffff', marginBottom: '2px'}}>현재 사용자 정보:</div>
+                  <div style={{color: '#ffffff', fontSize: '10px'}}>
+                    guestUserId: {persistentSessionInfo.currentSession.guestUserId?.slice(-8) || 'None'}
+                  </div>
+                  <div style={{color: '#ffffff', fontSize: '10px'}}>
+                    hasRoom: {persistentSessionInfo.currentSession.currentRoom ? '✅' : '❌'}
+                  </div>
+                  <div style={{color: '#ffffff', fontSize: '10px'}}>
+                    hasPlayer: {persistentSessionInfo.currentSession.currentPlayer ? '✅' : '❌'}
+                  </div>
+                </div>
+
+                {persistentSessionInfo.localStorage.userSession && (
+                  <div style={{marginBottom: '4px'}}>
+                    <div style={{color: '#10b981', fontSize: '10px'}}>
+                      ✅ localStorage에서 세션 복구됨
+                    </div>
+                  </div>
+                )}
+
+                <div style={{color: '#94a3b8', fontSize: '10px', marginTop: '8px'}}>
+                  새로고침 후에도 동일한 ID 유지됨
+                </div>
+              </div>
+            )}
+
             {/* 기존 마이크 상태 표시 */}
             <div className="fixed left-4 top-32 z-[9999]">
               <MicrophoneStatusIndicator
@@ -412,7 +500,7 @@ export const RoomPage = () => {
                 fontFamily: 'monospace',
                 fontWeight: 'bold',
                 lineHeight: '1.4',
-                maxWidth: '350px'
+                maxWidth: '380px'
               }}>
                 <div style={{color: '#ffffff', marginBottom: '8px', fontSize: '13px', fontWeight: 'bold'}}>🔧 WebRTC 상태</div>
                 
@@ -430,20 +518,31 @@ export const RoomPage = () => {
                   <div style={{color: '#ffffff'}}>방 참여자: {realtimeParticipants.length}명</div>
                   <div style={{color: '#ffffff'}}>내가 제외: {realtimeParticipants.length > 0 ? realtimeParticipants.length - 1 : 0}명</div>
                 </div>
-                
+
+                {/* ✅ 통합된 스트림 정보 */}
                 {remoteStreams.size > 0 && (
                   <div style={{marginTop: '6px', paddingTop: '6px', borderTop: '1px solid #ffffff'}}>
-                    {Array.from(remoteStreams.entries()).map(([socketId, stream]) => (
-                      <div key={socketId} style={{color: '#10b981', fontSize: '10px'}}>
-                        • {socketId.slice(-8)}: {stream.getAudioTracks().length}트랙
-                      </div>
-                    ))}
+                    <div style={{color: '#10b981', marginBottom: '4px'}}>🎵 직접 매핑된 스트림:</div>
+                    {Array.from(remoteStreams.entries()).map(([streamKey, stream]) => {
+                      const participant = realtimeParticipants.find(p => p.guestUserId === streamKey); // 🎯 통합 상태 사용
+                      return (
+                        <div key={streamKey} style={{color: '#10b981', fontSize: '10px'}}>
+                          • {participant?.nickname || streamKey.slice(-8)}: {stream.getAudioTracks().length}트랙
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
                 
-                {getConnectedPeersCount() === 0 && realtimeParticipants.length > 1 && (
+                {getConnectedPeersCount() === 0 && realtimeParticipants.length > 1 && ( // 🎯 통합 상태 사용
                   <div style={{marginTop: '6px', color: '#ef4444', fontSize: '10px'}}>
                     ⚠️ 다른 사용자가 있지만 P2P 연결 안됨
+                  </div>
+                )}
+
+                {getConnectedPeersCount() > 0 && remoteStreams.size === 0 && (
+                  <div style={{marginTop: '6px', color: '#ef4444', fontSize: '10px'}}>
+                    ⚠️ P2P 연결은 있지만 스트림 전달 안됨
                   </div>
                 )}
               </div>
@@ -538,7 +637,7 @@ export const RoomPage = () => {
                 <PlayerGrid 
                   currentRoom={currentRoom} 
                   currentPlayer={currentPlayer}
-                  realtimeParticipants={realtimeParticipants}
+                  realtimeParticipants={realtimeParticipants} // 🎯 통합된 참여자 데이터 사용
                   remoteStreams={remoteStreams}
                   voiceChatConnected={voiceChatState.isConnected}
                   playersReadyStatus={playersReadyStatus}

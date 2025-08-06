@@ -1,22 +1,40 @@
 // 게임 관련 타입 정의
 
-// 플레이어 (UI용 - 방 참여자 정보)
+// 통합 플레이어 (모든 상태 정보를 포함)
 export interface Player {
+  // 기본 정보
   id: string;
   guestUserId: string;
   nickname: string;
   role: 'host' | 'participant';
   joinedAt: string;
+  isHost?: boolean;
+  
+  // Socket.IO 연결 정보
+  socketId?: string | null;
+  isConnected: boolean;
+  
+  // WebRTC 정보  
+  hasWebRTCConnection: boolean;
+  remoteStream?: MediaStream | null;
+  
+  // 캐릭터 정보
   characterInfo?: {
     selectedOptions: Record<string, string> | null;
     selectedColors: Record<string, string> | null;
     isCustomized: boolean;
   } | null;
-  preparationStatus?: {
+  
+  // 준비 상태
+  preparationStatus: {
     characterSetup: boolean;
     screenSetup: boolean;
+    isReady?: boolean;
   };
-  isHost?: boolean;
+  
+  // UI/오디오 상태
+  isMuted?: boolean;
+  hasAudio?: boolean;
 }
 
 // 방 정보 (UI용)
