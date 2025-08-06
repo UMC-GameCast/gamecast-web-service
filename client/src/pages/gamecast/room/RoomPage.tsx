@@ -17,6 +17,7 @@ import { useGameRecording } from "../../../hooks/useGameRecording.ts"; // Player
 import { MicrophonePermissionGuide } from "../../../components/gamecast/common/MicrophonePermissionGuide";
 import { MicrophoneStatusIndicator } from "../../../components/gamecast/common/MicrophoneStatusIndicator";
 import { CharacterSetupPage } from "../character-setup/CharacterSetupPage";
+// 롤백 완료: appSocketManager 제거
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -179,6 +180,8 @@ export const RoomPage = () => {
   
   // 콜백 설정 완료 상태 추적
   const [callbacksSetup, setCallbacksSetup] = useState(false);
+  
+  // 애플리케이션 Socket 매니저 초기화 제거 (WebRTC Manager 사용)
 
   // 실시간 참여자 업데이트 콜백 설정 (WebRTCManager 통합)
   useEffect(() => {
@@ -205,10 +208,9 @@ export const RoomPage = () => {
 
     setOnRealtimeParticipantsUpdate((participants) => {
       if (Array.isArray(participants)) {
-        // WebRTC 백그라운드 참여자 필터링 및 중복 제거
-        const realParticipants = participants.filter((participant: any) => {
-          return !(participant.nickname || '').startsWith('WEBRTC_');
-        });
+        // 중복 제거만 수행 (WebRTC Manager는 완전히 독립적)
+        // WebRTC Manager는 완전히 독립적이므로 모든 참여자가 실제 사용자
+        const realParticipants = participants;
 
         const uniqueParticipants = realParticipants.filter((participant: any, index: number, self: any[]) => {
           return self.findIndex((p: any) => p.id === participant.id) === index;

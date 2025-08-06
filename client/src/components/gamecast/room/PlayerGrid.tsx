@@ -74,20 +74,15 @@ export const PlayerGrid: React.FC<PlayerGridProps> = ({
     isHost: p.role === 'host'
   }));
   
-  // WebRTC 백그라운드 참여자 필터링 함수
-  const isWebRTCBackgroundParticipant = (participant: Player) => {
-    const nickname = participant.nickname || '';
-    return nickname.startsWith('WEBRTC_');
-  };
+  // WebRTC Manager는 완전히 독립적이므로 모든 참여자가 실제 사용자
 
   // 중복 제거 및 필터링이 강화된 참가자 목록
   const otherPlayers = (() => {
-    // 1. 기본 필터링: 현재 플레이어와 WebRTC 백그라운드 참여자 제외
+    // 현재 플레이어만 제외 (WebRTC Manager는 완전히 분리됨)
     let filtered = convertedParticipants.filter((p) => {
       const isDifferentPlayer = p.id !== currentPlayer.id && p.guestUserId !== currentPlayer.guestUserId;
-      const isNotWebRTCBackground = !isWebRTCBackgroundParticipant(p);
       
-      return isDifferentPlayer && isNotWebRTCBackground;
+      return isDifferentPlayer;
     });
     
     // 2. 중복 제거: ID 또는 guestUserId가 같은 참가자 제거

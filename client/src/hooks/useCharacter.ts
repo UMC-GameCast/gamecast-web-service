@@ -41,9 +41,38 @@ export const useCharacter = () => {
   const [playersCharacters, setPlayersCharacters] = useState<Map<string, PlayerCharacter>>(new Map());
   const { currentPlayer } = useRoom(); // 현재 플레이어 정보 가져오기
 
-  // 캐릭터 상태 업데이트 핸들러
+  // 캐릭터 상태 업데이트 핸들러 (강화된 필터링)
   const handleCharacterStatusUpdated = useCallback((data: CharacterStatusUpdate) => {
-    console.log('🎨 [useCharacter] 캐릭터 상태 업데이트 수신:', {
+    // ⚡ 1단계: WebRTC Manager 이벤트 필터링 강화
+    if (data.nickname && data.nickname.startsWith('WEBRTC_')) {
+      console.log('🚫 [useCharacter] WebRTC Manager 이벤트 무시 (WEBRTC_ 접두사):', data.nickname);
+      return;
+    }
+    
+    // ⚡ 추가 필터링: WebRTC 관련 guestUserId 패턴
+    if (data.guestUserId && typeof data.guestUserId === 'string' && 
+        (data.guestUserId.includes('webrtc_') || data.guestUserId.includes('WEBRTC_'))) {
+      console.log('🚫 [useCharacter] WebRTC Manager guestUserId 패턴 감지, 이벤트 무시:', data.guestUserId);
+      return;
+    }
+    
+    // ⚡ Socket ID 기반 필터링: WebRTC Manager Socket에서 온 이벤트인지 확인
+    const manager = getWebRTCManager();
+    if (manager?.socket?.id && data.socketId === manager.socket.id) {
+      console.log('🚫 [useCharacter] WebRTC Manager Socket에서 발생한 이벤트 무시:', data.socketId);
+      return;
+    }
+    
+    // ⚡ 현재 플레이어 본인 이벤트 체크
+    const currentUserId = currentPlayer?.guestUserId || currentPlayer?.id;
+    if (currentUserId && data.guestUserId === currentUserId) {
+      console.log('🔄 [useCharacter] 본인 이벤트 수신 (정상):', {
+        guestUserId: data.guestUserId,
+        nickname: data.nickname
+      });
+    }
+
+    console.log('✅ [useCharacter] 유효한 캐릭터 상태 업데이트 수신:', {
       rawData: data,
       dataKeys: Object.keys(data),
       selectedOptions: data.selectedOptions,
@@ -56,14 +85,13 @@ export const useCharacter = () => {
     setPlayersCharacters(prev => {
       const newMap = new Map(prev);
       
-      // 🎯 핵심 수정: WebRTC Manager가 이미 ID 변환 처리했는지 확인
+      // 유효한 플레이어 데이터만 처리
       const finalGuestUserId = data.guestUserId;
       
-      console.log('🔍 [useCharacter] ID 확인:', {
+      console.log('🔍 [useCharacter] 캐릭터 데이터 수신:', {
         receivedGuestUserId: finalGuestUserId,
-        isWebRTCId: finalGuestUserId?.startsWith('WEBRTC_'),
         currentPlayerId: currentPlayer?.guestUserId || currentPlayer?.id,
-        dataSource: data.originalWebRTCId ? 'WebRTC Manager' : 'Direct'
+        nickname: data.nickname
       });
       
       // 데이터 유효성 검증
@@ -105,7 +133,7 @@ export const useCharacter = () => {
         keyUsedForStorage: finalGuestUserId
       });
 
-      // 🎯 핵심: 실제 플레이어 ID로 저장
+      // 플레이어 캐릭터 정보 저장
       newMap.set(finalGuestUserId, playerCharacter);
       
       console.log('✅ [useCharacter] 플레이어 캐릭터 업데이트 완료:', {
@@ -120,91 +148,98 @@ export const useCharacter = () => {
     });
   }, []);
 
-  // WebRTC Manager 설정
+  // 🔄 롤백: WebRTC Manager Socket 이벤트 리스너 설정 (중복 처리 강화)
   useEffect(() => {
     const manager = getWebRTCManager();
-    if (manager) {
-      // 캐릭터 상태 업데이트 콜백 설정
-      manager.onCharacterStatusUpdated = handleCharacterStatusUpdated;
+    if (manager?.socket) {
+      // 중복 처리가 강화된 Socket.IO 이벤트 리스너 등록
+      const handleCharacterUpdate = (data: any) => {
+        console.log('🎨 [useCharacter] WebRTC Manager Socket character-status-updated 수신:', data);
+        
+        // 🚫 WEBRTC_ 접두사 닉네임 필터링 (중복 방지)
+        if (data.nickname && data.nickname.startsWith('WEBRTC_')) {
+          console.log('🚫 [useCharacter] WebRTC Manager 이벤트 무시 (WEBRTC_ 접두사):', data.nickname);
+          return;
+        }
+        
+        // 서버에서 보내는 데이터 구조에 맞게 변환
+        const convertedData: CharacterStatusUpdate = {
+          guestUserId: data.guestUserId || 'unknown',
+          nickname: data.nickname || 'Unknown', 
+          selectedOptions: data.selectedOptions || {},
+          selectedColors: data.selectedColors || {},
+          updatedAt: data.updatedAt || new Date().toISOString()
+        };
+        
+        handleCharacterStatusUpdated(convertedData);
+      };
       
-      console.log('✅ [useCharacter] WebRTC Manager 캐릭터 콜백 설정 완료');
+      manager.socket.on('character-status-updated', handleCharacterUpdate);
+      console.log('✅ [useCharacter] WebRTC Manager Socket 이벤트 리스너 설정 완료 (중복 처리 강화)');
 
       return () => {
-        // 컴포넌트 언마운트 시 콜백 정리
-        manager.onCharacterStatusUpdated = () => {};
-        console.log('🧹 [useCharacter] WebRTC Manager 캐릭터 콜백 정리 완료');
+        manager.socket?.off('character-status-updated', handleCharacterUpdate);
+        console.log('🧹 [useCharacter] WebRTC Manager Socket 이벤트 리스너 정리 완료');
       };
     } else {
-      console.warn('⚠️ [useCharacter] WebRTC Manager를 찾을 수 없음');
+      console.warn('⚠️ [useCharacter] WebRTC Manager Socket을 찾을 수 없음');
     }
   }, [handleCharacterStatusUpdated]);
 
-  // ✅ Socket.IO + REST API 이중 전송으로 안정성 확보
+  // 로컬 캐릭터 업데이트 이벤트 수신 (서버가 본인에게 이벤트를 보내지 않는 경우 대응)
+  useEffect(() => {
+    const handleLocalCharacterUpdate = (event: CustomEvent) => {
+      console.log('🏠 [useCharacter] 로컬 캐릭터 업데이트 이벤트 수신:', event.detail);
+      
+      const convertedData: CharacterStatusUpdate = {
+        guestUserId: event.detail.guestUserId || 'unknown',
+        nickname: event.detail.nickname || 'Unknown', 
+        selectedOptions: event.detail.selectedOptions || {},
+        selectedColors: event.detail.selectedColors || {},
+        updatedAt: event.detail.updatedAt || new Date().toISOString()
+      };
+      
+      handleCharacterStatusUpdated(convertedData);
+    };
+
+    window.addEventListener('character-updated-local', handleLocalCharacterUpdate as EventListener);
+    console.log('✅ [useCharacter] 로컬 캐릭터 업데이트 이벤트 리스너 등록');
+
+    return () => {
+      window.removeEventListener('character-updated-local', handleLocalCharacterUpdate as EventListener);
+      console.log('🧹 [useCharacter] 로컬 캐릭터 업데이트 이벤트 리스너 정리');
+    };
+  }, [handleCharacterStatusUpdated]);
+
+  // 🔄 롤백: WebRTC Manager Socket을 통한 캐릭터 상태 전송 (중복 방지 강화)
   const sendCharacterStatus = useCallback(async (characterData: CharacterData): Promise<boolean> => {
-    try {
-      const manager = getWebRTCManager();
-      if (!manager) {
-        console.error('❌ [useCharacter] WebRTC Manager를 찾을 수 없음');
-        return false;
-      }
-
-      // 🎯 실제 플레이어 ID 확인 및 사용
-      const realPlayerId = manager.getRealPlayerId();
-      const actualPlayerId = realPlayerId || currentPlayer?.guestUserId || currentPlayer?.id || 'unknown';
-
-      // 🔧 완전한 데이터 구조로 전송 (실제 플레이어 ID 사용)
-      const socketData = {
-        selectedOptions: characterData.selectedOptions,
-        selectedColors: characterData.selectedColors,
-        guestUserId: actualPlayerId,  // 실제 플레이어 ID 사용
-        nickname: currentPlayer?.nickname || characterData.nickname || 'Unknown',
-        updatedAt: new Date().toISOString()
-      };
-
-      console.log('🎨 [useCharacter] 이중 전송 시작:', {
-        socketData,
-        webrtcManagerId: manager.getCurrentGuestUserId(),
-        extractedRealPlayerId: realPlayerId,
-        finalPlayerId: actualPlayerId,
-        currentPlayerInfo: {
-          guestUserId: currentPlayer?.guestUserId,
-          id: currentPlayer?.id
-        }
-      });
-      
-      // 🚀 1단계: Socket.IO 전송 (실시간 동기화용)
-      manager.emitUpdateCharacterStatus(socketData);
-      console.log('✅ [useCharacter] Socket.IO 전송 완료');
-      
-      // 🚀 2단계: 현재 플레이어의 로컬 저장 (즉시 표시용)
-      // 서버 응답을 기다리지 않고 즉시 로컬에 저장하여 UI에 표시
-      const immediatePlayerCharacter: PlayerCharacter = {
-        guestUserId: actualPlayerId,
-        nickname: currentPlayer?.nickname || characterData.nickname || 'Unknown',
-        character: characterData,
-        updatedAt: new Date().toISOString(),
-        hasCharacter: true
-      };
-      
-      // 즉시 로컬 Map에 저장
-      setPlayersCharacters(prev => {
-        const newMap = new Map(prev);
-        newMap.set(actualPlayerId, immediatePlayerCharacter);
-        console.log('🚀 [useCharacter] 즉시 로컬 저장 완료:', {
-          playerId: actualPlayerId,
-          storageKey: actualPlayerId,
-          character: characterData
-        });
-        return newMap;
-      });
-      
-      console.log('✅ [useCharacter] 이중 전송 완료 → Socket.IO 실시간 + REST API DB 저장');
-      return true;
-    } catch (error) {
-      console.error('❌ [useCharacter] 캐릭터 상태 전송 실패:', error);
+    console.log('🎨 [useCharacter] WebRTC Manager Socket으로 캐릭터 상태 전송:', characterData);
+    
+    const manager = getWebRTCManager();
+    if (!manager?.socket) {
+      console.error('❌ [useCharacter] WebRTC Manager Socket을 찾을 수 없음');
       return false;
     }
-  }, [currentPlayer]);
+    
+    if (!manager.socket.connected) {
+      console.error('❌ [useCharacter] WebRTC Manager Socket이 연결되지 않음');
+      return false;
+    }
+    
+    try {
+      // 중복 방지: 실제 사용자 정보로만 전송
+      manager.socket.emit('update-character-status', {
+        selectedOptions: characterData.selectedOptions,
+        selectedColors: characterData.selectedColors
+      });
+      
+      console.log('✅ [useCharacter] WebRTC Manager Socket 캐릭터 전송 성공');
+      return true;
+    } catch (error) {
+      console.error('❌ [useCharacter] WebRTC Manager Socket 캐릭터 전송 실패:', error);
+      return false;
+    }
+  }, []);
 
   // 특정 플레이어의 캐릭터 정보 조회
   const getPlayerCharacter = useCallback((guestUserId: string): PlayerCharacter | undefined => {

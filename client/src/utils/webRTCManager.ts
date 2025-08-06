@@ -83,9 +83,9 @@ export class WebRTCManager {
   constructor(roomCode: string, nickname: string) {
     this.roomCode = roomCode;
     this.nickname = nickname;
-    // 🎯 핵심 수정: WebRTC Manager 전용 ID 생성 (실제 플레이어와 구분)
+    // 🔄 롤백: 실제 사용자와 동일한 ID 사용 (중복 처리로 해결)
     const realPlayerId = getCurrentUserId();
-    this.guestUserId = realPlayerId ? `WEBRTC_${realPlayerId}` : null;
+    this.guestUserId = realPlayerId || null;
     
     // 연결 상태 초기화
     this.connectionState = {
@@ -614,52 +614,26 @@ export class WebRTCManager {
       this.onRecordingStopped();
     });
 
+    // 🚫 preparation-status-updated 이벤트 리스너 제거 (캐릭터 필터링 강화)
+    // WebRTC Manager에서는 캐릭터/준비 상태 이벤트를 처리하지 않음
+    console.log("ℹ️ [WebRTC] preparation-status-updated 이벤트는 useCharacter/useGameRecording에서 직접 처리됨");
+    
+    /*
     this.socket.on("preparation-status-updated", (data: any) => {
-      console.log("🔄 [WebRTC] Preparation status updated 이벤트 수신:", {
-        receivedData: data,
-        dataType: typeof data,
-        callbackExists: typeof this.onPreparationStatusUpdated === 'function',
-        timestamp: new Date().toISOString()
-      });
-      
-      if (typeof this.onPreparationStatusUpdated === 'function') {
-        console.log("📞 [WebRTC] onPreparationStatusUpdated 콜백 호출 중...");
-        this.onPreparationStatusUpdated(data);
-        console.log("✅ [WebRTC] onPreparationStatusUpdated 콜백 호출 완료");
-      } else {
-        console.warn("⚠️ [WebRTC] onPreparationStatusUpdated 콜백이 함수가 아님:", typeof this.onPreparationStatusUpdated);
-      }
+      // 비활성화됨 - useCharacter/useGameRecording에서 직접 처리
     });
+    */
 
-    // ✅ 캐릭터 상태 업데이트 이벤트 수정 - ID 매핑 처리
+    // 🚫 캐릭터 상태 업데이트 이벤트 비활성화 (useCharacter에서 직접 처리)
+    // 이제 useCharacter 훅에서 직접 Socket.IO 이벤트를 처리하므로 WebRTC Manager는 캐릭터 이벤트 처리 안함
+    console.log("ℹ️ [WebRTC] character-status-updated 이벤트는 useCharacter에서 직접 처리됨");
+    
+    // 기존 코드 주석 처리 - 더 이상 WebRTC Manager에서 캐릭터 이벤트 처리하지 않음
+    /*
     this.socket.on("character-status-updated", (data: any) => {
-      console.log("🎨 [WebRTC] Character status updated 이벤트 수신:", {
-        receivedData: data,
-        dataType: typeof data,
-        callbackExists: typeof this.onCharacterStatusUpdated === 'function',
-        timestamp: new Date().toISOString()
-      });
-      
-      if (typeof this.onCharacterStatusUpdated === 'function') {
-        // 🎯 핵심 수정: WebRTC Manager ID를 실제 플레이어 ID로 변환
-        const processedData = this.processCharacterEventData(data);
-        
-        console.log("📞 [WebRTC] 처리된 캐릭터 데이터로 콜백 호출:", {
-          originalData: data,
-          processedData: processedData,
-          idMapping: {
-            webrtcManagerId: this.guestUserId,
-            extractedPlayerId: this.extractRealPlayerIdFromWebRTC(this.guestUserId),
-            finalDataGuestUserId: processedData.guestUserId
-          }
-        });
-        
-        this.onCharacterStatusUpdated(processedData);
-        console.log("✅ [WebRTC] onCharacterStatusUpdated 콜백 호출 완료");
-      } else {
-        console.warn("⚠️ [WebRTC] onCharacterStatusUpdated 콜백이 함수가 아님:", typeof this.onCharacterStatusUpdated);
-      }
+      // 비활성화됨 - useCharacter에서 직접 처리
     });
+    */
 
     this.socket.on("recording-error", (data: any) => {
       console.error("❌ [WebRTC] Recording error:", data);
@@ -711,13 +685,14 @@ export class WebRTCManager {
       }
       
       setTimeout(() => {
+        // 🔄 롤백: 실제 사용자 ID 재시도
         const realPlayerId = getCurrentUserId();
-        this.guestUserId = realPlayerId ? `WEBRTC_${realPlayerId}` : null;
+        this.guestUserId = realPlayerId || null;
         if (this.guestUserId) {
           console.log('✅ [WebRTC] Guest user ID obtained, retrying join...');
           this.joinRoom();
         } else {
-          // 임시 ID 생성하여 연결 시도
+          // 임시 ID 생성하여 연결 시도  
           this.guestUserId = `WEBRTC_temp_${this.nickname}_${Date.now()}`;
           this.joinRoom();
         }
@@ -743,7 +718,7 @@ export class WebRTCManager {
       return;
     }
 
-    // WebRTC 매니저는 백그라운드용 고유 닉네임으로 방 참여 (UI에서 필터링됨)
+    // 🔄 롤백: WebRTC 매니저는 구분 가능한 닉네임으로 방 참여 (중복 처리용)
     const webrtcNickname = `WEBRTC_${this.nickname}_${this.guestUserId?.slice(-8) || 'unknown'}_${this.socket.id?.slice(-8) || 'unknown'}`;
     
     console.log('🚀 [WebRTC] JOINING ROOM via Socket.IO (as background WebRTC manager):', {
@@ -757,10 +732,10 @@ export class WebRTCManager {
       timestamp: new Date().toISOString()
     });
 
-    // Socket.IO 방 참여 실행
+    // Socket.IO 방 참여 실행 - WEBRTC_ 접두사로 구분
     this.socket.emit("join-room", {
       roomCode: this.roomCode,
-      nickname: webrtcNickname, // WEBRTC_ 접두사로 실제 참여자와 구분
+      nickname: webrtcNickname,
       guestUserId: this.guestUserId
     });
     
@@ -1578,50 +1553,9 @@ export class WebRTCManager {
     }
   }
 
-  // ✅ 순수 Socket.IO 기반 캐릭터 상태 전송 (서버 핸들러 활용)
-  emitUpdateCharacterStatus(data: {
-    selectedOptions: Record<string, string>;
-    selectedColors: Record<string, string>;
-    guestUserId: string;
-    nickname: string;
-    updatedAt: string;
-  }) {
-    console.log('🎨 [WebRTC] Emitting character status update via Socket.IO:', {
-      data,
-      socketExists: !!this.socket,
-      socketConnected: this.socket?.connected,
-      socketId: this.socket?.id,
-      timestamp: new Date().toISOString()
-    });
-    
-    if (!this.socket) {
-      console.error('❌ [WebRTC] Socket not available for emitUpdateCharacterStatus');
-      return;
-    }
-    
-    if (!this.socket.connected) {
-      console.error('❌ [WebRTC] Socket not connected for emitUpdateCharacterStatus');
-      return;
-    }
-    
-    try {
-      // 서버의 handleCharacterStatusUpdate() 호출 - 완전한 데이터 전송
-      this.socket.emit('update-character-status', {
-        selectedOptions: data.selectedOptions,
-        selectedColors: data.selectedColors,
-        guestUserId: data.guestUserId,
-        nickname: data.nickname,
-        updatedAt: data.updatedAt
-      });
-      console.log('📤 [WebRTC] update-character-status 이벤트 전송 완료:', {
-        webrtcManagerId: this.guestUserId,
-        realPlayerIdUsed: data.guestUserId,
-        message: '실제 플레이어 ID로 캐릭터 데이터 전송됨 → 서버가 handleCharacterStatusUpdate 처리'
-      });
-    } catch (error) {
-      console.error('❌ [WebRTC] update-character-status 이벤트 전송 실패:', error);
-    }
-  }
+  // 🚫 캐릭터 전송 기능 제거 (UserSocket에서 처리)
+  // emitUpdateCharacterStatus는 더 이상 사용하지 않음
+  // 캐릭터 설정은 userSocketManager를 통해 실제 사용자 신원으로 전송
 
   // ✅ 간단한 준비 상태 전송 (서버 PreparationStatusData 스펙에 맞춤)
   emitSimplePreparationStatus(data: {
@@ -1687,52 +1621,5 @@ export class WebRTCManager {
     return this.guestUserId;
   }
 
-  // 🎯 새로 추가: WebRTC Manager ID에서 실제 플레이어 ID 추출
-  private extractRealPlayerIdFromWebRTC(webrtcId: string | null): string | null {
-    if (!webrtcId) return null;
-    
-    // WEBRTC_ 접두사 제거하여 실제 플레이어 ID 추출
-    if (webrtcId.startsWith('WEBRTC_')) {
-      return webrtcId.replace('WEBRTC_', '');
-    }
-    
-    return webrtcId; // 이미 실제 ID인 경우
-  }
-
-  // 🎯 새로 추가: 캐릭터 이벤트 데이터 처리 (ID 매핑)
-  private processCharacterEventData(data: any): any {
-    if (!data || typeof data !== 'object') {
-      console.warn('⚠️ [WebRTC] 잘못된 캐릭터 이벤트 데이터:', data);
-      return data;
-    }
-
-    // 현재 WebRTC Manager의 실제 플레이어 ID 추출
-    const realPlayerId = this.extractRealPlayerIdFromWebRTC(this.guestUserId);
-    
-    if (!realPlayerId) {
-      console.warn('⚠️ [WebRTC] 실제 플레이어 ID를 추출할 수 없음:', this.guestUserId);
-      return data;
-    }
-
-    // 캐릭터 데이터를 실제 플레이어 ID로 처리
-    const processedData = {
-      ...data,
-      guestUserId: realPlayerId,  // 핵심: 실제 플레이어 ID로 변경
-      originalWebRTCId: this.guestUserId  // 디버깅용
-    };
-
-    console.log('🔄 [WebRTC] 캐릭터 이벤트 데이터 ID 변환:', {
-      webrtcId: this.guestUserId,
-      extractedPlayerId: realPlayerId,
-      originalData: data,
-      processedData: processedData
-    });
-
-    return processedData;
-  }
-
-  // 🎯 새로 추가: 실제 플레이어 ID 반환 (public 메서드)
-  getRealPlayerId(): string | null {
-    return this.extractRealPlayerIdFromWebRTC(this.guestUserId);
-  }
+  // WebRTC Manager는 완전히 독립적이므로 ID 변환 로직 불필요
 }

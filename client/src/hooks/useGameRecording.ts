@@ -303,26 +303,34 @@ export const useGameRecording = (currentRoom: Room | null, currentPlayer: Player
     // 준비 상황 로그 제거
   }, []);
 
-  // 실시간 준비 상태 업데이트 핸들러 (다른 플레이어들의 상태만 처리)
+  // 실시간 준비 상태 업데이트 핸들러 (강화된 필터링 적용)
   const handlePreparationStatusUpdated = useCallback((data: {
     guestUserId: string;
     nickname: string;
     characterSetup: boolean;
     screenSetup: boolean;
   }) => {
-    const currentUserId = currentPlayer?.guestUserId || currentPlayer?.id;
-    
-    // 🚫 WebRTC Manager 이벤트 제외 (WEBRTC_ 접두사를 가진 연결만 - preparation 이벤트만 해당)
-    if (data.playerName?.startsWith('WEBRTC_')) {
-      if (import.meta.env.DEV && Math.random() < 0.01) {
-        console.log('🚫 [handlePreparationStatusUpdated] WebRTC Manager preparation 이벤트 무시:', {
-          playerName: data.playerName,
-          guestUserId: data.guestUserId,
-          eventType: 'preparation-status'
-        });
-      }
-      return; // WebRTC Manager preparation 이벤트만 무시 (캐릭터 이벤트는 별도 처리)
+    // ⚡ 1단계: WebRTC Manager 이벤트 필터링 강화
+    if (data.nickname && data.nickname.startsWith('WEBRTC_')) {
+      console.log('🚫 [useGameRecording] WebRTC Manager 이벤트 무시 (WEBRTC_ 접두사):', data.nickname);
+      return;
     }
+    
+    // ⚡ 추가 필터링: WebRTC 관련 guestUserId 패턴
+    if (data.guestUserId && typeof data.guestUserId === 'string' && 
+        (data.guestUserId.includes('webrtc_') || data.guestUserId.includes('WEBRTC_'))) {
+      console.log('🚫 [useGameRecording] WebRTC Manager guestUserId 패턴 감지, 이벤트 무시:', data.guestUserId);
+      return;
+    }
+    
+    // ⚡ Socket ID 기반 필터링
+    const manager = getWebRTCManager();
+    if (manager?.socket?.id && data.socketId === manager.socket.id) {
+      console.log('🚫 [useGameRecording] WebRTC Manager Socket에서 발생한 이벤트 무시:', data.socketId);
+      return;
+    }
+    
+    const currentUserId = currentPlayer?.guestUserId || currentPlayer?.id;
     
     // 🚫 본인 이벤트 처리 여부 확인 및 무시 (실제 사용자만)
     if (data.guestUserId === currentUserId) {
@@ -331,7 +339,7 @@ export const useGameRecording = (currentRoom: Room | null, currentPlayer: Player
           receivedId: data.guestUserId,
           currentId: currentUserId,
           isEqual: data.guestUserId === currentUserId,
-          playerName: data.playerName
+          playerName: data.nickname
         });
       }
       return; // 본인 이벤트 완전 무시
@@ -362,9 +370,8 @@ export const useGameRecording = (currentRoom: Room | null, currentPlayer: Player
       );
       
       // 해당 플레이어가 목록에 없으면 추가 (새로 입장한 플레이어)
-      // 🚫 WebRTC Manager는 목록에 추가하지 않음
       const existingPlayer = prev.find(p => p.playerId === data.guestUserId);
-      if (!existingPlayer && !data.playerName?.startsWith('WEBRTC_')) {
+      if (!existingPlayer) {
         if (import.meta.env.DEV) {
           console.log('➕ [handlePreparationStatusUpdated] 새 플레이어 추가:', {
             playerId: data.guestUserId,
@@ -685,10 +692,8 @@ export const useGameRecording = (currentRoom: Room | null, currentPlayer: Player
       return;
     }
 
-    // WebRTC 매니저 제외한 실제 플레이어만 필터링
-    const realPlayers = playersReadyStatus.filter(player => 
-      !player.playerName?.startsWith('WEBRTC_')
-    );
+    // 모든 플레이어가 실제 플레이어 (WebRTC Manager는 완전히 독립적)
+    const realPlayers = playersReadyStatus;
 
     // 최소 1명 이상의 실제 플레이어가 있고, 모두 준비되었는지 확인
     const allRealPlayersReady = realPlayers.length > 0 && 
