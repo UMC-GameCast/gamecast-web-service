@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo } from "react";
+import { useEffect, useRef } from "react";
 import type { Player, CharacterData } from "../../../types/room";
 import HostSmallIcon from "../../../assets/gamecast/Room/Host_small.svg?react";
 import { VoiceIndicator } from "../common/VoiceIndicator";
@@ -47,52 +47,24 @@ export const PlayerCard = ({
   
   const playerId = player.guestUserId || player.id;
   
-  // 캐립터 데이터 우선순위: Props (RoomPage에서 전달) > 서버 API
-  const finalCharacterData = character || 
-    (player.characterInfo?.isCustomized ? {
-      selectedOptions: player.characterInfo.selectedOptions!,
-      selectedColors: player.characterInfo.selectedColors!,
-      nickname: player.nickname
-    } : null);
+  // ✨ 단순화된 캐릭터 데이터: PlayerGrid에서 계산된 데이터 사용
+  const finalCharacterData = character;
+  const playerHasCharacter = hasCharacter ?? (player.characterInfo?.isCustomized || false);
   
-  // 디버깅: 캐릭터 데이터 상태 (소수만 로깅)
-  if (import.meta.env.DEV && !finalCharacterData && Math.random() < 0.05) {
-    console.log('⚠️ [PlayerCard] 캐릭터 데이터 없음:', {
-      playerId,
+  // ✨ 단순화된 디버깅 (개발 환경에서만)
+  if (import.meta.env.DEV && Math.random() < 0.01) {
+    console.log('✨ [PlayerCard] 단순화된 상태:', {
       nickname: player.nickname,
-      hasCharacterInfo: !!player.characterInfo,
-      characterInfoCustomized: player.characterInfo?.isCustomized,
-      propsCharacter: !!character
+      isCustomized: player.characterInfo?.isCustomized,
+      hasCharacter: playerHasCharacter,
+      characterData: finalCharacterData ? 'present' : 'none'
     });
   }
   
-  // 🛡️ 안전한 캐릭터 데이터 검증
-  const hasValidCharacterData = !!(finalCharacterData && 
-    finalCharacterData.selectedOptions && 
-    finalCharacterData.selectedColors &&
-    typeof finalCharacterData.selectedOptions === 'object' &&
-    typeof finalCharacterData.selectedColors === 'object' &&
-    Object.keys(finalCharacterData.selectedOptions).length > 0 &&
-    Object.keys(finalCharacterData.selectedColors).length > 0
-  );
-  
-  // 🎯 캐릭터 존재 여부 결정: preparation status 우선, 그 다음 실제 데이터 유효성
-  const playerHasCharacter = preparationStatus?.characterSetup ?? hasValidCharacterData;
-  
-  // 개발 모드에서만 로깅 (무한 로그 방지)
-  if (import.meta.env.DEV && Math.random() < 0.01) { // 1% 확률로만 로깅
-    console.log('🎨 [PlayerCard] 캐릭터 데이터 최종 결정:', {
-      playerId: player.guestUserId || player.id,
-      nickname: player.nickname,
-      socketCharacterData: socketCharacterData?.character,
-      serverCharacterInfo: player.characterInfo,
-      propsCharacter: character,
-      finalCharacterData,
-      preparationStatusCharacterSetup: preparationStatus?.characterSetup,
-      playerHasCharacter,
-      hasCharacterSource: preparationStatus?.characterSetup ? 'preparation-status' : 'character-data'
-    });
-  }
+  // ✨ 단순화된 캐릭터 존재 여부: preparation status 우선, 그 다음 isCustomized 
+  const finalPlayerHasCharacter = preparationStatus?.characterSetup ?? playerHasCharacter;
+
+  // ✨ 단순화 완료: 복잡한 디버깅 로그 제거됨
   
   // 준비상태 확인: preparation status 우선, 그 다음 player의 기존 필드
   const isReady = preparationStatus?.isReady ?? !!(player.isReady || player.preparationStatus?.isReady);
@@ -102,14 +74,13 @@ export const PlayerCard = ({
   // 🎨 안전한 캐릭터 렌더링 함수
   const renderCharacterPreview = () => {
     // 🛡️ 단계별 안전 검증
-    if (!finalCharacterData || !hasValidCharacterData) {
+    if (!finalCharacterData || !finalPlayerHasCharacter) {
       if (import.meta.env.DEV && Math.random() < 0.01) {
-        console.warn('⚠️ [PlayerCard] 캐릭터 데이터 없음 또는 불완전:', {
+        console.warn('⚠️ [PlayerCard] 캐릭터 데이터 없음:', {
           playerId,
-          hasFinalCharacterData: !!finalCharacterData,
-          hasValidCharacterData,
-          selectedOptions: finalCharacterData?.selectedOptions,
-          selectedColors: finalCharacterData?.selectedColors
+          nickname: player.nickname,
+          hasCharacterData: !!finalCharacterData,
+          hasCharacter: finalPlayerHasCharacter
         });
       }
       return null;
@@ -137,7 +108,7 @@ export const PlayerCard = ({
     bottomPartStyle,
     characterImageStyle,
     loadingIconStyle
-  } = useCharacterAnimation(playerHasCharacter, isReady);
+  } = useCharacterAnimation(finalPlayerHasCharacter, isReady);
 
   // 원격 오디오 스트림 재생 처리
   useEffect(() => {
@@ -313,7 +284,7 @@ export const PlayerCard = ({
             ...characterImageStyle
           }}
         >
-          {hasValidCharacterData ? (
+          {finalPlayerHasCharacter && finalCharacterData ? (
             // 🎨 실제 캐릭터 렌더링 (CharacterSetupPage와 동일한 방식)
             <div className="relative w-full h-full">
               <div 

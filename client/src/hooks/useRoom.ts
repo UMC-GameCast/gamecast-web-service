@@ -24,9 +24,67 @@ export const useRoom = () => {
         const result = await getRoomInfo(room.roomCode);
         if (result.success && result.room) {
           setCurrentRoom(result.room);
-          // 서버 데이터 우선 사용 (최소 변환)
-          const serverPlayer = result.room.participants?.find(p => p.id === userId);
+          
+          // 🔍 디버깅: 서버에서 받아온 방 정보 전체 구조 확인
+          console.log('🔍 [useRoom] 서버에서 받아온 방 정보:', {
+            room: result.room,
+            participants: result.room.participants,
+            participantsLength: result.room.participants?.length || 0
+          });
+          
+          // 서버 데이터 우선 사용 (ID 매칭 개선)
+          // guestUserId 우선 매칭 (서버 응답 구조에 맞춘 수정)
+          let serverPlayer = result.room.participants?.find(p => p.guestUserId === userId);
+          if (!serverPlayer) {
+            serverPlayer = result.room.participants?.find(p => p.id === userId);
+          }
+          
+          // 🔍 디버깅: ID 매칭 상황 확인
+          console.log('🔍 [useRoom] ID 매칭 상황:', {
+            userId,
+            participantIds: result.room.participants?.map(p => ({ 
+              id: p.id, 
+              guestUserId: p.guestUserId, 
+              nickname: p.nickname,
+              hasCharacterInfo: !!p.characterInfo,
+              characterInfoCustomized: p.characterInfo?.isCustomized
+            })),
+            foundServerPlayer: !!serverPlayer,
+            matchedById: result.room.participants?.some(p => p.id === userId),
+            matchedByGuestUserId: result.room.participants?.some(p => p.guestUserId === userId)
+          });
+          
+          // 🔧 매칭 실패시 첫 번째 참가자를 사용 (임시 해결책)
+          if (!serverPlayer && result.room.participants && result.room.participants.length > 0) {
+            serverPlayer = result.room.participants[0];
+            console.log('⚠️ [useRoom] ID 매칭 실패, 첫 번째 참가자 사용:', {
+              originalUserId: userId,
+              selectedPlayer: serverPlayer,
+              selectedPlayerId: serverPlayer.id || serverPlayer.guestUserId,
+              hasCharacterInfo: !!serverPlayer.characterInfo
+            });
+          }
+          
+          // 🔍 디버깅: 찾아진 서버 플레이어 정보 상세 확인
+          console.log('🔍 [useRoom] 서버 플레이어 정보 상세:', {
+            userId,
+            serverPlayer,
+            serverPlayerKeys: serverPlayer ? Object.keys(serverPlayer) : [],
+            characterInfo: serverPlayer?.characterInfo,
+            hasCharacterInfo: !!serverPlayer?.characterInfo,
+            characterInfoKeys: serverPlayer?.characterInfo ? Object.keys(serverPlayer.characterInfo) : []
+          });
+          
           if (serverPlayer) {
+            // 🔍 디버깅: characterInfo 복사 전후 비교
+            console.log('🔍 [useRoom] characterInfo 복사 과정:', {
+              beforeCopy: {
+                serverPlayerCharacterInfo: serverPlayer.characterInfo,
+                hasServerCharacterInfo: !!serverPlayer.characterInfo,
+                serverCharacterInfoKeys: serverPlayer.characterInfo ? Object.keys(serverPlayer.characterInfo) : []
+              }
+            });
+            
             const playerInfo: Player = {
               ...serverPlayer,
               guestUserId: serverPlayer.guestUserId || serverPlayer.id,
@@ -38,12 +96,25 @@ export const useRoom = () => {
               character: serverPlayer.character || null, // 레거시 필드
               characterInfo: serverPlayer.characterInfo || null // 서버에서 보내주는 캐릭터 정보
             };
+            
+            // 🔍 디버깅: 복사 후 상태 확인
+            console.log('🔍 [useRoom] characterInfo 복사 후:', {
+              afterCopy: {
+                playerInfoCharacterInfo: playerInfo.characterInfo,
+                hasPlayerInfoCharacterInfo: !!playerInfo.characterInfo,
+                playerInfoCharacterInfoKeys: playerInfo.characterInfo ? Object.keys(playerInfo.characterInfo) : []
+              }
+            });
+            
             setCurrentPlayer(playerInfo);
             
             console.log('✅ [useRoom] 플레이어 정보 설정:', {
               playerInfo,
               guestUserId: playerInfo.guestUserId,
-              id: playerInfo.id
+              id: playerInfo.id,
+              characterInfo: playerInfo.characterInfo,
+              hasCharacterInfo: !!playerInfo.characterInfo,
+              isCustomized: playerInfo.characterInfo?.isCustomized
             });
           }
         } else {
@@ -74,8 +145,27 @@ export const useRoom = () => {
         if (result.success && result.room) {
           setCurrentRoom(result.room);
           
-          // 서버 데이터 우선 사용
-          const serverPlayer = result.room.participants?.find(p => p.id === userId);
+          // 서버 데이터 우선 사용 (ID 매칭 개선)
+          // guestUserId 우선 매칭 (refreshRoomState와 동일한 로직)
+          let serverPlayer = result.room.participants?.find(p => p.guestUserId === userId);
+          if (!serverPlayer) {
+            serverPlayer = result.room.participants?.find(p => p.id === userId);
+          }
+          
+          // 🔍 디버깅: 초기 로드 ID 매칭 상황 확인
+          console.log('🔍 [useRoom] 초기 로드 ID 매칭 상황:', {
+            userId,
+            participantIds: result.room.participants?.map(p => ({ 
+              id: p.id, 
+              guestUserId: p.guestUserId, 
+              nickname: p.nickname,
+              hasCharacterInfo: !!p.characterInfo,
+              characterInfoCustomized: p.characterInfo?.isCustomized
+            })),
+            foundServerPlayer: !!serverPlayer,
+            serverPlayerCharacterInfo: serverPlayer?.characterInfo
+          });
+          
           if (serverPlayer) {
             const playerInfo: Player = {
               ...serverPlayer,
@@ -90,13 +180,13 @@ export const useRoom = () => {
             };
             setCurrentPlayer(playerInfo);
             
-            console.log('✅ [useRoom] 플레이어 정보 설정 (refreshRoomState):', {
+            console.log('✅ [useRoom] 플레이어 정보 설정 (초기 로드):', {
               playerInfo,
               guestUserId: playerInfo.guestUserId,
               id: playerInfo.id,
               hasCharacterInfo: !!playerInfo.characterInfo,
               characterInfo: playerInfo.characterInfo,
-              serverPlayerRaw: serverPlayer
+              isCustomized: playerInfo.characterInfo?.isCustomized
             });
           } else {
             // 폴백: 로컬 정보 생성 (서버 데이터 우선, 없을 때만 사용)

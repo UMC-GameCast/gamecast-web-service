@@ -12,7 +12,7 @@ import SettingIcon from "../../../assets/gamecast/Room/setting.svg?react";
 import { useRoom } from "../../../hooks/useRoom.ts";
 import { PlayerGrid } from "../../../components/gamecast/room/PlayerGrid.tsx";
 import { useVoiceChat } from "../../../hooks/useVoiceChat.ts";
-import { useCharacter } from "../../../hooks/useCharacter.ts";
+// import { useCharacter } from "../../../hooks/useCharacter.ts"; // 🗑️ 제거: 단순한 방식으로 리팩토링
 import { useGameRecording } from "../../../hooks/useGameRecording.ts"; // PlayerGrid에 preparation status 전달용
 import { MicrophonePermissionGuide } from "../../../components/gamecast/common/MicrophonePermissionGuide";
 import { MicrophoneStatusIndicator } from "../../../components/gamecast/common/MicrophoneStatusIndicator";
@@ -62,75 +62,22 @@ export const RoomPage = () => {
   // 실시간 참여자 업데이트 상태 (초기값을 현재 방 참여자로 설정)
   const [realtimeParticipants, setRealtimeParticipants] = useState<Player[]>(currentRoom?.participants || []);
   
-  // 캐릭터 상태 관리
-  const { playersCharacters, getPlayerCharacter } = useCharacter();
-  
   // 준비 상태 관리 (PlayerGrid에 preparation status 전달용)
   const { playersReadyStatus } = useGameRecording(currentRoom, currentPlayer);
   
-  // 🎯 현재 플레이어의 캐릭터 정보 조회 - 올바른 ID 사용
-  const currentPlayerCharacter = currentPlayer ? getPlayerCharacter(currentPlayer.guestUserId || currentPlayer.id) : undefined;
+  // ✨ 단순한 캐릭터 설정 상태 체크: isCustomized만 확인
+  const hasCharacterSetup = currentPlayer?.characterInfo?.isCustomized || false;
   
-  // 🎯 최종 내 캐릭터 데이터: Socket.IO 실시간 > 서버 characterInfo > 레거시 character
-  // 서버 characterInfo를 더 우선적으로 처리하여 안정성 확보
-  const myCharacterData = currentPlayerCharacter?.character || 
-    (currentPlayer?.characterInfo?.isCustomized && 
-     currentPlayer.characterInfo.selectedOptions && 
-     currentPlayer.characterInfo.selectedColors ? {
-      selectedOptions: currentPlayer.characterInfo.selectedOptions,
-      selectedColors: currentPlayer.characterInfo.selectedColors,
-      nickname: currentPlayer.nickname
-    } : null) || 
-    currentPlayer?.character || null;
-  
-  // 🔧 디버깅: 내 캐릭터 데이터 상태 (ID 매칭 중심으로 강화된 로깅)
-  console.log('🏠 [RoomPage] 내 캐릭터 데이터 상세 분석:', {
-    // 플레이어 ID 정보
-    currentPlayerId: currentPlayer?.guestUserId || currentPlayer?.id,
-    currentPlayerNickname: currentPlayer?.nickname,
-    
-    // ID 매칭 분석
-    queryId: currentPlayer?.guestUserId || currentPlayer?.id,
-    playersCharactersMapSize: playersCharacters.size,
-    playersCharactersKeys: Array.from(playersCharacters.keys()),
-    isMyIdInMap: playersCharacters.has(currentPlayer?.guestUserId || currentPlayer?.id),
-    
-    // Socket.IO 실시간 데이터 (1순위)
-    hasSocketIOData: !!currentPlayerCharacter?.character,
-    socketIOCharacterData: currentPlayerCharacter?.character,
-    
-    // 서버 REST API 데이터 (2순위)  
-    hasServerCharacterInfo: !!currentPlayer?.characterInfo?.isCustomized,
-    serverCharacterInfo: currentPlayer?.characterInfo,
-    
-    // 레거시 데이터 (3순위)
-    hasLegacyCharacter: !!currentPlayer?.character,
-    legacyCharacter: currentPlayer?.character,
-    
-    // 최종 결과
-    finalMyCharacterData: myCharacterData,
-    hasFinalData: !!myCharacterData,
-    
-    // 문제 진단
-    diagnosis: {
-      socketIODataMissing: !currentPlayerCharacter?.character,
-      serverDataMissing: !currentPlayer?.characterInfo?.isCustomized,
-      idMismatch: !playersCharacters.has(currentPlayer?.guestUserId || currentPlayer?.id),
-      totalIssues: [
-        !currentPlayerCharacter?.character,
-        !currentPlayer?.characterInfo?.isCustomized,
-        !playersCharacters.has(currentPlayer?.guestUserId || currentPlayer?.id)
-      ].filter(Boolean).length
-    }
+  // 🔍 디버깅: currentPlayer 정보 상세 확인
+  console.log('🔍 [RoomPage] currentPlayer 상세 정보:', {
+    currentPlayer,
+    characterInfo: currentPlayer?.characterInfo,
+    hasCharacterInfo: !!currentPlayer?.characterInfo,
+    isCustomized: currentPlayer?.characterInfo?.isCustomized,
+    hasCharacterSetup,
+    selectedOptions: currentPlayer?.characterInfo?.selectedOptions,
+    selectedColors: currentPlayer?.characterInfo?.selectedColors
   });
-  
-  // 디버깅용 전역 변수 설정
-  if (import.meta.env.DEV) {
-    (window as any).__DEBUG_playersCharacters__ = playersCharacters;
-    (window as any).__DEBUG_currentPlayerCharacter__ = currentPlayerCharacter;
-    (window as any).__DEBUG_myCharacterData__ = myCharacterData;
-    (window as any).__DEBUG_currentPlayer__ = currentPlayer;
-  }
   
   // 닉네임 및 참여자 디버깅
   console.log('🏷️ [RoomPage] 닉네임 디버깅:', {
@@ -431,43 +378,26 @@ export const RoomPage = () => {
                 <MyCharacterContainer 
                   isHost={currentRoom.hostGuestId === currentPlayer.guestUserId} 
                   currentPlayer={currentPlayer}
-                  characterData={myCharacterData}
                   localStream={localStream}
                   isLocalMuted={isLocalMuted()}
                   voiceChatConnected={voiceChatState.isConnected}
                 />
                 
-                {/* 🔧 개선된 디버깅 패널: 캐릭터 데이터 흐름 실시간 모니터링 */}
+                {/* ✨ 단순화된 디버깅 패널 */}
                 {import.meta.env.DEV && (
                   <div className="fixed bottom-4 left-4 bg-gray-900 text-white p-3 rounded-lg text-xs z-[10000] max-w-md border border-gray-600">
-                    <div className="font-bold text-green-400 mb-2">🔧 캐릭터 데이터 디버깅</div>
+                    <div className="font-bold text-green-400 mb-2">✨ 단순화된 캐릭터 상태</div>
                     
-                    {/* ID 매칭 정보 */}
                     <div className="mb-2 pb-2 border-b border-gray-600">
                       <div className={`font-semibold ${(currentRoom.hostGuestId === currentPlayer.guestUserId) ? 'text-yellow-400' : 'text-blue-400'}`}>
                         {(currentRoom.hostGuestId === currentPlayer.guestUserId) ? '👑 방장' : '👤 게스트'}
                       </div>
-                      <div>방장 ID: <span className="text-yellow-300">{currentRoom.hostGuestId}</span></div>
-                      <div>내 Guest ID: <span className="text-blue-300">{currentPlayer.guestUserId}</span></div>
-                      <div>내 ID: <span className="text-blue-300">{currentPlayer.id}</span></div>
+                      <div>닉네임: <span className="text-blue-300">{currentPlayer.nickname}</span></div>
                     </div>
                     
-                    {/* 캐릭터 데이터 상태 */}
-                    <div className="mb-2 pb-2 border-b border-gray-600">
-                      <div className="font-semibold text-purple-400">캐릭터 데이터 상태</div>
-                      <div>최종 데이터: <span className={myCharacterData ? 'text-green-400' : 'text-red-400'}>{myCharacterData ? '✅ 있음' : '❌ 없음'}</span></div>
-                      <div>Socket.IO: <span className={currentPlayerCharacter?.character ? 'text-green-400' : 'text-orange-400'}>{currentPlayerCharacter?.character ? '✅ 있음' : '⚠️ 없음'}</span></div>
-                      <div>서버 DB: <span className={currentPlayer?.characterInfo?.isCustomized ? 'text-green-400' : 'text-orange-400'}>{currentPlayer?.characterInfo?.isCustomized ? '✅ 있음' : '⚠️ 없음'}</span></div>
-                    </div>
-                    
-                    {/* ID 매칭 진단 */}
                     <div className="mb-2">
-                      <div className="font-semibold text-cyan-400">ID 매칭 진단</div>
-                      <div>Map 크기: <span className="text-cyan-300">{playersCharacters.size}</span></div>
-                      <div>Map 키: <span className="text-cyan-300">[{Array.from(playersCharacters.keys()).join(', ')}]</span></div>
-                      <div>내 ID 매칭: <span className={playersCharacters.has(currentPlayer.guestUserId || currentPlayer.id) ? 'text-green-400' : 'text-red-400'}>
-                        {playersCharacters.has(currentPlayer.guestUserId || currentPlayer.id) ? '✅ 성공' : '❌ 실패'}
-                      </span></div>
+                      <div className="font-semibold text-purple-400">캐릭터 설정 상태</div>
+                      <div>isCustomized: <span className={hasCharacterSetup ? 'text-green-400' : 'text-red-400'}>{hasCharacterSetup ? '✅ 설정됨' : '❌ 미설정'}</span></div>
                     </div>
                   </div>
                 )}
@@ -484,7 +414,6 @@ export const RoomPage = () => {
                   realtimeParticipants={realtimeParticipants}
                   remoteStreams={remoteStreams}
                   voiceChatConnected={voiceChatState.isConnected}
-                  playersCharacters={playersCharacters}
                   playersReadyStatus={playersReadyStatus}
                 />
                 {/* 버튼 컨테이너 */}

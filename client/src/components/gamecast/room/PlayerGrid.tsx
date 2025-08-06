@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React from "react";
 import type { Player, Room } from "../../../types/room";
 import { PlayerCard } from "./PlayerCard";
 import CardBlock from "../../../assets/gamecast/Room/Card_block.svg?react";
@@ -10,7 +10,6 @@ interface PlayerGridProps {
   realtimeParticipants?: Player[];
   remoteStreams?: Map<string, MediaStream>;
   voiceChatConnected?: boolean;
-  playersCharacters?: Map<string, any>;
   playersReadyStatus?: Array<{
     playerId: string;
     playerName: string;
@@ -26,29 +25,16 @@ export const PlayerGrid: React.FC<PlayerGridProps> = ({
   realtimeParticipants = [],
   remoteStreams = new Map(),
   voiceChatConnected = false,
-  playersCharacters,
   playersReadyStatus = [],
 }) => {
-  // 캐릭터 데이터 조회 함수 (RoomPage에서 전달된 props 사용)
-  const getPlayerCharacter = (guestUserId: string) => {
-    if (!playersCharacters) return undefined;
-    return playersCharacters.get(guestUserId);
-  };
   
-  // 디버깅 정보 (소수만 로깅)
+  // ✨ 단순화된 디버깅 (필요시만)
   if (import.meta.env.DEV && Math.random() < 0.01) {
-    console.log('🎮 [PlayerGrid] 캐릭터 데이터 상태:', {
-      propsPlayersCharacters: playersCharacters?.size || 0,
+    console.log('✨ [PlayerGrid] 단순화된 상태:', {
+      participantsCount: realtimeParticipants.length || (currentRoom?.participants?.length || 0),
       timestamp: Date.now()
     });
   }
-
-  // playersCharacters 변경 시 리렌더링 트리거
-  useEffect(() => {
-    if (import.meta.env.DEV && Math.random() < 0.01) {
-      console.log('🔄 [PlayerGrid] playersCharacters 변경 감지');
-    }
-  }, [playersCharacters]);
     
   // 무한 렌더링 방지를 위해 디버깅 로그 제거
   // 서버 우선순위: Socket.IO 실시간 데이터가 절대 우선, REST API는 폴백만
@@ -165,55 +151,15 @@ export const PlayerGrid: React.FC<PlayerGridProps> = ({
           
           // Stream matching 로그 제거 (무한 로그 방지)
           
-          // 플레이어의 캐릭터 정보 조회: 서버 데이터 우선, 메모리 맵 폴백
-          const playerId = player.guestUserId || player.id;
-          const memoryCharacter = getPlayerCharacter(playerId);
+          // ✨ 단순화된 캐릭터 설정 상태 체크: isCustomized만 확인
+          const hasCharacter = player.characterInfo?.isCustomized || false;
           
-          // 더 안전한 캐릭터 존재 확인
-          const hasValidServerCharacter = player.characterInfo?.isCustomized && 
-            player.characterInfo.selectedOptions && 
-            player.characterInfo.selectedColors;
-            
-          const hasValidMemoryCharacter = memoryCharacter?.character && 
-            memoryCharacter.character.selectedOptions && 
-            memoryCharacter.character.selectedColors;
-            
-          const hasValidLegacyCharacter = player.character && 
-            player.character.selectedOptions && 
-            player.character.selectedColors;
-          
-          const hasCharacter = !!(
-            hasValidServerCharacter ||
-            hasValidMemoryCharacter ||
-            hasValidLegacyCharacter
-          );
-          
-          // 디버깅: 캐릭터 데이터 상태 (소수만 로깅)
-          if (import.meta.env.DEV && !hasCharacter && Math.random() < 0.05) {
-            console.log('⚠️ [PlayerGrid] 캐릭터 데이터 없음:', {
-              playerId,
-              nickname: player.nickname,
-              hasValidServerCharacter,
-              hasValidMemoryCharacter,
-              hasValidLegacyCharacter,
-              memoryCharacterExists: !!memoryCharacter,
-              serverCharacterInfoExists: !!player.characterInfo
-            });
-          }
-          
-          // 🎯 표준화된 캐릭터 데이터 우선순위: Socket.IO 실시간 > 서버 characterInfo > 레거시 character
-          const realtimeCharacterData = memoryCharacter?.character || null; // RoomPage에서 전달된 실시간 데이터
-          const serverCharacterData = (player.characterInfo?.isCustomized && player.characterInfo.selectedOptions && player.characterInfo.selectedColors)
-            ? {
-                selectedOptions: player.characterInfo.selectedOptions,
-                selectedColors: player.characterInfo.selectedColors,
-                nickname: player.nickname
-              } 
-            : null;
-          const legacyCharacterData = player.character || null;
-          
-          // 안전한 데이터 선택 (null 체크 강화)
-          const characterData = realtimeCharacterData || serverCharacterData || legacyCharacterData;
+          // ✨ 단순화된 캐릭터 데이터: isCustomized가 true일 때만 사용
+          const characterData = hasCharacter ? {
+            selectedOptions: player.characterInfo?.selectedOptions || {},
+            selectedColors: player.characterInfo?.selectedColors || {},
+            nickname: player.nickname
+          } : null;
           
           // 🎯 해당 플레이어의 preparation status 조회
           const playerPreparationStatus = playersReadyStatus.find(
