@@ -108,11 +108,29 @@ export const RoomPage = () => {
   } = useVoiceChat(
     currentRoom?.roomCode || null,
     currentPlayer?.nickname || '',
-    !!(currentRoom && currentPlayer) // 방과 플레이어 정보가 있을 때만 활성화
+    !!(currentRoom?.roomCode && currentPlayer?.nickname), // 실제 방 정보가 있을 때만 활성화
+    refreshRoomState // ✨ 실시간 참가자 업데이트 시 방 상태 새로고침
   );
   
   const [showCharacterSetup, setShowCharacterSetup] = useState(false);
   const [showMicGuide, setShowMicGuide] = useState(false);
+  
+  // ✨ 디버깅: 방/플레이어 정보 확인
+  useEffect(() => {
+    console.log('🔍 [RoomPage] 방/플레이어 정보 상태:', {
+      currentRoom: {
+        exists: !!currentRoom,
+        roomCode: currentRoom?.roomCode,
+        participants: currentRoom?.participants?.length || 0
+      },
+      currentPlayer: {
+        exists: !!currentPlayer, 
+        nickname: currentPlayer?.nickname,
+        guestUserId: currentPlayer?.guestUserId
+      },
+      useVoiceChatEnabled: !!(currentRoom?.roomCode && currentPlayer?.nickname)
+    });
+  }, [currentRoom, currentPlayer]);
 
   // 설정 상태를 RoomPage에서 직접 관리 (상태 동기화 문제 해결)
   const [characterSetupComplete, setCharacterSetupComplete] = useState(false);
@@ -155,8 +173,17 @@ export const RoomPage = () => {
 
     setOnRealtimeParticipantsUpdate((participants) => {
       if (Array.isArray(participants)) {
+        console.log('👥 [RoomPage] Realtime participants update:', {
+          newCount: participants.length,
+          previousCount: realtimeParticipants.length,
+          participants: participants.map((p: any) => ({ 
+            id: p.id, 
+            nickname: p.nickname,
+            guestUserId: p.guestUserId 
+          }))
+        });
+        
         // 중복 제거만 수행 (WebRTC Manager는 완전히 독립적)
-        // WebRTC Manager는 완전히 독립적이므로 모든 참여자가 실제 사용자
         const realParticipants = participants;
 
         const uniqueParticipants = realParticipants.filter((participant: any, index: number, self: any[]) => {
@@ -308,26 +335,26 @@ export const RoomPage = () => {
             </div>
             
             {/* 마이크 상태 표시 - 좌상단 (항상 표시) */}
-            <div 
-              className="fixed left-4 top-4 z-[9999]" 
-              style={{ 
-                position: 'fixed', 
-                left: '16px', 
-                top: '16px', 
-                zIndex: 9999,
-                backgroundColor: 'rgba(0, 0, 0, 0.9)',
-                color: 'white',
-                padding: '8px 12px',
-                borderRadius: '6px',
-                border: '2px solid white',
-                fontSize: '12px'
-              }}
-            >
-              <div>마이크: {localStream ? '✅' : '❌'}</div>
-              <div>연결: {voiceChatState.isConnected ? '✅' : '❌'}</div>
-              <div>음소거: {isLocalMuted() ? '🔇' : '🔊'}</div>
-              {microphoneError && <div style={{color: 'red'}}>에러: {microphoneError}</div>}
-              {joinError && <div style={{color: 'orange'}}>방: {joinError}</div>}
+            <div style={{ 
+              position: 'fixed', 
+              left: '16px', 
+              top: '16px', 
+              zIndex: 9999,
+              background: 'rgba(0,0,0,0.95)',
+              color: '#ffffff',
+              padding: '12px',
+              borderRadius: '8px',
+              border: '2px solid #ffffff',
+              fontSize: '12px',
+              fontFamily: 'monospace',
+              fontWeight: 'bold',
+              lineHeight: '1.4'
+            }}>
+              <div style={{color: '#ffffff', marginBottom: '4px'}}>🎤 마이크: {localStream ? '✅ 연결됨' : '❌ 연결안됨'}</div>
+              <div style={{color: '#ffffff', marginBottom: '4px'}}>🔗 WebRTC: {voiceChatState.isConnected ? '✅ 연결됨' : '❌ 연결안됨'}</div>
+              <div style={{color: '#ffffff', marginBottom: '4px'}}>🔊 음소거: {isLocalMuted() ? '🔇 켜짐' : '🔊 꺼짐'}</div>
+              {microphoneError && <div style={{color: '#ef4444', fontWeight: 'bold'}}>❌ 마이크 에러: {microphoneError}</div>}
+              {joinError && <div style={{color: '#f97316', fontWeight: 'bold'}}>⚠️ 방 에러: {joinError}</div>}
             </div>
 
             {/* 기존 마이크 상태 표시 */}
@@ -354,9 +381,71 @@ export const RoomPage = () => {
                 >
                   {isLocalMuted() ? '🔇 음소거' : '🎤 음성'}
                 </button>
-                <div className="text-xs text-white bg-black bg-opacity-50 px-2 py-1 rounded">
+                <div style={{
+                  fontSize: '12px',
+                  color: '#ffffff',
+                  background: 'rgba(0,0,0,0.95)',
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  fontFamily: 'monospace',
+                  fontWeight: 'bold',
+                  border: '1px solid #ffffff'
+                }}>
                   연결: {getConnectedPeersCount()}명
                 </div>
+              </div>
+            )}
+
+            {/* WebRTC 디버깅 패널 - 상세 연결 정보 */}
+            {import.meta.env.DEV && (
+              <div style={{ 
+                position: 'fixed', 
+                right: '16px', 
+                top: '16px', 
+                zIndex: 9999,
+                background: 'rgba(0,0,0,0.95)',
+                color: '#ffffff',
+                padding: '12px',
+                borderRadius: '8px',
+                border: '2px solid #ffffff',
+                fontSize: '11px',
+                fontFamily: 'monospace',
+                fontWeight: 'bold',
+                lineHeight: '1.4',
+                maxWidth: '350px'
+              }}>
+                <div style={{color: '#ffffff', marginBottom: '8px', fontSize: '13px', fontWeight: 'bold'}}>🔧 WebRTC 상태</div>
+                
+                <div style={{marginBottom: '6px'}}>
+                  <div style={{color: '#ffffff'}}>매니저: {hasWebRTCManager ? '✅' : '❌'}</div>
+                  <div style={{color: '#ffffff'}}>전역: {hasGlobalManager ? '✅' : '❌'}</div>
+                </div>
+                
+                <div style={{marginBottom: '6px'}}>
+                  <div style={{color: '#ffffff'}}>원격스트림: {remoteStreams.size}개</div>
+                  <div style={{color: '#ffffff'}}>실제연결: {getConnectedPeersCount()}명</div>
+                </div>
+                
+                <div style={{marginBottom: '6px'}}>
+                  <div style={{color: '#ffffff'}}>방 참여자: {realtimeParticipants.length}명</div>
+                  <div style={{color: '#ffffff'}}>내가 제외: {realtimeParticipants.length > 0 ? realtimeParticipants.length - 1 : 0}명</div>
+                </div>
+                
+                {remoteStreams.size > 0 && (
+                  <div style={{marginTop: '6px', paddingTop: '6px', borderTop: '1px solid #ffffff'}}>
+                    {Array.from(remoteStreams.entries()).map(([socketId, stream]) => (
+                      <div key={socketId} style={{color: '#10b981', fontSize: '10px'}}>
+                        • {socketId.slice(-8)}: {stream.getAudioTracks().length}트랙
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {getConnectedPeersCount() === 0 && realtimeParticipants.length > 1 && (
+                  <div style={{marginTop: '6px', color: '#ef4444', fontSize: '10px'}}>
+                    ⚠️ 다른 사용자가 있지만 P2P 연결 안됨
+                  </div>
+                )}
               </div>
             )}
 
@@ -385,19 +474,57 @@ export const RoomPage = () => {
                 
                 {/* ✨ 단순화된 디버깅 패널 */}
                 {import.meta.env.DEV && (
-                  <div className="fixed bottom-4 left-4 bg-gray-900 text-white p-3 rounded-lg text-xs z-[10000] max-w-md border border-gray-600">
-                    <div className="font-bold text-green-400 mb-2">✨ 단순화된 캐릭터 상태</div>
+                  <div style={{ 
+                    position: 'fixed', 
+                    bottom: '16px', 
+                    left: '16px', 
+                    background: 'rgba(0,0,0,0.95)', 
+                    color: '#ffffff', 
+                    padding: '12px',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    zIndex: 10000,
+                    maxWidth: '350px',
+                    border: '2px solid #ffffff',
+                    fontFamily: 'monospace',
+                    fontWeight: 'bold'
+                  }}>
+                    <div style={{ 
+                      fontWeight: 'bold',
+                      color: '#ffffff',
+                      marginBottom: '8px',
+                      fontSize: '14px'
+                    }}>✨ 단순화된 캐릭터 상태</div>
                     
-                    <div className="mb-2 pb-2 border-b border-gray-600">
-                      <div className={`font-semibold ${(currentRoom.hostGuestId === currentPlayer.guestUserId) ? 'text-yellow-400' : 'text-blue-400'}`}>
+                    <div style={{ 
+                      marginBottom: '8px',
+                      paddingBottom: '8px',
+                      borderBottom: '1px solid #ffffff'
+                    }}>
+                      <div style={{ 
+                        fontWeight: 'bold',
+                        color: '#ffffff',
+                        marginBottom: '4px'
+                      }}>
                         {(currentRoom.hostGuestId === currentPlayer.guestUserId) ? '👑 방장' : '👤 게스트'}
                       </div>
-                      <div>닉네임: <span className="text-blue-300">{currentPlayer.nickname}</span></div>
+                      <div style={{ 
+                        color: '#ffffff'
+                      }}>닉네임: <span style={{ color: '#ffffff', fontWeight: 'bold' }}>{currentPlayer.nickname}</span></div>
                     </div>
                     
-                    <div className="mb-2">
-                      <div className="font-semibold text-purple-400">캐릭터 설정 상태</div>
-                      <div>isCustomized: <span className={hasCharacterSetup ? 'text-green-400' : 'text-red-400'}>{hasCharacterSetup ? '✅ 설정됨' : '❌ 미설정'}</span></div>
+                    <div style={{ marginBottom: '8px' }}>
+                      <div style={{ 
+                        fontWeight: 'bold',
+                        color: '#ffffff',
+                        marginBottom: '4px'
+                      }}>캐릭터 설정 상태</div>
+                      <div style={{ 
+                        color: '#ffffff'
+                      }}>isCustomized: <span style={{ 
+                        fontWeight: 'bold',
+                        color: hasCharacterSetup ? '#10b981' : '#ef4444'
+                      }}>{hasCharacterSetup ? '✅ 설정됨' : '❌ 미설정'}</span></div>
                     </div>
                   </div>
                 )}

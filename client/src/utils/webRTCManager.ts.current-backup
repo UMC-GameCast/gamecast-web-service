@@ -145,65 +145,34 @@ export class WebRTCManager {
     }, 5000); // 5초마다 품질 체크
   }
 
-  // ✅ 강화된 연결 품질 체크
+  // ✅ 새로 추가: 연결 품질 체크
   private checkConnectionQuality() {
     this.peerConnections.forEach(async (pc, socketId) => {
       try {
         const stats = await pc.getStats();
-        let audioStats = {
-          packetsLost: 0,
-          packetsReceived: 0,
-          jitter: 0,
-          roundTripTime: 0,
-          audioLevel: 0
-        };
-        
         stats.forEach(report => {
           if (report.type === 'inbound-rtp' && report.kind === 'audio') {
-            audioStats.packetsLost = report.packetsLost || 0;
-            audioStats.packetsReceived = report.packetsReceived || 0;
-            audioStats.jitter = report.jitter || 0;
-            audioStats.audioLevel = report.audioLevel || 0;
-          }
-          
-          if (report.type === 'candidate-pair' && report.state === 'succeeded') {
-            audioStats.roundTripTime = report.currentRoundTripTime || 0;
+            const packetsLost = report.packetsLost || 0;
+            const packetsReceived = report.packetsReceived || 0;
+            const totalPackets = packetsReceived + packetsLost;
+            
+            if (totalPackets > 0) {
+              const lossRate = packetsLost / totalPackets;
+              let quality: 'good' | 'poor' | 'bad' = 'good';
+              
+              if (lossRate > 0.1) {
+                quality = 'bad';
+              } else if (lossRate > 0.05) {
+                quality = 'poor';
+              }
+              
+              if (quality !== 'good') {
+                console.warn(`⚠️ [WebRTC] Poor connection quality with ${socketId}: ${(lossRate * 100).toFixed(2)}% packet loss`);
+                this.onConnectionQualityChanged(socketId, quality);
+              }
+            }
           }
         });
-        
-        const totalPackets = audioStats.packetsReceived + audioStats.packetsLost;
-        if (totalPackets > 0) {
-          const lossRate = audioStats.packetsLost / totalPackets;
-          const jitterMs = audioStats.jitter * 1000;
-          const rttMs = audioStats.roundTripTime * 1000;
-          
-          let quality: 'good' | 'poor' | 'bad' = 'good';
-          let issues: string[] = [];
-          
-          if (lossRate > 0.05) {
-            quality = lossRate > 0.1 ? 'bad' : 'poor';
-            issues.push(`${(lossRate * 100).toFixed(1)}% 패킷 손실`);
-          }
-          
-          if (jitterMs > 50) {
-            quality = quality === 'good' ? 'poor' : quality;
-            issues.push(`${jitterMs.toFixed(1)}ms 지터`);
-          }
-          
-          if (rttMs > 200) {
-            quality = quality === 'good' ? 'poor' : quality;
-            issues.push(`${rttMs.toFixed(1)}ms RTT`);
-          }
-          
-          if (quality !== 'good' && Math.random() < 0.1) { // 10% 확률로만 로깅
-            console.warn(`⚠️ [WebRTC] 연결 품질 문제 (${socketId}):`, {
-              quality,
-              issues: issues.join(', '),
-              stats: audioStats
-            });
-            this.onConnectionQualityChanged(socketId, quality);
-          }
-        }
       } catch (error) {
         console.error('❌ [WebRTC] Error checking connection quality:', error);
       }
@@ -219,22 +188,12 @@ export class WebRTCManager {
         serverUrl: SOCKET_SERVER_URL,
         roomCode: this.roomCode,
         nickname: this.nickname,
-        isReconnection: !!this.socket.recovered,
         timestamp: new Date().toISOString()
       });
       
       // 연결 상태 업데이트
       this.connectionState.isConnected = true;
       this.onRealtimeConnectionStateChanged(true);
-      
-      // 재연결 시 기존 P2P 연결들 정리
-      if (this.peerConnections.size > 0) {
-        console.log('🧹 [WebRTC] Cleaning up existing peer connections on reconnect');
-        this.peerConnections.forEach(pc => pc.close());
-        this.peerConnections.clear();
-        this.peerStates.clear();
-        this.reconnectionAttempts.clear();
-      }
       
       // Socket 연결 직후 마이크 자동 초기화 시도
       try {
@@ -248,7 +207,7 @@ export class WebRTCManager {
         });
       }
       
-      // 방 참여 (재연결 감지)
+      // 방 참여
       this.joinRoom();
     });
 
@@ -338,7 +297,7 @@ export class WebRTCManager {
       this.onRoomUsers(userList);
     });
 
-    this.socket.on("joined-room-success", async (data: { roomCode: string; roomId: string; users: unknown[] }) => {
+    this.socket.on("joined-room-success", (data: { roomCode: string; roomId: string; users: unknown[] }) => {
       console.log('🎉 [WebRTC] Room join SUCCESS:', {
         roomCode: data.roomCode,
         roomId: data.roomId,
@@ -352,49 +311,6 @@ export class WebRTCManager {
       if (this.joinTimeoutId) {
         clearTimeout(this.joinTimeoutId);
         this.joinTimeoutId = null;
-      }
-      
-      // ✅ 기존 사용자들과 P2P 연결 생성 (재연결 대응)
-      if (Array.isArray(data.users) && data.users.length > 1) {
-        console.log('🔄 [WebRTC] Found existing users, creating peer connections:', {
-          totalUsers: data.users.length,
-          users: data.users.map((u: any) => ({ socketId: u.socketId, nickname: u.nickname }))
-        });
-        
-        for (const user of data.users) {
-          const userData = user as any;
-          // 자신이 아닌 사용자들과 연결 생성
-          if (userData.socketId && userData.socketId !== this.socket.id) {
-            console.log('🔄 [WebRTC] Creating peer connection with existing user:', {
-              socketId: userData.socketId,
-              nickname: userData.nickname || 'Unknown',
-              guestUserId: userData.guestUserId,
-              isOfferer: true,
-              isReconnection: true
-            });
-            
-            try {
-              await this.createPeerConnection(userData.socketId, true, userData.nickname || 'Unknown');
-              console.log('✅ [WebRTC] Peer connection created with existing user:', userData.nickname);
-            } catch (error) {
-              console.error('❌ [WebRTC] Failed to create peer connection with existing user:', {
-                user: userData,
-                error: error
-              });
-            }
-          }
-        }
-        
-        // 연결 상태 확인을 위한 지연된 체크
-        setTimeout(() => {
-          console.log('📊 [WebRTC] Post-reconnection status check:', {
-            totalPeerConnections: this.peerConnections.size,
-            connectedPeers: this.getConnectedPeersCount(),
-            expectedPeers: data.users.length - 1
-          });
-        }, 3000);
-      } else {
-        console.log('ℹ️ [WebRTC] No existing users to connect to:', { userCount: data.users.length });
       }
       
       this.onRoomUsers(data.users);
@@ -541,24 +457,10 @@ export class WebRTCManager {
         socketId: data.socketId,
         guestUserId: data.guestUserId,
         willClosePeerConnection: true,
-        currentPeerConnections: this.peerConnections.size,
         timestamp: new Date().toISOString()
       });
-      
-      // P2P 연결 정리
       this.closePeerConnection(data.socketId);
-      
-      // 사용자 나가기 콜백 호출
       this.onUserLeft(data.socketId);
-      
-      // 추가: 방 사용자 목록 갱신 요청
-      setTimeout(() => {
-        this.requestRoomUsers();
-        console.log('📊 [WebRTC] Post-leave status:', {
-          remainingConnections: this.peerConnections.size,
-          connectedPeers: this.getConnectedPeersCount()
-        });
-      }, 1000);
     });
 
     this.socket.on("room-participants", (participants: unknown[]) => {
@@ -849,9 +751,8 @@ export class WebRTCManager {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-          sampleRate: 48000,
+          sampleRate: 44100, // 48000 → 44100으로 변경 (더 안정적)
           channelCount: 1
-          // latency 설정 제거 (호환성 문제)
         }
       });
 
@@ -939,16 +840,14 @@ export class WebRTCManager {
           console.log('🎤 [WebRTC] Attempt 1: High-quality audio with processing');
           return await this.setupProcessedAudioStream();
         },
-        // 시도 2: 안정적인 기본 오디오 설정
+        // 시도 2: 기본 오디오 (에코 캔슬레이션 포함)
         async () => {
-          console.log('🎤 [WebRTC] Attempt 2: Stable basic audio settings');
+          console.log('🎤 [WebRTC] Attempt 2: Basic audio with echo cancellation');
           return await navigator.mediaDevices.getUserMedia({
             audio: {
               echoCancellation: true,
               noiseSuppression: true,
-              autoGainControl: true,
-              sampleRate: 44100, // 더 안정적인 샘플레이트
-              channelCount: 1
+              autoGainControl: true
             }
           });
         },
@@ -1066,13 +965,8 @@ export class WebRTCManager {
       const pc = new RTCPeerConnection({
         iceServers: [
           { urls: "stun:stun.l.google.com:19302" },
-          { urls: "stun:stun1.l.google.com:19302" },
-          { urls: "stun:stun2.l.google.com:19302" }
+          { urls: "stun:stun1.l.google.com:19302" }
         ],
-        // 추가 설정으로 연결 안정성 향상
-        iceCandidatePoolSize: 10,
-        bundlePolicy: 'max-bundle',
-        rtcpMuxPolicy: 'require'
       });
       
       console.log('⚙️ [WebRTC] RTCPeerConnection created with STUN servers');

@@ -25,36 +25,16 @@ let managerInitPromise: Promise<WebRTCManager> | null = null;
 let isInitializing = false;
 let lastInitTimestamp = 0;
 
-// HMR 및 페이지 새로고침 시 정리
+// HMR 시 정리
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
-    console.log('🧹 [useVoiceChat] HMR cleanup');
     if (globalWebRTCManager) {
       (globalWebRTCManager as any).close();
       globalWebRTCManager = null;
       currentManagerRoomCode = null;
-      globalThis.__webRTCManager__ = null;
     }
     activeHookInstances.clear();
-    globalLock = false;
-    isInitializing = false;
   });
-}
-
-// 페이지 언로드 시 정리
-if (typeof window !== 'undefined') {
-  const cleanup = () => {
-    console.log('🧹 [useVoiceChat] Page unload cleanup');
-    if (globalWebRTCManager) {
-      (globalWebRTCManager as any).close();
-      globalWebRTCManager = null;
-      currentManagerRoomCode = null;
-      globalThis.__webRTCManager__ = null;
-    }
-  };
-  
-  window.addEventListener('beforeunload', cleanup);
-  window.addEventListener('pagehide', cleanup);
 }
 
 export const useVoiceChat = (
@@ -329,31 +309,14 @@ export const useVoiceChat = (
         }
       };
 
-      // 사용자 퇴장 처리 (강화)
+      // 사용자 퇴장 처리
       manager.onUserLeft = (socketId) => {
         if (isMounted) {
-          console.log(`👋 [useVoiceChat] User left processing:`, { 
-            socketId, 
-            currentStreams: remoteStreams.size 
-          });
-          
           setRemoteStreams(prev => {
             const newStreams = new Map(prev);
-            const removed = newStreams.delete(socketId);
-            console.log(`🗺️ [useVoiceChat] Stream removed:`, {
-              socketId,
-              wasRemoved: removed,
-              remainingStreams: newStreams.size,
-              remainingKeys: Array.from(newStreams.keys())
-            });
+            newStreams.delete(socketId);
             return newStreams;
           });
-          
-          // 방 상태 새로고침 (참여자 목록 업데이트)
-          if (onStateUpdate) {
-            console.log('🔄 [useVoiceChat] Triggering room state update after user left');
-            setTimeout(onStateUpdate, 500);
-          }
         }
       };
 

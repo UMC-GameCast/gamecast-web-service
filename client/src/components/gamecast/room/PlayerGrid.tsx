@@ -116,10 +116,17 @@ export const PlayerGrid: React.FC<PlayerGridProps> = ({
         }
 
         if (player) {
-          // 플레이어의 음성 스트림 찾기 - 간단한 방법: 첫 번째 원격 스트림 사용
+          // ✅ 개선된 스트림 매칭 로직
           let playerStream = null;
           
-          // 원격 스트림이 1개뿐이라면 그것을 사용 (2명만 있는 경우)
+          console.log(`🔍 [PlayerGrid] Searching stream for ${player.nickname}:`, {
+            availableStreamKeys: Array.from(remoteStreams.keys()),
+            totalStreams: remoteStreams.size,
+            playerId: player.id,
+            guestUserId: player.guestUserId
+          });
+          
+          // 방법 1: 원격 스트림이 1개뿐이라면 그것을 사용 (2명만 있는 경우)
           if (remoteStreams.size === 1) {
             const [firstStreamKey, firstStream] = Array.from(remoteStreams.entries())[0];
             playerStream = firstStream;
@@ -127,22 +134,40 @@ export const PlayerGrid: React.FC<PlayerGridProps> = ({
               streamKey: firstStreamKey,
               streamId: firstStream.id
             });
-          } else if (remoteStreams.size > 1) {
-            // 여러 스트림이 있는 경우 기존 매칭 로직 사용
-            playerStream = remoteStreams.get(player.id) || remoteStreams.get(player.guestUserId || '');
+          } else {
+            // 방법 2: 모든 가능한 매칭 시도
+            const possibleKeys = [
+              player.id,
+              player.guestUserId,
+              player.socketId, // 혹시 있다면
+              ...Array.from(remoteStreams.keys()).filter(key => 
+                key.includes(player.nickname) || 
+                key.includes(player.guestUserId || '') ||
+                key.includes(player.id || '')
+              )
+            ].filter(Boolean);
             
-            // 닉네임 기반 매칭도 시도
-            if (!playerStream) {
-              for (const [, ] of remoteStreams.entries()) {
-                const remoteStreamKeys = Array.from(remoteStreams.keys());
-                const matchingKey = remoteStreamKeys.find(key => 
-                  key.includes('WEBRTC_') && key.includes(player.nickname)
-                );
-                if (matchingKey) {
-                  playerStream = remoteStreams.get(matchingKey);
-                  break;
-                }
+            console.log(`🎯 [PlayerGrid] Trying to match stream for ${player.nickname}:`, {
+              possibleKeys,
+              availableKeys: Array.from(remoteStreams.keys())
+            });
+            
+            for (const key of possibleKeys) {
+              playerStream = remoteStreams.get(key);
+              if (playerStream) {
+                console.log(`✅ [PlayerGrid] Found stream for ${player.nickname} with key:`, key);
+                break;
               }
+            }
+            
+            // 방법 3: 첫 번째 스트림 사용 (임시 해결책)
+            if (!playerStream && remoteStreams.size > 0) {
+              const [firstKey, firstStream] = Array.from(remoteStreams.entries())[0];
+              playerStream = firstStream;
+              console.warn(`⚠️ [PlayerGrid] Using first available stream for ${player.nickname}:`, {
+                streamKey: firstKey,
+                streamId: firstStream.id
+              });
             }
           }
           

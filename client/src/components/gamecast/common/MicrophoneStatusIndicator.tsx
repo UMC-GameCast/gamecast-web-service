@@ -93,13 +93,15 @@ export const MicrophoneStatusIndicator: React.FC<MicrophoneStatusIndicatorProps>
           }
         }}
         style={{
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
-          color: 'white',
-          border: '1px solid white'
+          background: 'rgba(0,0,0,0.95)',
+          color: '#ffffff',
+          border: '2px solid #ffffff',
+          fontFamily: 'monospace',
+          fontWeight: 'bold'
         }}
       >
         <span className="text-sm">{config.icon}</span>
-        <span className={`text-xs font-medium text-white`}>
+        <span style={{fontSize: '12px', fontWeight: 'bold', color: '#ffffff'}}>
           마이크: {config.text}
         </span>
         {status === 'connecting' && (
