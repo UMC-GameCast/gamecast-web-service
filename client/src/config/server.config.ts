@@ -16,22 +16,22 @@ interface ServerConfig {
 const SERVER_CONFIGS = {
   // 로컬 개발 환경
   development: {
-    API_BASE_URL: 'http://localhost:8002/api',
-    SOCKET_URL: 'http://localhost:8002',
+    API_BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8889',
+    SOCKET_URL: import.meta.env.VITE_SOCKET_URL || 'http://localhost:8889',
     IS_DEVELOPMENT: true,
   },
   
   // 프로덕션 환경 (실제 배포 서버)
   production: {
-    API_BASE_URL: 'https://api.gamecast.com/api', // 실제 서버 URL로 변경 필요
-    SOCKET_URL: 'https://api.gamecast.com',
+    API_BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://3.37.34.211:8889',
+    SOCKET_URL: import.meta.env.VITE_SOCKET_URL || 'http://3.37.34.211:8889',
     IS_DEVELOPMENT: false,
   },
   
   // 스테이징 환경 (테스트 서버)
   staging: {
-    API_BASE_URL: 'https://staging-api.gamecast.com/api',
-    SOCKET_URL: 'https://staging-api.gamecast.com', 
+    API_BASE_URL: import.meta.env.VITE_API_BASE_URL || 'https://staging-api.gamecast.com/api',
+    SOCKET_URL: import.meta.env.VITE_SOCKET_URL || 'https://staging-api.gamecast.com', 
     IS_DEVELOPMENT: false,
   }
 } as const;

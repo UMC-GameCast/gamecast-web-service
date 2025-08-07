@@ -18,7 +18,7 @@ const USER_SESSION_KEY = 'gamecast_user_session';
 export const testServerConnection = async (): Promise<{ success: boolean; message: string }> => {
   try {
     console.log('🔍 서버 연결 테스트 중...');
-    const response = await fetch(`${API_BASE_URL.replace('/api', '')}/health`, {
+    const response = await fetch(`${API_BASE_URL}/health`, {
       method: 'GET',
       mode: 'cors',
       credentials: 'omit',
@@ -115,7 +115,7 @@ const apiRequest = async <T>(
   try {
     console.log(`🌐 API 요청 시작: ${endpoint}`, options);
     
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const response = await fetch(`${API_BASE_URL}/api${endpoint}`, {
       mode: 'cors', // CORS 모드 명시적 설정
       credentials: 'omit', // 쿠키 없이 요청
       headers: {

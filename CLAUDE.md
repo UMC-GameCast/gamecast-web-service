@@ -163,3 +163,34 @@ interface CharacterData {
 ### Character Data Sources
 - **Server characterInfo**: Only source from REST API responses
 - **Local State**: Managed by `useRoom` hook, no Socket.IO events
+
+## Server Connection Configuration
+
+### Environment Variables
+- **VITE_API_BASE_URL**: Backend API base URL (default: http://3.37.34.211:8889)
+- **VITE_SOCKET_URL**: Socket.IO server URL (default: http://3.37.34.211:8889)
+- **VITE_MODE**: Environment mode (development/staging/production)
+
+### API URL Construction
+- `API_BASE_URL` contains base server URL without `/api` path
+- API requests append `/api` + endpoint (e.g., `/api/rooms`)
+- Health check endpoint: `${API_BASE_URL}/health`
+
+### Real-time Communication
+- Socket.IO events: `join-room`, `offer`, `answer`, `ice-candidate`
+- WebRTC signaling through dedicated Socket.IO connection
+- Separate paths for different services (main: `/`, voice: `/webrtc-voice`)
+
+## Type System Structure
+
+### Type Organization
+- **types/room.ts**: Legacy types for backward compatibility
+- **types/api.ts**: API request/response interfaces
+- **types/webrtc.ts**: WebRTC and real-time communication types
+- **types/game.ts**: Game-specific types (Room, Player, CharacterData)
+
+### WebRTC Manager
+- Handles P2P audio connections between users
+- Socket ID to guestUserId mapping for participant tracking
+- Connection quality monitoring and error handling
+- Automatic reconnection and cleanup on page unload
