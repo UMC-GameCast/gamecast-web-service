@@ -14,18 +14,49 @@ import textImage from "../../../assets/gamecast/main/text.png";
 import lineImage from "../../../assets/gamecast/main/line.png";
 import { CTAButtons } from "../../../components/gamecast/main/CTAButtons";
 import { PageTransition } from "../../../components/gamecast/common/PageTransition";
+import { motion } from "framer-motion";
 
 export const MainPage = () => {
 
+  // Stagger animation variants
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.3,
+        delayChildren: 0.2
+      }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { 
+      opacity: 0, 
+      y: 30,
+      scale: 0.95
+    },
+    visible: {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      transition: {
+        duration: 0.6,
+        ease: "easeOut"
+      }
+    }
+  };
 
   return (
-    <PageTransition className="w-full min-h-screen bg-black relative overflow-hidden">
+    <PageTransition className="w-full min-h-screen bg-black relative">
 
       {/* 메인 콘텐츠 - 스크롤 가능 */}
       <div className="relative z-10">
         
         {/* Hero Section */}
-        <section className="min-h-screen flex flex-col items-center justify-center px-4 relative">
+        <section 
+          className="min-h-screen flex flex-col items-center justify-center px-4 relative"
+        >
           {/* Earth Background Image */}
           <div 
             className="absolute bottom-0 left-0 w-full h-1/2 bg-contain bg-center bg-bottom bg-no-repeat z-[1]"
@@ -34,14 +65,19 @@ export const MainPage = () => {
             }}
           ></div>
           
-          <div className="max-w-[1440px] mx-auto text-center relative z-10">
+          <motion.div 
+            className="max-w-[1440px] mx-auto text-center relative z-10"
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+          >
             {/* 로고 */}
-            <div className="mb-[134px]">
+            <motion.div className="mb-[134px]" variants={itemVariants}>
               <img src={gamecastLogo} alt="GAMECAST" className="mx-auto" />
-            </div>
+            </motion.div>
             
             {/* 메인 타이틀 */}
-            <div className="relative mb-[74px]">
+            <motion.div className="relative mb-[74px]" variants={itemVariants}>
               {/* 그라데이션 원 배경 */}
               <div 
                 className="absolute w-[1919px] h-[1919px] flex-shrink-0 rounded-full top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -z-10"
@@ -53,10 +89,10 @@ export const MainPage = () => {
               <h1 className="text-[48px] font-bold text-white leading-tight relative z-10">
                 함께 플레이 하고 재미있는 영상을 만들자!
               </h1>
-            </div>
+            </motion.div>
             
             {/* 서브타이틀 */}
-            <div className="text-[18px] text-white mb-[93px] space-y-1 leading-[150%] font-pretendard">
+            <motion.div className="text-[18px] text-white mb-[93px] space-y-1 leading-[150%] font-pretendard" variants={itemVariants}>
               <div>
                 <span className="font-light">GameCast는 여러 명의 지인들과 게임을 함께 즐기고, </span>
                 <span className="font-bold">AI를 통해 자동으로 편집해 주는 웹 서비스</span>
@@ -72,25 +108,42 @@ export const MainPage = () => {
                 
                 <span className="font-light">지금 바로 친구와 함께 플레이하고 수익으로 연결되는 재밌는 소스를 얻어 가세요!</span>
               </div>
-            </div>
+            </motion.div>
             
             {/* CTA 버튼들 */}
-            <CTAButtons />
-          </div>
+            <motion.div variants={itemVariants}>
+              <CTAButtons />
+            </motion.div>
+          </motion.div>
         </section>
 
+        {/* Rest of Content Block - All sections except Hero */}
+        <div>
         {/* Features Section */}
-        <section className="py-[200px] border-b border-[#A6A6A6]">
+        <motion.section 
+          className="py-[200px] border-b border-[#A6A6A6]"
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, amount: 0.3 }}
+          variants={containerVariants}
+        >
           <div className="max-w-[1440px] mx-auto text-center">
-            <h2 className="text-white mb-4 text-center font-pretendard text-[47.412px] font-bold leading-[150%]" style={{letterSpacing: '0.948px'}}>
+            <motion.h2 
+              className="text-white mb-4 text-center font-pretendard text-[47.412px] font-bold leading-[150%]" 
+              style={{letterSpacing: '0.948px'}}
+              variants={itemVariants}
+            >
               GameCast에서 쉽게 영상을 만들고<br/>
               업로드하여 <span className="text-custom-pink">수익</span>까지 나아가보세요!
-            </h2>
+            </motion.h2>
             
-            <div className="flex flex-wrap justify-center items-center gap-8 mt-[130px]">
+            <motion.div 
+              className="flex flex-wrap justify-center items-center gap-8 mt-[130px]"
+              variants={itemVariants}
+            >
               {/* 첫 3개 원형을 묶은 그룹 */}
-              <div className="flex gap-0">
-                <div className="relative flex items-center justify-center flex-shrink-0 w-[206.497px] h-[206.497px]">
+              <motion.div className="flex gap-0" variants={itemVariants}>
+                <motion.div className="relative flex items-center justify-center flex-shrink-0 w-[206.497px] h-[206.497px]" variants={itemVariants}>
                   <img 
                     src={ellipseCircle} 
                     alt="원형 테두리" 
@@ -105,8 +158,8 @@ export const MainPage = () => {
                   >
                     재밌는 소스<br/>자동 추출
                   </span>
-                </div>
-                <div className="relative flex items-center justify-center flex-shrink-0 w-[206.497px] h-[206.497px]">
+                </motion.div>
+                <motion.div className="relative flex items-center justify-center flex-shrink-0 w-[206.497px] h-[206.497px]" variants={itemVariants}>
                   <img 
                     src={ellipseCircle} 
                     alt="원형 테두리" 
@@ -121,8 +174,8 @@ export const MainPage = () => {
                   >
                     플레이어 별<br/>자동 자막 생성
                   </span>
-                </div>
-                <div className="relative flex items-center justify-center flex-shrink-0 w-[206.497px] h-[206.497px]">
+                </motion.div>
+                <motion.div className="relative flex items-center justify-center flex-shrink-0 w-[206.497px] h-[206.497px]" variants={itemVariants}>
                   <img 
                     src={ellipseCircle} 
                     alt="원형 테두리" 
@@ -137,23 +190,27 @@ export const MainPage = () => {
                   >
                     감정 강조 자막으로<br/>풍부한 영상
                   </span>
-                </div>
-              </div>
+                </motion.div>
+              </motion.div>
               
               {/* 화살표 */}
-              <img 
+              <motion.img 
                 src={polygonArrow} 
                 alt="화살표"
                 className="flex-shrink-0"
                 style={{
                   width: '55.996px',
                   height: '47.01px',
-                  // transform: 'rotate(90deg)'
                 }}
+                variants={itemVariants}
               />
               
               {/* 4번째 원형 */}
-              <div className="relative flex items-center justify-center flex-shrink-0" style={{width: '206.497px', height: '206.497px'}}>
+              <motion.div 
+                className="relative flex items-center justify-center flex-shrink-0" 
+                style={{width: '206.497px', height: '206.497px'}}
+                variants={itemVariants}
+              >
                 <img 
                   src={ellipseCircle} 
                   alt="원형 테두리" 
@@ -174,30 +231,45 @@ export const MainPage = () => {
                 >
                   Youtube<br/>TikTok<br/>Instagram
                 </span>
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
           </div>
-        </section>
+        </motion.section>
 
         {/* Voice Chat Section */}
-        <section className="py-[200px] border-b border-[#A6A6A6]">
+        <motion.section 
+          className="py-[200px] border-b border-[#A6A6A6]"
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, amount: 0.3 }}
+          variants={containerVariants}
+        >
           <div className="max-w-[1440px] mx-auto flex flex-col items-left">
             {/* 텍스트 영역 - 좌측 정렬 */}
-            <div className="text-left mb-[74px]">
-              <h2 className="text-white font-pretendard text-[50px] font-bold leading-[150%] mb-[74px]">
+            <motion.div className="text-left mb-[74px]" variants={itemVariants}>
+              <motion.h2 
+                className="text-white font-pretendard text-[50px] font-bold leading-[150%] mb-[74px]"
+                variants={itemVariants}
+              >
                 따로 <span className="text-[#E338FF]">음성 채팅에 참가</span>하고<br/>
                 녹화를 안해도 괜찮아요!
-              </h2>
-              <p className="text-[#E338FF] font-pretendard text-[30px] font-bold leading-[106%] mb-[23px]">
+              </motion.h2>
+              <motion.p 
+                className="text-[#E338FF] font-pretendard text-[30px] font-bold leading-[106%] mb-[23px]"
+                variants={itemVariants}
+              >
                 "음성채팅도 들어오고 녹화도 각자해서 보내줘"
-              </p>
-              <p className="text-white font-pretendard text-[25px] font-light leading-[106%]">
+              </motion.p>
+              <motion.p 
+                className="text-white font-pretendard text-[25px] font-light leading-[106%]"
+                variants={itemVariants}
+              >
                 짧은 영상을 만들기 위해 귀찮았던 과정은 이제 그만! 간단하게 방을 만들고 참여하여 실시간 음성 채팅부터 화면 녹화까지 쉽게 진행해요!
-              </p>
-            </div>
+              </motion.p>
+            </motion.div>
             
             {/* 이미지 영역 */}
-            <div className="w-full flex justify-center relative">
+            <motion.div className="w-full flex justify-center relative" variants={itemVariants}>
               {/* 큰 그라데이션 원 배경 - 이미지 중앙 세로축에 좌측 끝이 닿도록 배치 */}
               <div 
                 className="absolute w-[3411.236px] h-[3411.236px] flex-shrink-0 rounded-full top-1/2 -translate-y-1/2 -z-20"
@@ -215,30 +287,51 @@ export const MainPage = () => {
                 }}
               ></div>
               
-              <img 
+              <motion.img 
                 src={screen1Image} 
                 alt="음성 채팅 화면" 
                 className="max-w-full h-auto relative z-10"
+                variants={itemVariants}
               />
-            </div>
+            </motion.div>
           </div>
-        </section>
+        </motion.section>
 
         {/* AI Section */}
-        <section className="py-[200px] text-center border-b border-[#A6A6A6]">
+        <motion.section 
+          className="py-[200px] text-center border-b border-[#A6A6A6]"
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, amount: 0.3 }}
+          variants={containerVariants}
+        >
           <div className="max-w-7xl mx-auto">
-            <h2 className="text-white text-center font-pretendard text-[50px] font-bold leading-[150%] mb-[70px] " style={{letterSpacing: '1px'}}>
+            <motion.h2 
+              className="text-white text-center font-pretendard text-[50px] font-bold leading-[150%] mb-[70px]" 
+              style={{letterSpacing: '1px'}}
+              variants={itemVariants}
+            >
               AI가 재밌는 소스를 추출하고, 사용자별로 <span className="text-[#E338FF]">자막을 생성</span>해요
-            </h2>
-            <p className="text-center font-pretendard text-[30px] font-bold leading-[106%] mb-[34px]" style={{color: 'rgba(227, 56, 255, 0.70)'}}>
+            </motion.h2>
+            <motion.p 
+              className="text-center font-pretendard text-[30px] font-bold leading-[106%] mb-[34px]" 
+              style={{color: 'rgba(227, 56, 255, 0.70)'}}
+              variants={itemVariants}
+            >
               "언제 2시간 영상 다 보고 자막은 언제 넣지..."
-            </p>
-            <p className="text-white text-center font-pretendard text-[25px] font-light leading-[150%] mb-[82px]">
+            </motion.p>
+            <motion.p 
+              className="text-white text-center font-pretendard text-[25px] font-light leading-[150%] mb-[82px]"
+              variants={itemVariants}
+            >
               AI를 통해 재밌는 소스를 추출해 주고 자막을 달아주기 때문에 <br/>
               영상 전체를 보는 시간을 없애고, 자막을 일일이 생성하지 않아도 돼요
-            </p>
+            </motion.p>
             {/* AI 이미지 영역 - 3개 이미지 flex 배치 */}
-            <div className="flex justify-center items-center gap-auto mb-[px] max-w-[1009px] mx-auto">
+            <motion.div 
+              className="flex justify-center items-center gap-auto mb-[px] max-w-[1009px] mx-auto"
+              variants={itemVariants}
+            >
               {/* 첫 번째 작은 이미지 */}
               <div style={{width: '171.46px', height: '166.33px'}}>
                 <img 
@@ -268,7 +361,7 @@ export const MainPage = () => {
                   className="w-full h-full object-cover rounded-lg"
                 />
               </div>
-            </div>
+            </motion.div>
             
             {/* 하단 큰 이미지 */}
             <div className="flex justify-center mt-8 relative">
@@ -290,10 +383,16 @@ export const MainPage = () => {
               </div>
             </div>
           </div>
-        </section>
+        </motion.section>
 
                 {/* Character Section */}
-        <section className="py-[200px] relative">
+        <motion.section 
+          className="py-[200px] relative overflow-hidden"
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, amount: 0.3 }}
+          variants={containerVariants}
+        >
           {/* 배경 이미지 - Character Section 중앙 아래 100px, 1:1 비율로 섹션 가로와 일치 */}
           <div 
             className="absolute left-1/2 -z-50"
@@ -310,72 +409,93 @@ export const MainPage = () => {
           ></div>
           
           <div className="max-w-[1440px] mx-auto">
-            <div className="flex flex-col lg:flex-row items-center gap-12 mb-[130px]">
+            <motion.div className="flex flex-col lg:flex-row items-center gap-12 mb-[130px]" variants={itemVariants}>
               {/* 이미지 영역 */}
-              <div className="flex-1">
+              <motion.div className="flex-1" variants={itemVariants}>
                 <div style={{width: '829.404px'}}>
-                  <img 
+                  <motion.img 
                     src={screen4Image} 
                     alt="캐릭터 커스터마이징" 
                     className="w-full h-auto"
+                    variants={itemVariants}
                   />
                 </div>
-              </div>
+              </motion.div>
               
               {/* 텍스트 영역 */}
-              <div className="flex-1">
-                <h2 className="text-white text-right font-pretendard text-[50px] font-bold leading-[150%] mb-[84px]" style={{letterSpacing: '-0.95px'}}>
+              <motion.div className="flex-1" variants={itemVariants}>
+                <motion.h2 
+                  className="text-white text-right font-pretendard text-[50px] font-bold leading-[150%] mb-[84px]" 
+                  style={{letterSpacing: '-0.95px'}}
+                  variants={itemVariants}
+                >
                   플레이어별 캐릭터 자막으로<br/>
                   <span className="text-[#E338FF]">풍부한 영상미</span>를 제공해요
-                </h2>
-                <p className="text-right font-pretendard text-[30px] font-bold leading-[180%] mb-[30px]" style={{color: 'rgba(227, 56, 255, 0.70)'}}>
+                </motion.h2>
+                <motion.p 
+                  className="text-right font-pretendard text-[30px] font-bold leading-[180%] mb-[30px]" 
+                  style={{color: 'rgba(227, 56, 255, 0.70)'}}
+                  variants={itemVariants}
+                >
                   "누구 캐릭터 그릴 수 있는 사람 있어?"
-                </p>
-                <p className="text-white font-pretendard text-[25px] font-light leading-[180%] text-right">
+                </motion.p>
+                <motion.p 
+                  className="text-white font-pretendard text-[25px] font-light leading-[180%] text-right"
+                  variants={itemVariants}
+                >
                   협동 플레이 영상을 더 풍부하게 만들어주는 캐릭터 요소<br/>
                   게임할 시간도 없는데 언제 캐릭터 만들지 고민했던 지난날! 간단한 클릭으로 나만의 캐릭터를 만들 수 있어요
-                </p>
-              </div>
-            </div>
+                </motion.p>
+              </motion.div>
+            </motion.div>
           </div>
 
           <div className="max-w-[1440px] mx-auto">
-            <div className="flex flex-col lg:flex-row items-center gap-12 mb-[130px]">
+            <motion.div className="flex flex-col lg:flex-row items-center gap-12 mb-[130px]" variants={itemVariants}>
               {/* 텍스트 영역 */}
-              <div className="flex-1 mt-[200px]">
-                <p className="text-left font-pretendard text-[30px] font-bold leading-[180%] mb-[30px]" style={{color: 'rgba(227, 56, 255, 0.70)'}}>
+              <motion.div className="flex-1 mt-[200px]" variants={itemVariants}>
+                <motion.p 
+                  className="text-left font-pretendard text-[30px] font-bold leading-[180%] mb-[30px]" 
+                  style={{color: 'rgba(227, 56, 255, 0.70)'}}
+                  variants={itemVariants}
+                >
                   "이 부분... 더 재밌게 표현 할 수 없나?"
-                </p>
-                <p className="text-white font-pretendard text-[25px] font-light leading-[180%] text-left">
+                </motion.p>
+                <motion.p 
+                  className="text-white font-pretendard text-[25px] font-light leading-[180%] text-left"
+                  variants={itemVariants}
+                >
                 영상 상황에 따라서 감정 강조 자막으로<br/> 
                 자막 형태를 전환하여,플레이 할 때의 감정을<br/>
                 영상으로 생생하게 전달 할 수 있어요
-                </p>
-              </div>
+                </motion.p>
+              </motion.div>
               
               {/* 이미지 영역 */}
-              <div className="flex-1 relative">
+              <motion.div className="flex-1 relative" variants={itemVariants}>
                 <div style={{width: '917px'}}>
-                  <img 
+                  <motion.img 
                     src={screen5Image} 
                     alt="감정 강조 자막" 
                     className="w-full h-auto"
+                    variants={itemVariants}
                   />
                 </div>
                 {/* 텍스트 이미지 오버레이 */}
-                <div className="absolute top-[50px] left-[0px]">
-                  <img 
+                <motion.div className="absolute top-[50px] left-[0px]" variants={itemVariants}>
+                  <motion.img 
                     src={textImage} 
                     alt="텍스트 오버레이" 
                     style={{width: '540px'}}
                     className="h-auto"
+                    variants={itemVariants}
                   />
-                </div>
-              </div>
-            </div>
+                </motion.div>
+              </motion.div>
+            </motion.div>
           </div>
           
-        </section>
+        </motion.section>
 
 
         {/* Footer Section */}
@@ -400,6 +520,7 @@ export const MainPage = () => {
             <p className="text-white text-[16px] opacity-80">© 2025 UMC Project MARU</p>
           </div>
         </footer>
+        </div>
       </div>
     </PageTransition>
   );
