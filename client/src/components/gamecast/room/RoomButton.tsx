@@ -43,7 +43,7 @@ export const RoomButton = ({ children, onClick, className = "", disabled = false
       onClick={handleClick}
       onMouseEnter={() => !disabled && setIsHovered(true)}
       onMouseLeave={() => !disabled && setIsHovered(false)}
-      className={`relative bg-transparent bg-contain bg-center bg-no-repeat outline-none focus:outline-none border-none transition-all duration-200 transform ${getStateStyles()} ${className}`}
+      className={`relative bg-transparent bg-center bg-no-repeat outline-none focus:outline-none border-none transition-all duration-200 transform ${getStateStyles()} ${className}`}
       style={{
         backgroundImage: `url(${getBackgroundImage()})`,
         width: '192px',

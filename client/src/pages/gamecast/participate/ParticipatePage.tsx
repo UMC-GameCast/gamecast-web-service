@@ -2,6 +2,7 @@ import { Navigation } from "../../../components/gamecast/common/Navigation";
 import { Footer } from "../../../components/gamecast/common/Footer";
 import { ParticipationCodeCard } from "../../../components/gamecast/participate/ParticipationCodeCard";
 import { BackButton1 } from "../../../components/gamecast/common/BackButton1";
+import { PageTransition } from "../../../components/gamecast/common/PageTransition";
 import { useNavigate } from 'react-router-dom';
 
 
@@ -19,7 +20,7 @@ export const ParticipatePage = () => {
   };
 
   return (
-    <div className="min-h-screen w-full flex flex-col justify-between bg-[linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,6,72,1)_100%)] relative overflow-hidden">
+    <PageTransition className="min-h-screen w-full flex flex-col justify-between bg-[linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,6,72,1)_100%)] relative overflow-hidden">
       
       {/* 배경 장식 이미지 */}
       {/* 
@@ -58,6 +59,6 @@ export const ParticipatePage = () => {
       
       {/* 하단 푸터 영역 */}
       <Footer />
-    </div>
+    </PageTransition>
   );
 }; 

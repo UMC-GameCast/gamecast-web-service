@@ -22,7 +22,10 @@
       "Bash(curl:*)",
       "Bash(npx tsx:*)",
       "Bash(tasklist:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(git checkout:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(cp:*)"
     ],
     "deny": []
   }
