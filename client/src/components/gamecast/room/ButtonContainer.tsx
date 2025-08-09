@@ -18,6 +18,14 @@ interface ButtonContainerProps {
   setScreenSetup?: (completed: boolean) => void;
   // 캐릭터 설정 페이지 이동 콜백
   onCharacterSetupClick?: () => void;
+  // 준비 상태 관리 (현재 ButtonContainer 내부에서 직접 처리)
+  onReadyToggle?: (isReady: boolean) => void;
+  allPlayersReady?: boolean;
+  // 녹화 관련 (현재 useGameRecording으로 처리)
+  isRecording?: boolean;
+  recordingTime?: number;
+  onRecordingStart?: () => void;
+  onRecordingStop?: () => void;
 }
 
 /**
@@ -34,7 +42,15 @@ export const ButtonContainer = ({
   setCharacterSetup,
   setScreenSetup,
   // 캐릭터 설정 페이지 이동 콜백
-  onCharacterSetupClick
+  onCharacterSetupClick,
+  // 준비 상태 관리
+  onReadyToggle,
+  allPlayersReady: allPlayersReadyProp,
+  // 녹화 관련
+  isRecording = false,
+  recordingTime = 0,
+  onRecordingStart,
+  onRecordingStop
 }: ButtonContainerProps) => {
   const [isTooltipVisible, setIsTooltipVisible] = useState(false);
   const [isHoveringHostButton, setIsHoveringHostButton] = useState(false);
@@ -53,9 +69,9 @@ export const ButtonContainer = ({
 
   // 현재 플레이어의 준비 상태를 서버 데이터에서 가져오기 (통합 ID 사용)
   const unifiedPlayerId = currentPlayer?.guestUserId || currentPlayer?.id;
-  const currentPlayerReadyStatus = playersReadyStatus.find(p => 
-    p.playerId === unifiedPlayerId || p.playerId === currentPlayer?.id
-  );
+  const currentPlayerReadyStatus = Array.isArray(playersReadyStatus) 
+    ? playersReadyStatus.find(p => p.playerId === unifiedPlayerId || p.playerId === currentPlayer?.id)
+    : null;
   const isPlayerReady = currentPlayerReadyStatus?.isReady || false;
 
   // 서버 중심 준비 상태 업데이트 (Socket.IO 단일 소스) - 현재 미사용
@@ -136,8 +152,8 @@ export const ButtonContainer = ({
       existingLogs.push({ type: 'button_click', ...logData });
       if (existingLogs.length > 20) existingLogs.shift();
       localStorage.setItem('gamecast_button_clicks', JSON.stringify(existingLogs));
-    } catch (e) {
-      // 무시
+    } catch {
+      // 무시 - localStorage 에러는 중요하지 않음
     }
     
     switch (recordingStatus.state) {

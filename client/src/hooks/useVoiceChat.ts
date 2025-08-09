@@ -114,12 +114,15 @@ export const useVoiceChat = (
   useEffect(() => {
     const instanceId = hookInstanceId.current;
 
-    // 🔧 더 적극적인 초기화 조건: roomCode만 있으면 시작 (nickname은 나중에 설정 가능)
-    if (!roomCode || !enabled) {
+    // 🔧 엄격한 초기화 조건: roomCode와 nickname 모두 있어야 시작
+    if (!roomCode || !nickname || !enabled) {
       console.log('🔍 [useVoiceChat] WebRTC Manager 초기화 건너뜀:', {
         hasRoomCode: !!roomCode,
+        hasNickname: !!nickname,
         enabled: enabled,
-        nickname: nickname || '(empty)'
+        roomCode: roomCode,
+        nickname: nickname || '(empty)',
+        reason: !roomCode ? 'no roomCode' : !nickname ? 'no nickname' : 'disabled'
       });
       return;
     }
@@ -180,11 +183,15 @@ export const useVoiceChat = (
       
       setVoiceChatState(currentState);
       
+      // 🔧 mute 상태도 동기화
+      setIsLocalMutedState(currentState.isLocalMuted);
+      
       console.log(`🔄 [useVoiceChat] 상태 동기화 완료:`, {
         instanceId,
         hasLocalStream: !!currentState.localStream,
         isConnected: currentState.isConnected,
-        isLocalMuted: currentState.isLocalMuted
+        isLocalMuted: currentState.isLocalMuted,
+        syncedMuteState: currentState.isLocalMuted
       });
       
       return; // 여기서 완전히 종료
@@ -336,9 +343,37 @@ export const useVoiceChat = (
             audioTrackEnabled: stream.getAudioTracks()[0]?.enabled
           });
           
+          // 🔧 전역 매니저에도 스트림 저장 (PlayerCard가 접근할 수 있도록)
+          if (!manager.remoteStreams) {
+            manager.remoteStreams = new Map();
+          }
+          manager.remoteStreams.set(socketId, stream);
+          
           setRemoteStreams(prev => {
             const newStreams = new Map(prev);
             newStreams.set(socketId, stream);
+            
+            // ✨ 보험을 위해 여러 키로 동일 스트림 저장 (React state와 전역 매니저 둘 다)
+            // socketId에서 단순 문자열 부분만 추출
+            const shortSocketId = socketId.split('-')[0] || socketId;
+            if (shortSocketId !== socketId) {
+              newStreams.set(shortSocketId, stream);
+              manager.remoteStreams.set(shortSocketId, stream);
+              console.log(`🎆 [useVoiceChat] 추가 키로 스트림 저장:`, { shortSocketId });
+            }
+            
+            // 🔍 디버깅을 위해 window에 노출
+            (window as any).__voiceChatRemoteStreams__ = newStreams;
+            
+            console.log(`🎆 [useVoiceChat] 원격 스트림 업데이트:`, {
+              streamKey: socketId,
+              shortKey: shortSocketId,
+              streamId: stream.id,
+              totalStreams: newStreams.size,
+              allStreamKeys: Array.from(newStreams.keys()),
+              audioTracks: stream.getAudioTracks().length,
+              audioEnabled: stream.getAudioTracks()[0]?.enabled
+            });
             console.log(`🗺️ [useVoiceChat] Updated remoteStreams:`, {
               totalStreams: newStreams.size,
               streamKeys: Array.from(newStreams.keys())
@@ -425,6 +460,9 @@ export const useVoiceChat = (
             ...state,
             remoteStreams: remoteStreams // 현재 상태 유지
           });
+          
+          // 🔧 WebRTC Manager의 mute 상태와 동기화
+          setIsLocalMutedState(state.isLocalMuted);
         }
       };
 
@@ -479,7 +517,7 @@ export const useVoiceChat = (
       
       // 전역 매니저는 다른 컴포넌트가 사용 중일 수 있으므로 정리하지 않음
     };
-  }, [roomCode, nickname]);
+  }, [roomCode, nickname, enabled]);
 
   // 채팅 메시지 보내기
   const sendChatMessage = (message: string) => {
@@ -508,15 +546,36 @@ export const useVoiceChat = (
 
   // 음성 mute/unmute 기능
   const muteLocalAudio = () => {
-    return webRTCManagerRef.current?.muteLocalAudio() || false;
+    const success = webRTCManagerRef.current?.muteLocalAudio() || false;
+    if (success && webRTCManagerRef.current) {
+      setIsLocalMutedState(true);
+      console.log('🔇 [useVoiceChat] 마이크 음소거:', { success });
+    }
+    return success;
   };
 
   const unmuteLocalAudio = () => {
-    return webRTCManagerRef.current?.unmuteLocalAudio() || false;
+    const success = webRTCManagerRef.current?.unmuteLocalAudio() || false;
+    if (success && webRTCManagerRef.current) {
+      setIsLocalMutedState(false);
+      console.log('🔊 [useVoiceChat] 마이크 음소거 해제:', { success });
+    }
+    return success;
   };
 
   const toggleLocalAudio = () => {
-    return webRTCManagerRef.current?.toggleLocalAudio() || false;
+    const success = webRTCManagerRef.current?.toggleLocalAudio() || false;
+    if (success && webRTCManagerRef.current) {
+      // 상태 즉시 동기화
+      const newState = webRTCManagerRef.current.getIsLocalMuted();
+      setIsLocalMutedState(newState);
+      console.log('🔄 [useVoiceChat] 마이크 상태 토글:', { 
+        success, 
+        newMuteState: newState,
+        timestamp: new Date().toISOString()
+      });
+    }
+    return success;
   };
 
   // 상태 조회 기능
@@ -528,9 +587,16 @@ export const useVoiceChat = (
     return webRTCManagerRef.current?.getActiveSpeakers() || [];
   };
 
-  const isLocalMuted = () => {
-    return webRTCManagerRef.current?.getIsLocalMuted() || false;
-  };
+  // 🔧 isLocalMuted를 상태 값으로 변경 (함수 호출 제거)
+  const [isLocalMutedState, setIsLocalMutedState] = useState(false);
+  
+  // WebRTC Manager의 상태와 동기화
+  useEffect(() => {
+    if (webRTCManagerRef.current) {
+      const currentState = webRTCManagerRef.current.getIsLocalMuted();
+      setIsLocalMutedState(currentState);
+    }
+  }, [webRTCManagerRef.current?.getIsLocalMuted()]);
 
   // 실시간 업데이트 콜백 설정 (useRealTimeRoom 대체)
   const setOnRealtimeParticipantsUpdate = (callback: (participants: unknown[]) => void) => {
@@ -620,7 +686,7 @@ export const useVoiceChat = (
     toggleLocalAudio,
     getConnectedPeersCount,
     getActiveSpeakers,
-    isLocalMuted,
+    isLocalMuted: isLocalMutedState,
     // 실시간 업데이트 기능 (useRealTimeRoom 대체)
     setOnRealtimeParticipantsUpdate,
     setOnRealtimeConnectionStateChanged,

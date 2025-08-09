@@ -9,6 +9,10 @@ export default defineConfig({
     svgr()
   ],
   server: {
-    port: 3000
+    host: true,
+    port: 3000,
+    allowedHosts: ['.ngrok-free.app', '.ngrok.io', '.ngrok.app'], // 🔑 ngrok 도메인 허용
+    // 개발용으로는 모든 호스트 허용도 가능
+    // allowedHosts: 'all'
   }
 })

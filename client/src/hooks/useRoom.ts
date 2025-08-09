@@ -25,6 +25,9 @@ export const useRoom = () => {
         if (result.success && result.room) {
           setCurrentRoom(result.room);
           
+          // 🔧 participants를 전역 window에 저장 (WebRTC 매핑용)
+          (window as any).gamecastCurrentParticipants = result.room.participants || [];
+          
           // 🔍 디버깅: 서버에서 받아온 방 정보 전체 구조 확인
           console.log('🔍 [useRoom] 서버에서 받아온 방 정보:', {
             room: result.room,
@@ -140,11 +143,32 @@ export const useRoom = () => {
 
       setCurrentRoom(room);
       
+      // 🔧 방 생성 직후 즉시 WebRTC 초기화를 위한 기본 플레이어 정보 설정
+      if (!currentPlayer && userId && room.hostGuestId === userId) {
+        const basicPlayerInfo: Player = {
+          id: userId,
+          nickname: "Nickname1", // 방 생성 시 사용된 기본 닉네임
+          guestUserId: userId,
+          preparationStatus: {
+            characterSetup: false,
+            screenSetup: false
+          },
+          isHost: true,
+          character: null,
+          characterInfo: null
+        };
+        setCurrentPlayer(basicPlayerInfo);
+        console.log('🏃 [useRoom] 기본 플레이어 정보 즉시 설정 (WebRTC 초기화용):', basicPlayerInfo);
+      }
+      
       // 서버에서 최신 방 정보 조회 (서버 우선)
       try {
         const result = await getRoomInfo(room.roomCode);
         if (result.success && result.room) {
           setCurrentRoom(result.room);
+          
+          // 🔧 participants를 전역 window에 저장 (WebRTC 매핑용)
+          (window as any).gamecastCurrentParticipants = result.room.participants || [];
           
           // 서버 데이터 우선 사용 (ID 매칭 개선)
           // guestUserId 우선 매칭 (refreshRoomState와 동일한 로직)

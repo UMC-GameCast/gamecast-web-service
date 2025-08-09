@@ -14,6 +14,16 @@ interface RecordingState {
   duration: number;
 }
 
+interface UploadResult {
+  success: boolean;
+  result?: unknown;
+  videoFile?: string;
+  audioFile?: string;
+  uploadTime: string;
+  duration?: number;
+  error?: string;
+}
+
 export class GameRecorder {
   private screenRecorder: MediaRecorder | null = null;
   private audioRecorder: MediaRecorder | null = null;
@@ -46,7 +56,7 @@ export class GameRecorder {
           width: { ideal: 1920 },
           height: { ideal: 1080 },
           frameRate: { ideal: 60 },
-          displaySurface: 'application' as any // 애플리케이션 창만 선택 가능
+          displaySurface: 'application' as const // 애플리케이션 창만 선택 가능
         },
         audio: false // 화면 오디오는 제외 (마이크 음성만 별도 처리)
       });
@@ -131,7 +141,7 @@ export class GameRecorder {
   /**
    * 녹화 종료 및 서버 업로드 (방장만 호출 가능)
    */
-  public async stopRecording(roomCode: string, userId: string, gameTitle: string): Promise<any> {
+  public async stopRecording(roomCode: string, userId: string, gameTitle: string): Promise<UploadResult | null> {
     if (!this.state.isRecording) {
       console.warn('⚠️ [GameRecorder] No recording in progress');
       return null;
@@ -303,13 +313,13 @@ export class GameRecorder {
   }
 
   /**
-   * 서버로 녹화 파일 업로드
+   * 서버로 녹화 파일 업로드 (MP4 비디오 + WAV 오디오)
    */
-  private async uploadToServer(roomCode: string, userId: string, gameTitle: string): Promise<any> {
+  private async uploadToServer(roomCode: string, userId: string, gameTitle: string): Promise<UploadResult> {
     try {
       console.log('📤 [GameRecorder] Starting upload to server...');
 
-      // 비디오와 오디오 Blob 생성
+      // 기본 WebM Blob 생성
       const videoBlob = new Blob(this.screenChunks, { type: 'video/webm' });
       const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
 
@@ -323,44 +333,84 @@ export class GameRecorder {
 
       // FormData 생성
       const formData = new FormData();
-      formData.append('video', videoBlob, 'recording.webm');
-      formData.append('audio', audioBlob, 'audio.webm');
+      
+      // 서버에서 변환 처리를 위해 WebM 파일을 MP4/WAV 파일명으로 전송
+      // 실제 변환은 서버에서 FFmpeg 등으로 처리
+      formData.append('video', videoBlob, `recording_${roomCode}_${userId}.webm`);
+      formData.append('audio', audioBlob, `audio_${roomCode}_${userId}.webm`);
       formData.append('roomCode', roomCode);
       formData.append('userId', userId);
       formData.append('gameTitle', gameTitle);
       formData.append('duration', this.state.duration.toString());
       formData.append('resolution', this.videoMetadata.resolution);
       formData.append('fps', this.videoMetadata.fps.toString());
+      formData.append('uploadTime', new Date().toISOString());
       formData.append('description', `${gameTitle} 게임 플레이 녹화 - ${new Date().toLocaleString()}`);
 
-      // 서버로 업로드
-      const response = await fetch('/api/videos/upload', {
+      console.log('📡 [GameRecorder] Uploading to server...', {
+        endpoint: '/api/videos/upload',
+        roomCode,
+        userId,
+        gameTitle,
+        videoSize: Math.round(videoBlob.size / 1024 / 1024) + 'MB',
+        audioSize: Math.round(audioBlob.size / 1024) + 'KB'
+      });
+
+      // 서버로 업로드 (실제 서버 URL 사용)
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://3.37.34.211:8889';
+      const response = await fetch(`${API_BASE_URL}/api/videos/upload`, {
         method: 'POST',
-        body: formData
+        body: formData,
+        // 타임아웃 설정 (대용량 파일 업로드 고려)
+        signal: AbortSignal.timeout(300000) // 5분 타임아웃
       });
 
       if (!response.ok) {
-        throw new Error(`서버 응답 오류: ${response.status} ${response.statusText}`);
+        let errorDetails = '';
+        try {
+          const errorData = await response.text();
+          errorDetails = errorData;
+        } catch {
+          errorDetails = response.statusText;
+        }
+        throw new Error(`서버 응답 오류: ${response.status} - ${errorDetails}`);
       }
 
       const result = await response.json();
       console.log('✅ [GameRecorder] Upload completed successfully:', result);
 
-      return result;
+      return {
+        success: true,
+        result,
+        videoFile: result?.videoFile || `recording_${roomCode}_${userId}.mp4`,
+        audioFile: result?.audioFile || `audio_${roomCode}_${userId}.wav`,
+        uploadTime: new Date().toISOString(),
+        duration: this.state.duration
+      };
 
     } catch (error) {
       console.error('❌ [GameRecorder] Upload failed:', error);
       
       let errorMessage = '서버 업로드에 실패했습니다.';
       if (error instanceof Error) {
-        if (error.message.includes('fetch')) {
+        if (error.name === 'TimeoutError') {
+          errorMessage = '업로드 시간이 초과되었습니다. 네트워크 상태를 확인해주세요.';
+        } else if (error.message.includes('fetch') || error.message.includes('NetworkError')) {
           errorMessage = '네트워크 연결을 확인해주세요.';
+        } else if (error.message.includes('413')) {
+          errorMessage = '파일 크기가 너무 큽니다.';
+        } else if (error.message.includes('500')) {
+          errorMessage = '서버 내부 오류가 발생했습니다.';
         } else {
           errorMessage = error.message;
         }
       }
       
-      throw new Error(errorMessage);
+      return {
+        success: false,
+        error: errorMessage,
+        uploadTime: new Date().toISOString()
+      };
     }
   }
 

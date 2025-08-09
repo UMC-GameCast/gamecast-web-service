@@ -8,6 +8,7 @@ import type { CharacterData } from "../../../types/room";
 
 interface CharacterSetupPageProps {
   onBack?: () => void;
+  onCharacterComplete?: (characterData: any) => void;
 }
 
 /**
@@ -16,7 +17,7 @@ interface CharacterSetupPageProps {
  */
 const API_BASE_URL = "http://3.37.34.211:8889"; // WebRTC Manager와 동일한 서버 사용
 
-export const CharacterSetupPage = ({ onBack }: CharacterSetupPageProps) => {
+export const CharacterSetupPage = ({ onBack, onCharacterComplete }: CharacterSetupPageProps) => {
   // 모든 Hook을 컴포넌트 최상단에서 항상 같은 순서로 호출
   const { currentRoom, currentPlayer, handleLeaveRoom, refreshRoomState } = useRoom();
   const [characterData, setCharacterData] = useState<CharacterData | null>(null);
@@ -169,6 +170,12 @@ export const CharacterSetupPage = ({ onBack }: CharacterSetupPageProps) => {
       console.log('🔄 [CharacterSetupPage] 방 정보 새로고침 중...');
       await refreshRoomState();
       console.log('✅ [CharacterSetupPage] 방 정보 새로고침 완료');
+      
+      // 🔌 Socket.IO로 실시간 캐릭터 업데이트 전송
+      if (onCharacterComplete) {
+        console.log('🔌 [CharacterSetupPage] Socket으로 캐릭터 업데이트 전송');
+        onCharacterComplete(characterSetup);
+      }
       
       // 짧은 지연 후 RoomPage로 돌아가기
       setTimeout(() => {

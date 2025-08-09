@@ -81,7 +81,8 @@ python audio_highlight/generate_subtitle.py
 ## Development Notes
 
 ### Git Workflow
-- Main development branch: `develop` (not `dev`)
+- Main branch: `main` (production/stable)
+- Development branch: `develop` (integration branch)
 - Feature branches: `feature/(기능명)`
 - Commit convention: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`, `add:`
 

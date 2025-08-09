@@ -12,6 +12,7 @@ import NonSelectBottom from "../../../assets/gamecast/Room/nonselect_bottom.svg?
 import CharacterSample from "../../../assets/gamecast/Room/캐릭터 샘플.png";
 import { useCharacterAnimation } from "../../../hooks/useCharacterAnimation";
 import { renderCharacterLayers } from "../../../utils/characterRenderer";
+import { usePlayerCardStream } from "../../../hooks/usePlayerCardStream";
 
 interface PlayerCardProps {
   player: Player;
@@ -47,21 +48,16 @@ export const PlayerCard = ({
   const audioRef = useRef<HTMLAudioElement>(null);
   const [needsAudioActivation, setNeedsAudioActivation] = useState(false);
   
+  // 🎵 스트림 검색 전용 훅 사용
+  const { effectiveStream, streamFound, searchLog } = usePlayerCardStream(player, stream, isLocalPlayer);
+  
   const playerId = player.guestUserId || player.id;
   
   // ✨ 단순화된 캐릭터 데이터: PlayerGrid에서 계산된 데이터 사용
   const finalCharacterData = character;
   const playerHasCharacter = hasCharacter ?? (player.characterInfo?.isCustomized || false);
   
-  // ✨ 단순화된 디버깅 (개발 환경에서만)
-  if (import.meta.env.DEV && Math.random() < 0.01) {
-    console.log('✨ [PlayerCard] 단순화된 상태:', {
-      nickname: player.nickname,
-      isCustomized: player.characterInfo?.isCustomized,
-      hasCharacter: playerHasCharacter,
-      characterData: finalCharacterData ? 'present' : 'none'
-    });
-  }
+  // 디버깅 로그 제거 (콘솔 스팸 방지)
   
   // ✨ 단순화된 캐릭터 존재 여부: preparation status 우선, 그 다음 isCustomized 
   const finalPlayerHasCharacter = preparationStatus?.characterSetup ?? playerHasCharacter;
@@ -112,20 +108,20 @@ export const PlayerCard = ({
     loadingIconStyle
   } = useCharacterAnimation(finalPlayerHasCharacter, isReady);
 
-  // 원격 오디오 스트림 재생 처리
+  // 🎵 오디오 엘리먼트에 스트림 연결 처리
   useEffect(() => {
     const audioElement = audioRef.current;
     
-    if (audioElement && stream && !isLocalPlayer) {
-      console.log(`🔊 [PlayerCard] Setting up audio for ${player.nickname}:`, {
-        streamId: stream.id,
-        audioTracks: stream.getAudioTracks().length,
-        hasAudioElement: !!audioElement
+    if (audioElement && effectiveStream && !isLocalPlayer) {
+      console.log(`🎆 [PlayerCard] 스트림을 오디오 엘리먼트에 연결 for ${player.nickname}:`, {
+        streamId: effectiveStream.id,
+        audioTracks: effectiveStream.getAudioTracks().length,
+        streamFound
       });
       
       try {
         // 스트림을 오디오 엘리먼트에 연결 (최적화된 설정)
-        audioElement.srcObject = stream;
+        audioElement.srcObject = effectiveStream;
         audioElement.autoplay = true;
         audioElement.muted = false; // 음소거 해제
         
@@ -139,12 +135,30 @@ export const PlayerCard = ({
         }
         
         // 오디오 트랙 활성화 확인
-        const audioTracks = stream.getAudioTracks();
+        const audioTracks = effectiveStream.getAudioTracks();
         audioTracks.forEach(track => {
           if (!track.enabled) {
             console.warn(`⚠️ [PlayerCard] Audio track disabled for ${player.nickname}`);
           }
         });
+        
+        // 오디오 엘리먼트 상태 확인 (확률적 로깅으로 무한 루프 방지)
+        if (Math.random() < 0.1) {
+          console.log(`🎆 [PlayerCard] 오디오 엘리먼트 설정 완료 for ${player.nickname}:`, {
+            audioElementSrc: audioElement.srcObject?.id,
+            audioElementVolume: audioElement.volume,
+            audioElementMuted: audioElement.muted,
+            audioElementAutoplay: audioElement.autoplay,
+            audioElementPaused: audioElement.paused,
+            audioElementReadyState: audioElement.readyState,
+            streamTracks: effectiveStream.getTracks().map(track => ({
+              kind: track.kind,
+              enabled: track.enabled,
+              readyState: track.readyState,
+              muted: track.muted
+            }))
+          });
+        }
         
         // 강화된 오디오 재생 시도
         const attemptPlay = async () => {
@@ -153,14 +167,20 @@ export const PlayerCard = ({
             if (window.AudioContext) {
               const audioContext = new AudioContext();
               if (audioContext.state === 'suspended') {
-                console.log(`🔄 [PlayerCard] AudioContext suspended, attempting resume for ${player.nickname}`);
+                // console.log(`🔄 [PlayerCard] AudioContext suspended, attempting resume for ${player.nickname}`);
                 await audioContext.resume();
               }
               audioContext.close();
             }
             
             await audioElement.play();
-            console.log(`✅ [PlayerCard] Audio playing for ${player.nickname}`);
+            console.log(`✅ [PlayerCard] Audio playing successfully for ${player.nickname}:`, {
+              currentTime: audioElement.currentTime,
+              duration: audioElement.duration,
+              paused: audioElement.paused,
+              volume: audioElement.volume,
+              muted: audioElement.muted
+            });
           } catch (error) {
             console.warn(`⚠️ [PlayerCard] Auto-play failed for ${player.nickname}:`, error);
             
@@ -171,7 +191,7 @@ export const PlayerCard = ({
             const enableAudio = async () => {
               try {
                 await audioElement.play();
-                console.log(`✅ [PlayerCard] Audio enabled after user interaction for ${player.nickname}`);
+                // console.log(`✅ [PlayerCard] Audio enabled after user interaction for ${player.nickname}`);
                 
                 // UI 상태 업데이트
                 setNeedsAudioActivation(false);
@@ -187,7 +207,7 @@ export const PlayerCard = ({
                   if (otherAudio !== audioElement && otherAudio.paused && otherAudio.srcObject) {
                     try {
                       await otherAudio.play();
-                      console.log('✅ [PlayerCard] Other audio also enabled');
+                      // console.log('✅ [PlayerCard] Other audio also enabled');
                     } catch (err) {
                       console.warn('⚠️ [PlayerCard] Other audio still blocked');
                     }
@@ -204,21 +224,47 @@ export const PlayerCard = ({
             document.addEventListener('touchstart', enableAudio, { once: true });
             document.addEventListener('keydown', enableAudio, { once: true });
             
-            console.log(`👆 [PlayerCard] Waiting for user interaction to enable audio for ${player.nickname}`);
+            // console.log(`👆 [PlayerCard] Waiting for user interaction to enable audio for ${player.nickname}`);
           }
         };
         
         // 재생 시도
         attemptPlay();
         
-        console.log(`✅ [PlayerCard] Audio setup completed for ${player.nickname}`);
+        // ✨ 전역 디버깅 함수 등록
+        if (typeof window !== 'undefined') {
+          (window as any).testAudioFor = (nickname: string) => {
+            if (nickname === player.nickname) {
+              console.log(`🎆 [DEBUG] Testing audio for ${nickname}:`, {
+                hasAudioElement: !!audioElement,
+                hasStream: !!stream,
+                audioTracks: stream.getAudioTracks().length,
+                audioElement: {
+                  paused: audioElement.paused,
+                  muted: audioElement.muted,
+                  volume: audioElement.volume,
+                  srcObject: !!audioElement.srcObject
+                }
+              });
+              
+              if (audioElement && !audioElement.paused) {
+                console.log('🔊 [DEBUG] Audio should be playing!');
+              } else {
+                console.log('⚠️ [DEBUG] Audio is paused, attempting to play...');
+                audioElement.play().catch(e => console.error('Play failed:', e));
+              }
+            }
+          };
+        }
+        
+        // console.log(`✅ [PlayerCard] Audio setup completed for ${player.nickname}`);
       } catch (error) {
         console.error(`❌ [PlayerCard] Audio setup failed for ${player.nickname}:`, error);
       }
     } else if (audioElement && !stream) {
       // 스트림이 없으면 오디오 정리
       audioElement.srcObject = null;
-      console.log(`🧹 [PlayerCard] Audio cleaned up for ${player.nickname}`);
+      // console.log(`🧹 [PlayerCard] Audio cleaned up for ${player.nickname}`);
     }
     
     // 정리 함수
@@ -227,7 +273,7 @@ export const PlayerCard = ({
         audioElement.srcObject = null;
       }
     };
-  }, [stream, isLocalPlayer, player.nickname]);
+  }, [effectiveStream, isLocalPlayer, player.nickname]);
 
   return (
     <div className="w-[230px] h-[288px] flex flex-col items-center justify-between">
@@ -277,11 +323,11 @@ export const PlayerCard = ({
           </span>
           
           {/* 음성 표시기 */}
-          {(voiceChatConnected || stream) && (
+          {(voiceChatConnected || effectiveStream) && (
             <div className="ml-2">
               <VoiceIndicator
-                stream={stream}
-                isConnected={voiceChatConnected || !!stream}
+                stream={effectiveStream}
+                isConnected={voiceChatConnected || streamFound}
                 nickname={player.nickname}
                 size="small"
               />
@@ -379,10 +425,11 @@ export const PlayerCard = ({
       </div>
       
       {/* 원격 오디오 재생을 위한 숨겨진 audio 엘리먼트 */}
-      {!isLocalPlayer && stream && (
+      {/* 로그 제거 - 무한 루프 방지 */}
+      {!isLocalPlayer && (effectiveStream || import.meta.env.DEV) && (
         <audio 
           ref={audioRef}
-          style={{ display: 'none' }}
+          style={{ display: import.meta.env.DEV ? 'block' : 'none' }}
           autoPlay
           playsInline
           controls={import.meta.env.DEV} // 개발 모드에서는 컨트롤 표시
@@ -405,12 +452,12 @@ export const PlayerCard = ({
           fontWeight: 'bold',
           zIndex: 1000
         }}>
-          🎵 Audio: {stream ? '✅' : '❌'} | 🎮 Local: {isLocalPlayer ? '✅' : '❌'}
+          🎵 Stream: {effectiveStream ? '✅' : '❌'} | 🎮 Local: {isLocalPlayer ? '✅' : '❌'} | 🔍 Found: {streamFound ? '✅' : '❌'}
         </div>
       )}
 
       {/* 오디오 활성화 필요 알림 */}
-      {needsAudioActivation && !isLocalPlayer && (
+      {(needsAudioActivation || import.meta.env.DEV) && !isLocalPlayer && effectiveStream && (
         <div style={{
           position: 'absolute',
           top: '50%',
@@ -434,7 +481,7 @@ export const PlayerCard = ({
             try {
               await audioElement.play();
               setNeedsAudioActivation(false);
-              console.log(`✅ [PlayerCard] Audio activated by user click for ${player.nickname}`);
+              // console.log(`✅ [PlayerCard] Audio activated by user click for ${player.nickname}`);
             } catch (err) {
               console.error('Failed to activate audio:', err);
             }

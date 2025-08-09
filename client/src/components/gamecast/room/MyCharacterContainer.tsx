@@ -37,14 +37,7 @@ export const MyCharacterContainer: React.FC<MyCharacterContainerProps> = ({
   } : null;
   
   // ✨ 단순화된 디버깅 (개발 환경에서만)
-  if (import.meta.env.DEV) {
-    console.log('✨ [MyCharacterContainer] 단순화된 캐릭터 상태:', {
-      nickname: currentPlayer?.nickname,
-      isCustomized: currentPlayer?.characterInfo?.isCustomized,
-      hasCharacter,
-      characterData: characterData ? 'present' : 'none'
-    });
-  }
+  // 디버깅 로그 제거 (콘솔 스팸 방지)
 
   return (
     <div className="w-[579px] h-[499px] pl-[30px] justify-end items-center inline-flex relative">

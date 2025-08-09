@@ -164,22 +164,26 @@ export const PlayerGrid: React.FC<PlayerGridProps> = ({
           // 🎯 통합 Player 데이터에서 스트림 정보 우선 사용, 없으면 기존 remoteStreams에서 조회
           const unifiedStream = player.remoteStream;
           const fallbackStream = remoteStreams.get(player.guestUserId);
-          const playerStream = unifiedStream || fallbackStream;
+          const socketIdStream = remoteStreams.get(player.socketId);
+          const playerStream = unifiedStream || fallbackStream || socketIdStream;
           
-          if (import.meta.env.DEV && Math.random() < 0.1) {
-            console.log(`🔍 [PlayerGrid] 통합 스트림 조회 for ${player.nickname}:`, {
-              guestUserId: player.guestUserId,
-              hasUnifiedStream: !!unifiedStream,
-              hasFallbackStream: !!fallbackStream,
-              usingStream: unifiedStream ? 'unified' : fallbackStream ? 'fallback' : 'none',
-              streamId: playerStream?.id,
-              playerConnectionStatus: {
-                isConnected: player.isConnected,
-                hasWebRTCConnection: player.hasWebRTCConnection,
-                socketId: player.socketId
-              }
-            });
-          }
+          // ✨ 항상 디버깅 (Math.random 제거)
+          console.log(`🎆 [PlayerGrid] PlayerCard에 전달할 스트림 for ${player.nickname}:`, {
+            guestUserId: player.guestUserId,
+            socketId: player.socketId,
+            hasUnifiedStream: !!unifiedStream,
+            hasFallbackStream: !!fallbackStream,
+            hasSocketIdStream: !!socketIdStream,
+            usingStream: unifiedStream ? 'unified' : fallbackStream ? 'fallback' : socketIdStream ? 'socketId' : 'none',
+            streamId: playerStream?.id,
+            audioTracks: playerStream?.getAudioTracks().length,
+            remoteStreamsKeys: Array.from(remoteStreams.keys()),
+            willPassToPlayerCard: !!playerStream,
+            playerConnectionStatus: {
+              isConnected: player.isConnected,
+              hasWebRTCConnection: player.hasWebRTCConnection
+            }
+          });
           
           // 방장 여부 판단 로직 개선 (중복 방지)
           const isPlayerHost = player.role === 'host' || player.id === currentRoom.hostGuestId;
@@ -197,9 +201,9 @@ export const PlayerGrid: React.FC<PlayerGridProps> = ({
           } : null;
           
           // 🎯 해당 플레이어의 preparation status 조회
-          const playerPreparationStatus = playersReadyStatus.find(
-            ps => ps.playerId === (player.guestUserId || player.id)
-          );
+          const playerPreparationStatus = Array.isArray(playersReadyStatus) 
+            ? playersReadyStatus.find(ps => ps.playerId === (player.guestUserId || player.id))
+            : null;
           
                   // Preparation status 매칭 로그 제거 (무한 로그 방지)
           

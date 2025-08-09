@@ -1,5 +1,6 @@
 import { Routes, Route, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
+import { SimpleGamecastProvider } from './contexts/SimpleContext'
 import { MainPage } from './pages/gamecast/main/MainPage'
 import { ParticipatePage } from './pages/gamecast/participate/ParticipatePage'
 import { CreatePage } from './pages/gamecast/create/CreatePage'
@@ -17,23 +18,25 @@ function App() {
   const location = useLocation();
   
   return (
-    <div className="h-full w-full bg-black">
-      <AnimatePresence mode="wait">
-        <Routes location={location} key={location.pathname}>
-          <Route path="/" element={<MainPage />} />
-          <Route path="/participate" element={<ParticipatePage />} />
-          <Route path="/create" element={<CreatePage />} />
-          <Route path="/room" element={<RoomPage />} />
-          <Route path="/source-extraction" element={<SourceExtractionPage />} />
-          <Route path="/source-selection" element={<SourceSelectionPage />} />
-          <Route path="/subtitle-generation" element={<SubtitleGenerationPage />} />
-          <Route path="/subtitle-edit" element={<SubtitleEditPage />} />
-          <Route path="/rendering" element={<RenderingPage />} />
-          <Route path="/host-evaluation" element={<HostEvaluationPage />} />
-          <Route path="/guest-evaluation" element={<GuestEvaluationPage />} />
-        </Routes>
-      </AnimatePresence>
-    </div>
+    <SimpleGamecastProvider>
+      <div className="h-full w-full bg-black">
+        <AnimatePresence mode="wait">
+          <Routes location={location} key={location.pathname}>
+            <Route path="/" element={<MainPage />} />
+            <Route path="/participate" element={<ParticipatePage />} />
+            <Route path="/create" element={<CreatePage />} />
+            <Route path="/room" element={<RoomPage />} />
+            <Route path="/source-extraction" element={<SourceExtractionPage />} />
+            <Route path="/source-selection" element={<SourceSelectionPage />} />
+            <Route path="/subtitle-generation" element={<SubtitleGenerationPage />} />
+            <Route path="/subtitle-edit" element={<SubtitleEditPage />} />
+            <Route path="/rendering" element={<RenderingPage />} />
+            <Route path="/host-evaluation" element={<HostEvaluationPage />} />
+            <Route path="/guest-evaluation" element={<GuestEvaluationPage />} />
+          </Routes>
+        </AnimatePresence>
+      </div>
+    </SimpleGamecastProvider>
   )
 }
 //
