@@ -88,25 +88,16 @@ export const PlayerGrid: React.FC<PlayerGridProps> = ({
     
     // 1. 🔧 강화된 플레이어 필터링 (ID 안전성 보장)
     let filtered = convertedParticipants.filter((p) => {
-      // 🔧 다중 ID 비교로 안전성 확보
-      const isSameById = p.id && currentPlayer.id && p.id === currentPlayer.id;
-      const isSameByGuestUserId = p.guestUserId && currentPlayer.guestUserId && p.guestUserId === currentPlayer.guestUserId;
-      const isSameByNickname = p.nickname === currentPlayer.nickname; // 추가 안전장치
-      
-      const isCurrentPlayer = isSameById || isSameByGuestUserId || isSameByNickname;
+      // 🎯 guestUserId만 사용하여 현재 플레이어 식별 (통합 정책)
+      const isCurrentPlayer = p.guestUserId === currentPlayer.guestUserId;
       const isNotWebRTCConnection = !p.nickname?.startsWith('WEBRTC_');
       
       const shouldInclude = !isCurrentPlayer && isNotWebRTCConnection;
       
       console.log(`🔍 [PlayerGrid] 참여자 필터링:`, {
         participant: p.nickname,
-        participantId: p.id,
         participantGuestUserId: p.guestUserId,
-        currentPlayerId: currentPlayer.id,
         currentPlayerGuestUserId: currentPlayer.guestUserId,
-        isSameById,
-        isSameByGuestUserId,
-        isSameByNickname,
         isCurrentPlayer,
         isNotWebRTCConnection,
         shouldInclude,

@@ -29,8 +29,8 @@ export const useUnifiedRoom = () => {
    */
   const transformServerPlayerData = useCallback((serverPlayer: any): Player => {
     return {
-      // 기본 정보
-      id: serverPlayer.id || serverPlayer.guestUserId,
+      // 🎯 guestUserId 중심 정보 (통합 정책)
+      id: serverPlayer.guestUserId, // guestUserId를 기본 id로 통일
       guestUserId: serverPlayer.guestUserId,
       nickname: serverPlayer.nickname || serverPlayer.guestUser?.nickname,
       role: serverPlayer.role || (serverPlayer.isHost ? 'host' : 'participant'),
@@ -148,10 +148,8 @@ export const useUnifiedRoom = () => {
           });
         }
 
-        // 현재 플레이어 정보 업데이트
-        const serverPlayer = result.room.participants?.find(p => 
-          p.guestUserId === userId || p.id === userId
-        );
+        // 🎯 guestUserId를 주 식별자로 사용 (통합 정책)
+        const serverPlayer = result.room.participants?.find(p => p.guestUserId === userId);
         if (serverPlayer) {
           const unifiedCurrentPlayer = transformServerPlayerData(serverPlayer);
           setCurrentPlayer(unifiedCurrentPlayer);

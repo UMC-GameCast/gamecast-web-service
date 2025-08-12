@@ -1,6 +1,6 @@
 import { Routes, Route, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
-import { SimpleGamecastProvider } from './contexts/SimpleContext'
+import { UnifiedGamecastProvider } from './contexts/UnifiedGamecastContext'
 import { MainPage } from './pages/gamecast/main/MainPage'
 import { ParticipatePage } from './pages/gamecast/participate/ParticipatePage'
 import { CreatePage } from './pages/gamecast/create/CreatePage'
@@ -18,7 +18,7 @@ function App() {
   const location = useLocation();
   
   return (
-    <SimpleGamecastProvider>
+    <UnifiedGamecastProvider>
       <div className="h-full w-full bg-black">
         <AnimatePresence mode="wait">
           <Routes location={location} key={location.pathname}>
@@ -36,7 +36,7 @@ function App() {
           </Routes>
         </AnimatePresence>
       </div>
-    </SimpleGamecastProvider>
+    </UnifiedGamecastProvider>
   )
 }
 //

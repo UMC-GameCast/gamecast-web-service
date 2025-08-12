@@ -35,36 +35,26 @@ export const useRoom = () => {
             participantsLength: result.room.participants?.length || 0
           });
           
-          // 서버 데이터 우선 사용 (ID 매칭 개선)
-          // guestUserId 우선 매칭 (서버 응답 구조에 맞춘 수정)
-          let serverPlayer = result.room.participants?.find(p => p.guestUserId === userId);
-          if (!serverPlayer) {
-            serverPlayer = result.room.participants?.find(p => p.id === userId);
-          }
+          // 🎯 guestUserId를 주 식별자로 사용 (통합 정책)
+          const serverPlayer = result.room.participants?.find(p => p.guestUserId === userId);
           
-          // 🔍 디버깅: ID 매칭 상황 확인
-          console.log('🔍 [useRoom] ID 매칭 상황:', {
+          // 🔍 디버깅: guestUserId 매칭 상황 확인
+          console.log('🔍 [useRoom] guestUserId 매칭 상황:', {
             userId,
-            participantIds: result.room.participants?.map(p => ({ 
-              id: p.id, 
+            participantGuestUserIds: result.room.participants?.map(p => ({ 
               guestUserId: p.guestUserId, 
               nickname: p.nickname,
               hasCharacterInfo: !!p.characterInfo,
               characterInfoCustomized: p.characterInfo?.isCustomized
             })),
-            foundServerPlayer: !!serverPlayer,
-            matchedById: result.room.participants?.some(p => p.id === userId),
-            matchedByGuestUserId: result.room.participants?.some(p => p.guestUserId === userId)
+            foundServerPlayer: !!serverPlayer
           });
           
-          // 🔧 매칭 실패시 첫 번째 참가자를 사용 (임시 해결책)
-          if (!serverPlayer && result.room.participants && result.room.participants.length > 0) {
-            serverPlayer = result.room.participants[0];
-            console.log('⚠️ [useRoom] ID 매칭 실패, 첫 번째 참가자 사용:', {
-              originalUserId: userId,
-              selectedPlayer: serverPlayer,
-              selectedPlayerId: serverPlayer.id || serverPlayer.guestUserId,
-              hasCharacterInfo: !!serverPlayer.characterInfo
+          // 🚨 guestUserId 매칭 실패 시 에러 처리 (더 이상 fallback 없음)
+          if (!serverPlayer) {
+            console.error('❌ [useRoom] guestUserId 매칭 실패:', {
+              userId,
+              participantIds: result.room.participants?.map(p => p.guestUserId)
             });
           }
           
@@ -90,8 +80,8 @@ export const useRoom = () => {
             
             const playerInfo: Player = {
               ...serverPlayer,
-              id: serverPlayer.id || serverPlayer.guestUserId, // 🔧 ID 필드 보장
-              guestUserId: serverPlayer.guestUserId || serverPlayer.id,
+              id: serverPlayer.guestUserId, // 🎯 guestUserId를 기본 id로 통일
+              guestUserId: serverPlayer.guestUserId,
               preparationStatus: serverPlayer.preparationStatus || {
                 characterSetup: false,
                 screenSetup: false
@@ -170,18 +160,13 @@ export const useRoom = () => {
           // 🔧 participants를 전역 window에 저장 (WebRTC 매핑용)
           (window as any).gamecastCurrentParticipants = result.room.participants || [];
           
-          // 서버 데이터 우선 사용 (ID 매칭 개선)
-          // guestUserId 우선 매칭 (refreshRoomState와 동일한 로직)
-          let serverPlayer = result.room.participants?.find(p => p.guestUserId === userId);
-          if (!serverPlayer) {
-            serverPlayer = result.room.participants?.find(p => p.id === userId);
-          }
+          // 🎯 guestUserId를 주 식별자로 사용 (통합 정책)
+          const serverPlayer = result.room.participants?.find(p => p.guestUserId === userId);
           
-          // 🔍 디버깅: 초기 로드 ID 매칭 상황 확인
-          console.log('🔍 [useRoom] 초기 로드 ID 매칭 상황:', {
+          // 🔍 디버깅: 초기 로드 guestUserId 매칭 상황 확인
+          console.log('🔍 [useRoom] 초기 로드 guestUserId 매칭 상황:', {
             userId,
-            participantIds: result.room.participants?.map(p => ({ 
-              id: p.id, 
+            participantGuestUserIds: result.room.participants?.map(p => ({ 
               guestUserId: p.guestUserId, 
               nickname: p.nickname,
               hasCharacterInfo: !!p.characterInfo,
@@ -194,8 +179,8 @@ export const useRoom = () => {
           if (serverPlayer) {
             const playerInfo: Player = {
               ...serverPlayer,
-              id: serverPlayer.id || serverPlayer.guestUserId, // 🔧 ID 필드 보장
-              guestUserId: serverPlayer.guestUserId || serverPlayer.id,
+              id: serverPlayer.guestUserId, // 🎯 guestUserId를 기본 id로 통일
+              guestUserId: serverPlayer.guestUserId,
               preparationStatus: serverPlayer.preparationStatus || {
                 characterSetup: false,
                 screenSetup: false
@@ -215,9 +200,9 @@ export const useRoom = () => {
               isCustomized: playerInfo.characterInfo?.isCustomized
             });
           } else {
-            // 폴백: 로컬 정보 생성 (서버 데이터 우선, 없을 때만 사용)
+            // 🚨 guestUserId 매칭 실패 시 로컬 정보 생성 (임시)
             const fallbackPlayer: Player = {
-              id: userId, // 🔧 ID 필드 명시적 설정
+              id: userId, // guestUserId와 동일하게 설정
               guestUserId: userId,
               nickname: room.hostGuestId === userId ? "Nickname1" : "Nickname2", // 역할에 따른 기본 닉네임
               role: room.hostGuestId === userId ? 'host' : 'participant',

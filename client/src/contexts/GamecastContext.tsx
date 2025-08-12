@@ -1,5 +1,8 @@
-import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, ReactNode, useCallback } from 'react';
+import { io, Socket } from 'socket.io-client';
 import { Room, Player, CharacterData } from '../types/game';
+import { WebRTCManager } from '../utils/webRTCManager';
+import { SOCKET_URL } from '../config/server.config';
 import { 
   getCurrentRoom, 
   getCurrentUserId, 
@@ -7,25 +10,45 @@ import {
   leaveRoom as leaveRoomUtil 
 } from '../utils/roomManager';
 
-// 간소화된 전역 상태 인터페이스
+// 통합 전역 상태 인터페이스
 interface GamecastState {
-  // 방 관련
+  // 방 관련 (단일 소스)
   currentRoom: Room | null;
   currentPlayer: Player | null;
-  participants: Player[];
+  participants: Player[]; // Socket.IO + WebRTC 통합 관리
   
   // 로딩 및 에러
   loading: boolean;
   error: string | null;
   
-  // 캐릭터 관련
-  characterData: CharacterData | null;
-  showCharacterSetup: boolean;
-  characterSetupComplete: boolean;
-  screenSetupComplete: boolean;
+  // 준비 상태 (preparationStatus 기반 통합)
+  preparation: {
+    characterSetup: boolean;
+    screenSetup: boolean;
+    isReady: boolean;
+  };
+  
+  // 실시간 연결 상태 통합
+  realtime: {
+    socket: Socket | null;
+    webrtc: WebRTCManager | null;
+    voiceConnected: boolean;
+    localStream: MediaStream | null;
+    remoteStreams: Map<string, MediaStream>;
+    isLocalMuted: boolean;
+  };
+  
+  // 녹화 상태
+  recording: {
+    isRecording: boolean;
+    recordingTime: number;
+  };
   
   // UI 상태
-  showMicGuide: boolean;
+  ui: {
+    showCharacterSetup: boolean;
+    showMicGuide: boolean;
+  };
 }
 
 // 액션 타입

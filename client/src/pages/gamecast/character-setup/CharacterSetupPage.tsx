@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { Navigation } from "../../../components/gamecast/common/Navigation";
 import { Footer } from "../../../components/gamecast/common/Footer";
 import { BackButton1 } from "../../../components/gamecast/common/BackButton1";
-import { useRoom } from "../../../hooks/useRoom.ts";
+import { useUnifiedRoom } from "../../../contexts/UnifiedGamecastContext";
 import { CharacterCustomizer } from "../../../components/gamecast/character/CharacterCustomizer";
 import type { CharacterData } from "../../../types/room";
 
@@ -18,8 +18,8 @@ interface CharacterSetupPageProps {
 const API_BASE_URL = "http://3.37.34.211:8889"; // WebRTC Manager와 동일한 서버 사용
 
 export const CharacterSetupPage = ({ onBack, onCharacterComplete }: CharacterSetupPageProps) => {
-  // 모든 Hook을 컴포넌트 최상단에서 항상 같은 순서로 호출
-  const { currentRoom, currentPlayer, handleLeaveRoom, refreshRoomState } = useRoom();
+  // 통합 Context 사용
+  const { currentRoom, currentPlayer, handleLeaveRoom, refreshRoomState } = useUnifiedRoom();
   const [characterData, setCharacterData] = useState<CharacterData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 

@@ -12,15 +12,14 @@ import { PlayerGrid } from "../../../components/gamecast/room/PlayerGrid.tsx";
 import { MicrophonePermissionGuide } from "../../../components/gamecast/common/MicrophonePermissionGuide";
 import { MicrophoneStatusIndicator } from "../../../components/gamecast/common/MicrophoneStatusIndicator";
 import { CharacterSetupPage } from "../character-setup/CharacterSetupPage";
-import { useRoom } from "../../../hooks/useRoom.ts";
-import { useVoiceChat } from "../../../hooks/useVoiceChat.ts";
-import { useGameRecording } from "../../../hooks/useGameRecording.ts";
-import { useRoomSocket } from "../../../hooks/useRoomSocket.ts";
-import { useRoomRecording } from "../../../hooks/useRoomRecording.ts";
 import { 
-  useGamecastCharacter, 
-  useGamecastUI 
-} from "../../../contexts/SimpleContext";
+  useUnifiedGamecast,
+  useUnifiedRoom,
+  useUnifiedVoiceChat,
+  useUnifiedPreparation,
+  useUnifiedUI,
+  useUnifiedRecording
+} from "../../../contexts/UnifiedGamecastContext";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 
@@ -64,157 +63,64 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 export const RoomPage = () => {
   const navigate = useNavigate();
   
-  // 🎭 실시간 상태 관리
-  const [realtimeParticipants, setRealtimeParticipants] = useState<any[]>([]);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
-  
-  // 기존 Hook 사용 (안정적인 상태 관리)
+  // 🎯 통합 Context 사용
+  const { state, actions } = useUnifiedGamecast();
   const { 
     currentRoom, 
     currentPlayer, 
+    participants,
     loading, 
     error, 
     refreshRoomState, 
     handleLeaveRoom 
-  } = useRoom();
+  } = useUnifiedRoom();
 
-  // 음성채팅 및 실시간 업데이트 기능
   const {
     localStream,
     remoteStreams,
-    joinError,
-    microphoneError,
-    voiceChatState,
-    toggleLocalAudio,
+    voiceChatConnected,
     isLocalMuted,
-    getConnectedPeersCount,
-    setOnRealtimeParticipantsUpdate,
-    hasWebRTCManager,
-    hasGlobalManager
-  } = useVoiceChat(
-    currentRoom?.roomCode || null,
-    currentPlayer?.nickname || '',
-    true,
-    refreshRoomState
-  );
+    toggleLocalAudio,
+    initializeWebRTC
+  } = useUnifiedVoiceChat();
 
-  // 준비 상태 관리
-  const { playersReadyStatus } = useGameRecording(currentRoom, currentPlayer);
+  const {
+    characterSetupComplete,
+    screenSetupComplete,
+    isReady,
+    updatePreparation
+  } = useUnifiedPreparation();
   
-  // Context를 통한 UI 상태 관리
   const {
     showCharacterSetup,
-    characterSetupComplete,
-    setShowCharacterSetup,
-    setCharacterSetupComplete
-  } = useGamecastCharacter();
-  
-  const {
     showMicGuide,
-    screenSetupComplete,
-    setShowMicGuide,
-    setScreenSetupComplete
-  } = useGamecastUI();
+    setUIState
+  } = useUnifiedUI();
+
+  const {
+    isRecording,
+    recordingTime,
+    startRecording,
+    stopRecording
+  } = useUnifiedRecording();
 
   // 캐릭터 설정 상태 확인
   const hasCharacterSetup = currentPlayer?.characterInfo?.isCustomized || false;
 
-  // 🔌 Socket.IO 실시간 통신
-  const {
-    socket,
-    updateCharacter,
-    updatePreparation,
-    startRecording,
-    stopRecording
-  } = useRoomSocket({
-    roomCode: currentRoom?.roomCode || '',
-    currentPlayer,
-    onParticipantsUpdate: (participants) => {
-      console.log('👥 [RoomPage] 실시간 참여자 업데이트:', participants);
-      setRealtimeParticipants(participants);
-    },
-    onCharacterUpdate: (guestUserId, characterData) => {
-      console.log('🎨 [RoomPage] 캐릭터 업데이트 수신:', { guestUserId, characterData });
-      // 실시간 참여자 목록의 캐릭터 정보 업데이트
-      setRealtimeParticipants(prev => 
-        prev.map(p => 
-          p.guestUserId === guestUserId 
-            ? { ...p, characterInfo: characterData }
-            : p
-        )
-      );
-    },
-    onPreparationUpdate: (guestUserId, preparationStatus) => {
-      console.log('✅ [RoomPage] 준비 상태 업데이트 수신:', { guestUserId, preparationStatus });
-      // 준비 상태 업데이트
-      setRealtimeParticipants(prev => 
-        prev.map(p => 
-          p.guestUserId === guestUserId 
-            ? { ...p, preparationStatus }
-            : p
-        )
-      );
-    },
-    onRecordingStart: async () => {
-      console.log('🎬 [RoomPage] Socket에서 녹화 시작 신호 수신 - 실제 녹화 시작');
-      try {
-        await startRoomRecording();
-        console.log('✅ [RoomPage] 녹화 시작 완료');
-      } catch (error) {
-        console.error('❌ [RoomPage] 녹화 시작 실패:', error);
-      }
-    },
-    onRecordingStop: async () => {
-      console.log('⏹️ [RoomPage] Socket에서 녹화 종료 신호 수신 - 실제 녹화 종료');
-      try {
-        await stopRoomRecording();
-        console.log('✅ [RoomPage] 녹화 종료 완료');
-      } catch (error) {
-        console.error('❌ [RoomPage] 녹화 종료 실패:', error);
-      }
-    }
-  });
-
-  // 🎬 녹화 관리 훅
-  const {
-    selectScreen,
-    startRecording: startRoomRecording,
-    stopRecording: stopRoomRecording,
-    getRecordingState,
-    cleanup: cleanupRecording
-  } = useRoomRecording({
-    currentRoom,
-    currentPlayer,
-    isRecording,
-    onRecordingStateChange: setIsRecording
-  });
-
-  // 초기 참여자 목록 설정 (currentRoom이 변경될 때)
+  // 🚀 실시간 연결 초기화
   useEffect(() => {
-    if (currentRoom?.participants) {
-      setRealtimeParticipants(currentRoom.participants);
+    if (currentRoom && currentPlayer && !state.realtime.socket) {
+      console.log('🔌 Socket 초기화:', currentRoom.roomCode);
+      actions.initializeSocket(currentRoom.roomCode, currentPlayer);
     }
-  }, [currentRoom?.participants]);
+  }, [currentRoom, currentPlayer, state.realtime.socket]);
 
-  // 녹화 시간 카운터
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isRecording) {
-      interval = setInterval(() => {
-        setRecordingTime(prev => prev + 1);
-      }, 1000);
+    if (currentRoom && currentPlayer && !state.realtime.webrtc && localStream === null) {
+      console.log('🎤 WebRTC 초기화:', currentPlayer.nickname);
+      initializeWebRTC(currentRoom.roomCode, currentPlayer.nickname || 'Unknown');
     }
-    return () => clearInterval(interval);
-  }, [isRecording]);
-
-  // 컴포넌트 언마운트 시 정리 작업
-  useEffect(() => {
-    return () => {
-      console.log('🧹 [RoomPage] 컴포넌트 언마운트 - 녹화 정리');
-      cleanupRecording();
-    };
-  }, [cleanupRecording]);
+  }, [currentRoom, currentPlayer, state.realtime.webrtc, localStream]);
 
   // 준비하기 버튼 활성화 조건
   const isReadyEnabled = characterSetupComplete && screenSetupComplete;
@@ -256,21 +162,22 @@ export const RoomPage = () => {
     );
   }
 
-  console.log('🎮 [RoomPage] 하이브리드 렌더링:', {
+  console.log('🎮 [RoomPage] 통합 Context 렌더링:', {
     loading,
     error,
-    joinError,
     currentRoom: !!currentRoom,
     currentPlayer: !!currentPlayer,
     showCharacterSetup,
     roomCode: currentRoom?.roomCode,
     playerNickname: currentPlayer?.nickname,
-    participantsCount: realtimeParticipants.length,
-    voiceChatConnected: voiceChatState.isConnected,
+    participantsCount: participants.length,
+    voiceChatConnected,
     isReadyEnabled,
     characterSetupComplete,
     screenSetupComplete,
-    hasCharacterSetup
+    hasCharacterSetup,
+    socketConnected: !!state.realtime.socket,
+    webrtcInitialized: !!state.realtime.webrtc
   });
 
   return (
@@ -292,11 +199,12 @@ export const RoomPage = () => {
             }
           >
             <CharacterSetupPage 
-              onBack={() => setShowCharacterSetup(false)}
+              onBack={() => setUIState({ showCharacterSetup: false })}
               onCharacterComplete={(characterData) => {
                 console.log('🎨 [RoomPage] 캐릭터 설정 완료, Socket으로 전송:', characterData);
-                updateCharacter(characterData);
-                setShowCharacterSetup(false);
+                actions.updateCharacter(characterData);
+                updatePreparation({ characterSetup: true });
+                setUIState({ showCharacterSetup: false });
               }}
             />
           </ErrorBoundary>
@@ -350,20 +258,20 @@ export const RoomPage = () => {
               lineHeight: '1.4'
             }}>
               <div style={{color: '#ffffff', marginBottom: '4px'}}>🎤 마이크: {localStream ? '✅ 연결됨' : '❌ 연결안됨'}</div>
-              <div style={{color: '#ffffff', marginBottom: '4px'}}>🔗 WebRTC: {voiceChatState.isConnected ? '✅ 연결됨' : '❌ 연결안됨'}</div>
+              <div style={{color: '#ffffff', marginBottom: '4px'}}>🔗 WebRTC: {voiceChatConnected ? '✅ 연결됨' : '❌ 연결안됨'}</div>
               <div style={{color: '#ffffff', marginBottom: '4px'}}>🔊 음소거: {isLocalMuted ? '🔇 켜짐' : '🔊 꺼짐'}</div>
-              {microphoneError && <div style={{color: '#ef4444', fontWeight: 'bold'}}>❌ 마이크 에러: {microphoneError}</div>}
-              {joinError && <div style={{color: '#f97316', fontWeight: 'bold'}}>⚠️ 방 에러: {joinError}</div>}
+              <div style={{color: '#ffffff', marginBottom: '4px'}}>🔌 Socket: {state.realtime.socket ? '✅ 연결됨' : '❌ 연결안됨'}</div>
+              {error && <div style={{color: '#ef4444', fontWeight: 'bold'}}>❌ 에러: {error}</div>}
             </div>
 
             {/* 기존 마이크 상태 표시 */}
             <div className="fixed left-4 top-32 z-[9999]">
               <MicrophoneStatusIndicator
-                hasPermission={!microphoneError && !!localStream}
-                isConnected={voiceChatState.isConnected}
+                hasPermission={!!localStream}
+                isConnected={voiceChatConnected}
                 isLocalMuted={isLocalMuted}
-                error={microphoneError}
-                onRequestPermission={() => setShowMicGuide(true)}
+                error={error && error.includes('마이크') ? error : null}
+                onRequestPermission={() => setUIState({ showMicGuide: true })}
               />
             </div>
 
@@ -390,7 +298,7 @@ export const RoomPage = () => {
                   fontWeight: 'bold',
                   border: '1px solid #ffffff'
                 }}>
-                  연결: {getConnectedPeersCount()}명
+                  연결: {remoteStreams.size}명
                 </div>
               </div>
             )}
@@ -416,25 +324,25 @@ export const RoomPage = () => {
                 <div style={{color: '#ffffff', marginBottom: '8px', fontSize: '13px', fontWeight: 'bold'}}>🔧 WebRTC 상태</div>
                 
                 <div style={{marginBottom: '6px'}}>
-                  <div style={{color: '#ffffff'}}>연결상태: {voiceChatState.isConnected ? '✅' : '❌'}</div>
-                  <div style={{color: '#ffffff'}}>연결중: {voiceChatState.isConnecting ? '🔄' : '⏹️'}</div>
+                  <div style={{color: '#ffffff'}}>연결상태: {voiceChatConnected ? '✅' : '❌'}</div>
+                  <div style={{color: '#ffffff'}}>Socket: {state.realtime.socket ? '✅' : '❌'}</div>
                 </div>
                 
                 <div style={{marginBottom: '6px'}}>
                   <div style={{color: '#ffffff'}}>원격스트림: {remoteStreams.size}개</div>
-                  <div style={{color: '#ffffff'}}>실제연결: {getConnectedPeersCount()}명</div>
+                  <div style={{color: '#ffffff'}}>실제연결: {remoteStreams.size}명</div>
                 </div>
                 
                 <div style={{marginBottom: '6px'}}>
-                  <div style={{color: '#ffffff'}}>방 참여자: {realtimeParticipants.length}명</div>
-                  <div style={{color: '#ffffff'}}>내가 제외: {realtimeParticipants.length > 0 ? realtimeParticipants.length - 1 : 0}명</div>
+                  <div style={{color: '#ffffff'}}>방 참여자: {participants.length}명</div>
+                  <div style={{color: '#ffffff'}}>내가 제외: {participants.length > 0 ? participants.length - 1 : 0}명</div>
                 </div>
 
                 {remoteStreams.size > 0 && (
                   <div style={{marginTop: '6px', paddingTop: '6px', borderTop: '1px solid #ffffff'}}>
                     <div style={{color: '#10b981', marginBottom: '4px'}}>🎵 스트림 목록:</div>
                     {Array.from(remoteStreams.entries()).map(([streamKey, stream]) => {
-                      const participant = realtimeParticipants.find(p => p.guestUserId === streamKey);
+                      const participant = participants.find(p => p.guestUserId === streamKey);
                       return (
                         <div key={streamKey} style={{color: '#10b981', fontSize: '10px'}}>
                           • {participant?.nickname || streamKey.slice(-8)}: {stream.getAudioTracks().length}트랙
@@ -467,7 +375,7 @@ export const RoomPage = () => {
                   currentPlayer={currentPlayer}
                   localStream={localStream}
                   isLocalMuted={isLocalMuted}
-                  voiceChatConnected={voiceChatState.isConnected}
+                  voiceChatConnected={voiceChatConnected}
                 />
                 
                 {/* Context 기반 캐릭터 상태 디버깅 패널 */}
@@ -542,10 +450,10 @@ export const RoomPage = () => {
                 <PlayerGrid 
                   currentRoom={currentRoom} 
                   currentPlayer={currentPlayer}
-                  realtimeParticipants={realtimeParticipants}
+                  realtimeParticipants={participants}
                   remoteStreams={remoteStreams}
-                  voiceChatConnected={voiceChatState.isConnected}
-                  playersReadyStatus={playersReadyStatus || []}
+                  voiceChatConnected={voiceChatConnected}
+                  playersReadyStatus={[]}
                 />
                 
                 {/* 버튼 컨테이너 */}
@@ -556,37 +464,17 @@ export const RoomPage = () => {
                   currentPlayer={currentPlayer}
                   characterSetupComplete={characterSetupComplete}
                   screenSetupComplete={screenSetupComplete}
-                  setCharacterSetup={setCharacterSetupComplete}
-                  setScreenSetup={async (completed) => {
-                    if (completed) {
-                      // 화면 설정 완료 요청 시 실제 화면 선택 실행
-                      console.log('🖥️ [RoomPage] 화면 설정 시작');
-                      const success = await selectScreen();
-                      if (success) {
-                        setScreenSetupComplete(true);
-                        console.log('✅ [RoomPage] 화면 설정 완료');
-                        // Socket으로 화면 설정 완료 상태 전송
-                        updatePreparation({
-                          characterReady: characterSetupComplete,
-                          screenReady: true,
-                          finalReady: false // 아직 최종 준비는 아님
-                        });
-                      }
-                    } else {
-                      setScreenSetupComplete(false);
-                    }
+                  setCharacterSetup={(completed) => updatePreparation({ characterSetup: completed })}
+                  setScreenSetup={(completed) => {
+                    console.log('🖥️ [RoomPage] 화면 설정:', completed);
+                    updatePreparation({ screenSetup: completed });
                   }}
-                  onCharacterSetupClick={() => setShowCharacterSetup(true)}
-                  // 🔌 Socket 기반 준비/녹화 관리
-                  onReadyToggle={(isReady) => {
-                    console.log('✅ [RoomPage] 준비 상태 변경:', isReady);
-                    updatePreparation({
-                      characterReady: characterSetupComplete,
-                      screenReady: screenSetupComplete,
-                      finalReady: isReady
-                    });
+                  onCharacterSetupClick={() => setUIState({ showCharacterSetup: true })}
+                  onReadyToggle={(ready) => {
+                    console.log('✅ [RoomPage] 준비 상태 변경:', ready);
+                    updatePreparation({ isReady: ready });
                   }}
-                  allPlayersReady={realtimeParticipants.every(p => p.preparationStatus?.finalReady)}
+                  allPlayersReady={participants.every(p => p.preparationStatus?.isReady)}
                   isRecording={isRecording}
                   recordingTime={recordingTime}
                   onRecordingStart={startRecording}
@@ -600,9 +488,10 @@ export const RoomPage = () => {
                     <div>캐릭터 설정: {characterSetupComplete ? '✅ 완료' : '❌ 미완료'}</div>
                     <div>화면 설정: {screenSetupComplete ? '✅ 완료' : '❌ 미완료'}</div>
                     <div>준비 버튼: {isReadyEnabled ? '✅ 활성화' : '❌ 비활성화'}</div>
-                    <div>WebRTC 연결: {voiceChatState.isConnected ? '✅ 연결됨' : '❌ 연결안됨'}</div>
+                    <div>WebRTC 연결: {voiceChatConnected ? '✅ 연결됨' : '❌ 연결안됨'}</div>
+                    <div>Socket 연결: {state.realtime.socket ? '✅ 연결됨' : '❌ 연결안됨'}</div>
                     <div className="mt-2 text-xs text-gray-400">
-                      기존 Hook + Context 하이브리드 관리
+                      통합 Context 기반 관리
                     </div>
                   </div>
                 </div>
@@ -617,21 +506,21 @@ export const RoomPage = () => {
 
       {/* 마이크 권한 가이드 모달 */}
       <MicrophonePermissionGuide
-        error={microphoneError}
-        isVisible={showMicGuide && !!microphoneError}
+        error={error && error.includes('마이크') ? error : null}
+        isVisible={showMicGuide && !!error}
         onRetry={() => {
           console.log('🔄 Retrying microphone access...');
           window.location.reload();
         }}
-        onClose={() => setShowMicGuide(false)}
+        onClose={() => setUIState({ showMicGuide: false })}
       />
 
-      {/* 방 입장 에러 표시 */}
-      {joinError && (
+      {/* 에러 표시 */}
+      {error && (
         <div className="fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-md shadow-lg z-50">
           <div className="flex items-center space-x-2">
             <span>⚠️</span>
-            <span className="text-sm">{joinError}</span>
+            <span className="text-sm">{error}</span>
             <button 
               onClick={() => window.location.reload()}
               className="ml-2 text-xs underline hover:no-underline"
