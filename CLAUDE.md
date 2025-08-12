@@ -44,6 +44,9 @@ npm run preview      # Preview production build
 pip install -r requirements.txt
 pip install -r audio_highlight/requirements.txt
 
+# Run main video processing script (highlight generation)
+python main.py
+
 # Run main processing API
 python backend-processing/main_api.py
 
@@ -100,8 +103,10 @@ python audio_highlight/generate_subtitle.py
 ### Development Setup
 **프론트엔드 개발 환경만 설정:**
 1. ~~Start backend realtime server~~ (별도 환경에서 실행 중)
-2. Start frontend dev server: `cd client && npm run dev`
+2. Start frontend dev server: `cd client && npm run dev` (runs on port 3000)
 3. ~~For audio processing~~ (별도 환경에서 실행 중)
+
+**Note**: Frontend dev server supports ngrok tunneling with allowed hosts configured in vite.config.ts
 
 The application focuses on real-time voice communication for gaming sessions with automatic highlight generation through audio analysis.
 
@@ -112,6 +117,12 @@ The application focuses on real-time voice communication for gaming sessions wit
 - **프론트엔드만 개발**: `client/` 폴더 내의 React/TypeScript 코드만 수정
 - **서버 에러**: 백엔드에서 발생하는 에러(인원 초과 등)는 프론트엔드에서 적절히 처리
 - **API 통신**: Socket.IO 및 REST API는 기존 인터페이스 유지
+
+### Video Processing (Python Scripts)
+- **main.py**: Automated video highlight generation from MP4 files
+- **Input/Output**: Uses `input/` and `output/` directories for video processing
+- **Processing Flow**: Audio extraction → Loudest point detection → Video cutting → Subtitle generation
+- **Dependencies**: Requires ffmpeg, whisper, moviepy, pydub (see requirements.txt)
 
 ### NEVER REMOVE: Real-time Participant Update System
 - **File**: `client/src/pages/gamecast/room/RoomPage.tsx` - Real-time participant UI updates
