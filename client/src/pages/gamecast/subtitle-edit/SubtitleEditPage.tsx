@@ -1,12 +1,17 @@
-import React from 'react'
+import React, { useRef, useState } from 'react'
 import { useSubtitleEditor } from './hooks/useSubtitleEditor'
 import SubtitleHeader from './components/SubtitleHeader'
-import VideoSection from './components/VideoSection'
-import EditorSection from './components/EditorSection'
-import SubtitleStylePanel from './components/SubtitleStylePanel'
 import RenderModal from './components/RenderModal'
+import VideoUploader from './components/VideoUploader'
+import MultiSpeakerAudioUploader from './components/MultiSpeakerAudioUploader'
+import { Navigation } from '../../../components/gamecast/common/Navigation';
+import SubtitleEditMainPanel from './components/SubtitleEditMainPanel';
+import SubtitleTimelinePanel from './components/SubtitleTimelinePanel';
 
 const SubtitleEditPage: React.FC = () => {
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const timelineRef = useRef<HTMLDivElement>(null)
+  const [pendingSmallVideoIndex, setPendingSmallVideoIndex] = useState<number | null>(null)
   const {
     // 상태
     subtitleSegments,
@@ -14,7 +19,6 @@ const SubtitleEditPage: React.FC = () => {
     duration,
     isPlaying,
     selectedSegment,
-    zoom,
     showHelp,
     showAudioUploader,
     showMultiSpeakerUploader,
@@ -26,23 +30,19 @@ const SubtitleEditPage: React.FC = () => {
     renderProgress,
     speakers,
     emotions,
-    timelineRef,
     selectedStyle,
     selectedEmphasis,
     selectedEmotion,
     
     // 액션
-    setCurrentTime,
-    setDuration,
-    setIsPlaying,
     setSelectedSegment,
-    setZoom,
     setShowHelp,
     setShowAudioUploader,
     setShowMultiSpeakerUploader,
     setShowVideoUploader,
     setIsRendering,
     setRenderProgress,
+    setDuration,
     
     // 이벤트 핸들러
     handleVideoUploaded,
@@ -52,7 +52,6 @@ const SubtitleEditPage: React.FC = () => {
     handleEmphasisChange,
     handleEmotionChange,
     handleSubtitlesGenerated,
-    handleTimelineClick,
     handleDragStart,
     handleResizeStart,
     addSubtitleSegment,
@@ -64,123 +63,67 @@ const SubtitleEditPage: React.FC = () => {
     importSubtitles,
     handleFFmpegRender,
     handleClientSideRender
-  } = useSubtitleEditor()
+  } = useSubtitleEditor(timelineRef)
+
+  // 디버깅용 로그
+  console.log('videoUrl:', videoUrl);
+  console.log('videos:', videos);
+
+  // VideoSection에 맞는 업로드 핸들러 래퍼
+  const handleMainVideoUploaded = (url: string, file: File) => {
+    handleVideoUploaded(url, file, 0)
+  }
+
+  // 파일 선택 핸들러 (메인)
+  const handleMainVideoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const url = URL.createObjectURL(file)
+    handleVideoUploaded(url, file, 0)
+    e.target.value = ''
+  }
+  // 파일 선택 핸들러 (작은 동영상)
+  const handleSmallVideoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || pendingSmallVideoIndex === null) return
+    const url = URL.createObjectURL(file)
+    handleVideoUploaded(url, file, pendingSmallVideoIndex)
+    setPendingSmallVideoIndex(null)
+    e.target.value = ''
+  }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
-      {/* 헤더 */}
-      <SubtitleHeader
-        showHelp={showHelp}
-        showVideoUploader={showVideoUploader}
-        showAudioUploader={showAudioUploader}
-        showMultiSpeakerUploader={showMultiSpeakerUploader}
-        isRendering={isRendering}
-        videoUrl={videoUrl}
-        onToggleHelp={() => setShowHelp(!showHelp)}
-        onToggleVideoUploader={() => setShowVideoUploader(!showVideoUploader)}
-        onToggleAudioUploader={() => setShowAudioUploader(!showAudioUploader)}
-        onToggleMultiSpeakerUploader={() => setShowMultiSpeakerUploader(!showMultiSpeakerUploader)}
-        onImportSubtitles={importSubtitles}
-        onExportSubtitles={exportSubtitles}
-        onAddSubtitleSegment={addSubtitleSegment}
-        onTogglePlayback={togglePlayback}
-        onFFmpegRender={handleFFmpegRender}
-        onCanvasRender={handleClientSideRender}
-      />
-
-      <div className="max-w-[1600px] mx-auto p-4">
-        {/* 비디오 섹션 - 왼쪽 작은 동영상들, 중앙 메인 동영상, 오른쪽 스타일 패널 */}
-        <div className="mb-20 flex gap-4">
-          {/* 왼쪽 - 4개의 작은 동영상들 */}
-          <div className="flex flex-col gap-3 w-64">
-            {videos.slice(1).map((video, arrayIndex) => {
-              const videoIndex = arrayIndex + 1; // 실제 인덱스 (1,2,3,4)
-              return (
-                <div key={videoIndex} className="bg-gray-800 rounded-lg p-3 relative">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-sm text-gray-300">{video.name}</div>
-                    {video.url && (
-                      <button 
-                        className="text-red-400 hover:text-red-300 text-xs p-1"
-                        onClick={() => handleVideoDelete(videoIndex)}
-                        title="동영상 삭제"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                  <div className="aspect-video bg-gray-700 rounded relative overflow-hidden">
-                    {video.url ? (
-                      <div className="relative group">
-                        <video 
-                          className="w-full h-full object-cover rounded"
-                          src={video.url}
-                          controls
-                          preload="metadata"
-                        />
-                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button 
-                            className="bg-black bg-opacity-50 text-white p-1 rounded text-xs hover:bg-opacity-75"
-                            onClick={() => handleVideoUploadStart(videoIndex)}
-                            title="동영상 교체"
-                          >
-                            교체
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center h-full text-gray-400 text-xs">
-                        <div className="text-center">
-                          <div className="mb-2">📹</div>
-                          <div className="mb-2">동영상을 업로드하세요</div>
-                          <button 
-                            className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition-colors"
-                            onClick={() => handleVideoUploadStart(videoIndex)}
-                          >
-                            업로드
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* 중앙 - 메인 동영상 */}
-          <div className="flex-1">
-            <div className="mb-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-200">{videos[0].name}</h2>
-                <div className="flex gap-2">
-                  {videoUrl ? (
-                    <>
-                      <button 
-                        className="px-3 py-1 bg-gray-600 text-white rounded text-sm hover:bg-gray-700"
-                        onClick={() => handleVideoUploadStart(0)}
-                      >
-                        동영상 교체
-                      </button>
-                      <button 
-                        className="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700"
-                        onClick={() => handleVideoDelete(0)}
-                      >
-                        삭제
-                      </button>
-                    </>
-                  ) : (
-                    <button 
-                      className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
-                      onClick={() => handleVideoUploadStart(0)}
-                    >
-                      메인 동영상 업로드
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-            <VideoSection
+    <>
+      <Navigation />
+      <div className="min-h-screen text-white" style={{ backgroundColor: '#87CEEB' }}>
+        {/* 숨겨진 메인 동영상 업로드용 file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="video/*"
+          style={{ display: 'none' }}
+          onChange={handleMainVideoFileChange}
+        />
+        {/* 숨겨진 작은 동영상 업로드용 file input (공용) */}
+        <input
+          type="file"
+          accept="video/*"
+          style={{ display: 'none' }}
+          onChange={handleSmallVideoFileChange}
+          id="small-video-file-input"
+        />
+        {/* VideoUploader를 모든 동영상 업로드에 대해 조건부 렌더링 */}
+        {showVideoUploader && activeVideoIndex !== null && (
+          <VideoUploader
+            onVideoUploaded={handleVideoUploaded}
+            videoIndex={activeVideoIndex}
+          />
+        )}
+        <div className="main mx-auto" style={{ width: 1315 }}>
+          {/* 상단 div: 4개 동영상, 메인 동영상, 자막 스타일 */}
+          <div className="w-full" style={{ height: 409, marginBottom: 35 }}>
+            <SubtitleEditMainPanel
+              videos={videos}
               videoUrl={videoUrl}
               subtitleSegments={subtitleSegments}
               speakers={speakers}
@@ -190,65 +133,111 @@ const SubtitleEditPage: React.FC = () => {
               isPlaying={isPlaying}
               showVideoUploader={showVideoUploader}
               showAudioUploader={showAudioUploader}
-              showMultiSpeakerUploader={showMultiSpeakerUploader}
-              onTimeUpdate={setCurrentTime}
-              onDurationChange={setDuration}
-              onPlayPause={togglePlayback}
-              onVideoUploaded={handleVideoUploaded}
-              onSubtitlesGenerated={handleSubtitlesGenerated}
-            />
-          </div>
-
-          {/* 오른쪽 - 자막 스타일 패널 */}
-          <div className="w-80">
-            <SubtitleStylePanel
+              activeVideoIndex={activeVideoIndex}
+              handleVideoDelete={handleVideoDelete}
+              handleVideoUploadStart={handleVideoUploadStart}
+              handleMainVideoUploaded={handleMainVideoUploaded}
+              handleSubtitlesGenerated={handleSubtitlesGenerated}
               selectedStyle={selectedStyle}
               selectedEmphasis={selectedEmphasis}
               selectedEmotion={selectedEmotion}
-              selectedSegment={subtitleSegments.find(s => s.id === selectedSegment) || null}
-              speakers={speakers}
-              emotions={emotions}
-              onStyleChange={handleStyleChange}
-              onEmphasisChange={handleEmphasisChange}
-              onEmotionChange={handleEmotionChange}
-              onUpdateSegment={updateSubtitleSegment}
-              onDeleteSegment={deleteSubtitleSegment}
-              onCloseEdit={() => setSelectedSegment(null)}
+              selectedSegment={selectedSegment}
+              updateSubtitleSegment={updateSubtitleSegment}
+              deleteSubtitleSegment={deleteSubtitleSegment}
+              handleStyleChange={handleStyleChange}
+              handleEmphasisChange={handleEmphasisChange}
+              handleEmotionChange={handleEmotionChange}
+              setSelectedSegment={setSelectedSegment as (id: string | null) => void}
+              setPendingSmallVideoIndex={setPendingSmallVideoIndex as (index: number | null) => void}
+              onDurationChange={setDuration}
             />
           </div>
+          {/* 구분선 */}
+          {/* <div className="my-8 border-t border-gray-600 w-full" /> */}
+          {/* 하단 div: 유저 리스트 + 자막 시간/편집 (타임라인) */}
+          <div
+            style={{
+              borderRadius: '14.633px',
+              border: '0.457px solid #FFF',
+              background: 'rgba(65, 78, 145, 0.25)',
+              display: 'flex',
+              width: '1315px',
+              padding: '15px 35px',
+              flexDirection: 'row',
+              justifyContent: 'center',
+              alignItems: 'flex-start',
+              gap: '12px',
+            }}
+          >
+            {/* 유저 리스트 */}
+            <div className="flex flex-col" style={{ width: 80 }}>
+              {[...Array(5)].map((_, idx) => (
+                <div key={idx} className="h-[50px] flex items-center justify-center text-sm font-semibold text-gray-300">
+                  {`유저${idx + 1}`}
+                </div>
+              ))}
+            </div>
+            {/* 타임라인 */}
+            <div className="flex-1">
+              <SubtitleTimelinePanel
+                videoUrl={videoUrl}
+                subtitleSegments={subtitleSegments}
+                speakers={speakers}
+                emotions={emotions}
+                selectedSegment={selectedSegment}
+                duration={duration}
+                timelineRef={timelineRef as React.RefObject<HTMLDivElement | null>}
+                handleDragStart={handleDragStart}
+                handleResizeStart={handleResizeStart}
+                setSelectedSegment={setSelectedSegment as (id: string | null) => void}
+                handleTextChange={handleTextChange}
+              />
+            </div>
+          </div>
+          {/* 렌더링 모달 */}
+          <RenderModal
+            isRendering={isRendering}
+            renderProgress={renderProgress}
+            onCancel={() => {
+              setIsRendering(false)
+              setRenderProgress(0)
+            }}
+          />
+          {/* 다중 화자 오디오 업로더 */}
+          {showMultiSpeakerUploader && (
+            <div className="max-w-[1600px] mx-auto p-4">
+              <MultiSpeakerAudioUploader
+                speakers={speakers}
+                onSubtitlesGenerated={handleSubtitlesGenerated}
+              />
+            </div>
+          )}
         </div>
-
-        {/* 편집 섹션 */}
-        <EditorSection
-          videoUrl={videoUrl}
-          subtitleSegments={subtitleSegments}
-          speakers={speakers}
-          emotions={emotions}
-          currentTime={currentTime}
-          duration={duration}
-          zoom={zoom}
-          selectedSegment={selectedSegment}
-          timelineRef={timelineRef}
-          onTimeUpdate={setCurrentTime}
-          onZoomChange={setZoom}
-          onTimelineClick={handleTimelineClick}
-          onDragStart={handleDragStart}
-          onResizeStart={handleResizeStart}
-          onSegmentClick={setSelectedSegment}
-          onTextChange={handleTextChange}
-        />
-
-        {/* 렌더링 모달 */}
-        <RenderModal
-          isRendering={isRendering}
-          renderProgress={renderProgress}
-          onCancel={() => {
-            setIsRendering(false)
-            setRenderProgress(0)
-          }}
-        />
+        <footer className="footer">
+          {/* SubtitleHeader를 맨 아래로 이동 */}
+          <SubtitleHeader
+            showHelp={showHelp}
+            showVideoUploader={showVideoUploader}
+            showAudioUploader={showAudioUploader}
+            showMultiSpeakerUploader={showMultiSpeakerUploader}
+            isRendering={isRendering}
+            videoUrl={videoUrl}
+            onToggleHelp={() => setShowHelp(!showHelp)}
+            onToggleVideoUploader={() => setShowVideoUploader(!showVideoUploader)}
+            onToggleAudioUploader={() => setShowAudioUploader(!showAudioUploader)}
+            onToggleMultiSpeakerUploader={() => setShowMultiSpeakerUploader(!showMultiSpeakerUploader)}
+            onImportSubtitles={importSubtitles}
+            onExportSubtitles={exportSubtitles}
+            onAddSubtitleSegment={addSubtitleSegment}
+            onTogglePlayback={togglePlayback}
+            onFFmpegRender={handleFFmpegRender}
+            onCanvasRender={handleClientSideRender}
+            onMainVideoUpload={() => fileInputRef.current?.click()}
+            onMainVideoDelete={() => handleVideoDelete(0)}
+          />
+        </footer>
       </div>
-    </div>
+    </>
   )
 }
 

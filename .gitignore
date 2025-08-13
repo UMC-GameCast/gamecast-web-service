@@ -1,0 +1,9 @@
+# node_modules, build 등 기본 무시
+node_modules/
+dist/
+build/
+
+# 환경 변수 파일 무시
+.env
+.env.*
+client/.env

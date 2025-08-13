@@ -61,161 +61,240 @@ const SubtitleStylePanel: React.FC<SubtitleStylePanelProps> = ({
   }
 
   return (
-    <div className="bg-gray-800 rounded-lg p-4 border border-gray-600 w-80 space-y-6">
+    <div
+      style={{
+        borderRadius: '18.525px',
+        border: '3px solid #94A8DD',
+        display: 'flex',
+        width: '490px',
+        height: '409px',
+        minWidth: '351.974px',
+        minHeight: '306.73px',
+        padding: '25px 20px',
+        flexDirection: 'column',
+        alignItems: 'flex-end',
+        gap: '18.525px',
+      }}
+    >
       {/* 전체 자막 스타일 */}
-      <div>
-        <div className="text-center mb-4">
-          <h3 className="text-white text-sm font-medium">전체 자막 스타일</h3>
+      <div
+        style={{
+          display: 'flex',
+          minWidth: '291.768px',
+          flexDirection: 'column',
+          alignItems: 'flex-end',
+          gap: '15px',
+          alignSelf: 'stretch',
+        }}
+      >
+        <div className="text-center mb-4" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+          <h3
+            style={{
+              color: '#FFF',
+              textAlign: 'right',
+              fontFamily: 'Pretendard',
+              fontSize: '15px',
+              fontStyle: 'normal',
+              fontWeight: 500,
+              lineHeight: '22.5px',
+              letterSpacing: '-0.285px',
+              display: 'flex',
+              width: '124.117px',
+              height: '17.599px',
+              flexDirection: 'column',
+              justifyContent: 'center',
+            }}
+          >
+            전체 자막 스타일
+          </h3>
+          <svg xmlns="http://www.w3.org/2000/svg" width="202.83" height="6" viewBox="0 0 206 6" fill="none" style={{ marginTop: '4px' }}>
+            <path d="M0.00520825 2.68359C0.00520825 4.15635 1.19912 5.35026 2.67188 5.35026C4.14463 5.35026 5.33854 4.15635 5.33854 2.68359C5.33854 1.21083 4.14463 0.016927 2.67188 0.016927C1.19912 0.016927 0.00520825 1.21083 0.00520825 2.68359ZM205.502 2.68359V2.18359H2.67188V2.68359V3.18359H205.502V2.68359Z" fill="#949FCA"/>
+          </svg>
         </div>
-        <div className="flex gap-2 justify-center">
-          {styles.map((style) => (
-            <button
-              key={style.id}
-              onClick={() => onStyleChange(style.id)}
-              className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
-                selectedStyle === style.id
-                  ? 'bg-blue-600 text-white border-2 border-white'
-                  : 'bg-gray-700 text-gray-300 border border-gray-600 hover:bg-gray-600'
-              }`}
-            >
-              {style.name}
-            </button>
-          ))}
+        <div className="flex gap-2 justify-center" style={{ gap: '15px' }}>
+          {styles.map((style) => {
+            const isSelected = selectedStyle === style.id;
+            return (
+              <button
+                key={style.id}
+                onClick={() => onStyleChange(style.id)}
+                style={{
+                  borderRadius: isSelected ? '9.262px' : '9px',
+                  border: isSelected ? '1.292px solid #FFF' : '1.292px solid #6483FF',
+                  background: isSelected ? '#1D1F3B' : 'transparent',
+                  display: 'flex',
+                  width: '110px',
+                  height: '46px',
+                  padding: '9.262px 0',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  gap: '38.773px',
+                  flex: '1 0 0',
+                  color: '#6483FF',
+                  textAlign: 'center',
+                  fontFamily: 'Pretendard',
+                  fontSize: '18px',
+                  fontStyle: 'normal',
+                  fontWeight: 700,
+                  lineHeight: '27px',
+                  letterSpacing: '-0.342px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+              >
+                {style.name}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* 자막 편집창 */}
-      {selectedSegment && (
-        <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
-          <h3 className="text-lg font-semibold mb-4 text-white">자막 편집</h3>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium mb-2 text-gray-300">스피커</label>
-                <select
-                  value={selectedSegment.speaker}
-                  onChange={(e) => onUpdateSegment(selectedSegment.id, { speaker: e.target.value })}
-                  className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-white text-sm"
-                >
-                  {speakers.map(speaker => (
-                    <option key={speaker.id} value={speaker.id}>
-                      {speaker.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium mb-2 text-gray-300">감정</label>
-                <select
-                  value={selectedSegment.emotion}
-                  onChange={(e) => onUpdateSegment(selectedSegment.id, { emotion: e.target.value })}
-                  className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-white text-sm"
-                >
-                  {emotions.map(emotion => (
-                    <option key={emotion.id} value={emotion.id}>
-                      {emotion.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium mb-2 text-gray-300">시작</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={selectedSegment.startTime}
-                  onChange={(e) => onUpdateSegment(selectedSegment.id, { startTime: Number(e.target.value) })}
-                  className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-white text-sm"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium mb-2 text-gray-300">종료</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={selectedSegment.endTime}
-                  onChange={(e) => onUpdateSegment(selectedSegment.id, { endTime: Number(e.target.value) })}
-                  className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-white text-sm"
-                />
-              </div>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium mb-2 text-gray-300">자막 텍스트</label>
-              <textarea
-                value={selectedSegment.text}
-                onChange={(e) => onUpdateSegment(selectedSegment.id, { text: e.target.value })}
-                className="w-full bg-gray-600 border border-gray-500 rounded px-3 py-2 text-white h-16 resize-none text-sm"
-                placeholder="자막 텍스트를 입력하세요..."
-              />
-            </div>
-
-            {/* 선택한 스타일 정보 표시 */}
-            <div className="bg-gray-600 rounded p-3 border border-gray-500">
-              <div className="text-xs text-gray-300 mb-1">적용될 스타일:</div>
-              <div className="text-sm text-blue-300 font-medium">{getStyleDisplayText()}</div>
-            </div>
-            
-            <div className="flex justify-end space-x-2">
-              <button
-                onClick={() => onDeleteSegment(selectedSegment.id)}
-                className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded font-medium transition-colors text-sm"
-              >
-                삭제
-              </button>
-              <button
-                onClick={onCloseEdit}
-                className="bg-gray-600 hover:bg-gray-700 px-3 py-1 rounded font-medium transition-colors text-sm"
-              >
-                닫기
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-start',
+          gap: '9.262px',
+          flex: '1 0 0',
+          alignSelf: 'stretch',
+        }}
+      >
+        {selectedSegment ? (
+          <textarea
+            value={selectedSegment.text}
+            onChange={(e) => onUpdateSegment(selectedSegment.id, { text: e.target.value })}
+            className="resize-none text-sm"
+            style={{
+              width: '100%',
+              height: '100%',
+              background: 'rgba(255, 255, 255, 0.11)',
+              display: 'flex',
+              padding: '9px',
+              flexDirection: 'column',
+              alignItems: 'flex-start',
+              gap: '9.262px',
+              flex: '1 0 0',
+              alignSelf: 'stretch',
+              color: 'rgba(255, 255, 255, 0.50)',
+              fontFamily: 'Inter',
+              fontSize: '18px',
+              fontStyle: 'normal',
+              fontWeight: 500,
+              lineHeight: '27px',
+              letterSpacing: '-0.342px',
+              border: 'none',
+              borderRadius: 0,
+              outline: 'none',
+              boxSizing: 'border-box',
+            }}
+            placeholder="자막 텍스트를 입력하세요..."
+          />
+        ) : (
+          <div className="text-gray-400 text-center py-8">편집할 자막을 선택하세요.</div>
+        )}
+      </div>
 
       {/* 선택 자막 스타일 */}
-      <div>
-        <div className="text-center mb-4">
-          <h3 className="text-white text-sm font-medium">선택 자막 스타일</h3>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-end',
+          gap: '15px',
+          alignSelf: 'stretch',
+          height: '142px',
+        }}
+      >
+        <div className="text-center mb-4" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+          <h3
+            style={{
+              color: '#FFF',
+              textAlign: 'right',
+              fontFamily: 'Pretendard',
+              fontSize: '15px',
+              fontStyle: 'normal',
+              fontWeight: 500,
+              lineHeight: '22.5px',
+              letterSpacing: '-0.285px',
+              display: 'flex',
+              width: '124.117px',
+              height: '17.599px',
+              flexDirection: 'column',
+              justifyContent: 'center',
+            }}
+          >
+            선택 자막 스타일
+          </h3>
+          <svg xmlns="http://www.w3.org/2000/svg" width="202.83" height="6" viewBox="0 0 206 6" fill="none" style={{ marginTop: '4px' }}>
+            <path d="M0.00520825 2.68359C0.00520825 4.15635 1.19912 5.35026 2.67188 5.35026C4.14463 5.35026 5.33854 4.15635 5.33854 2.68359C5.33854 1.21083 4.14463 0.016927 2.67188 0.016927C1.19912 0.016927 0.00520825 1.21083 0.00520825 2.68359ZM205.502 2.68359V2.18359H2.67188V2.68359V3.18359H205.502V2.68359Z" fill="#949FCA"/>
+          </svg>
         </div>
-        <div className="grid grid-cols-2 gap-4">
-          {/* 일반/감정 강조 자막 (좌측) */}
-          <div className="space-y-2">
-            {emphasisOptions.map((option) => (
-              <button
-                key={option.id}
-                onClick={() => onEmphasisChange(option.id)}
-                className={`w-full px-3 py-2 rounded text-sm font-medium transition-colors ${
-                  selectedEmphasis === option.id
-                    ? 'bg-blue-600 text-white border-2 border-white'
-                    : 'bg-gray-700 text-gray-300 border border-gray-600 hover:bg-gray-600'
-                }`}
-              >
-                {option.name}
-              </button>
-            ))}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
+          {/* 일반/감정 강조 자막 (좌우 배치) */}
+          <div style={{ display: 'flex', flexDirection: 'row', gap: '8px', width: '100%' }}>
+            {emphasisOptions.map((option) => {
+              const isSelected = selectedEmphasis === option.id;
+              return (
+                <button
+                  key={option.id}
+                  onClick={() => onEmphasisChange(option.id)}
+                  style={{
+                    width: '217.5px',
+                    height: '46px',
+                    borderRadius: isSelected ? '9.262px' : '9px',
+                    border: isSelected ? '1.292px solid #FFF' : '1.292px solid #6483FF',
+                    background: isSelected ? '#1D1F3B' : 'transparent',
+                    display: 'flex',
+                    padding: '9.262px 0',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    gap: '38.773px',
+                    flex: '1 0 0',
+                    color: '#6483FF',
+                    fontWeight: 700,
+                    fontSize: '16px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  {option.name}
+                </button>
+              );
+            })}
           </div>
-
-          {/* 감정 선택 (우측) */}
-          <div className="grid grid-cols-2 gap-2">
-            {emotionOptions.map((emotion) => (
-              <button
-                key={emotion.id}
-                onClick={() => onEmotionChange(emotion.id)}
-                className={`px-2 py-2 rounded text-xs font-medium transition-colors flex flex-col items-center ${
-                  selectedEmotion === emotion.id
-                    ? `${emotion.color} text-white border-2 border-white`
-                    : 'bg-gray-700 text-gray-300 border border-gray-600 hover:bg-gray-600'
-                }`}
-              >
-                <span className="text-lg mb-1">{emotion.icon}</span>
-                <span>{emotion.name}</span>
-              </button>
-            ))}
+          {/* 감정 선택 (아래) */}
+          <div style={{ display: 'flex', flexDirection: 'row', gap: '8px', width: '100%' }}>
+            {emotionOptions.map((emotion) => {
+              const isSelected = selectedEmotion === emotion.id;
+              return (
+                <button
+                  key={emotion.id}
+                  onClick={() => onEmotionChange(emotion.id)}
+                  style={{
+                    width: '101.25px',
+                    height: '46px',
+                    borderRadius: isSelected ? '9.262px' : '9px',
+                    border: isSelected ? '1.292px solid #FFF' : '1.292px solid #6483FF',
+                    background: isSelected ? '#1D1F3B' : 'transparent',
+                    display: 'flex',
+                    padding: '9.262px 0',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    gap: '38.773px',
+                    flex: '1 0 0',
+                    color: '#6483FF',
+                    fontWeight: 700,
+                    fontSize: '16px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    textAlign: 'center',
+                  }}
+                >
+                  {emotion.name}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>

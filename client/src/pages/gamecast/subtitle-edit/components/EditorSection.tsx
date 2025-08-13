@@ -1,8 +1,5 @@
 import React from 'react'
-import SpeakerPanel from './SpeakerPanel'
 import TimelineEditor from './TimelineEditor'
-import SubtitlePreview from './SubtitlePreview'
-import TimelineHeader from './TimelineHeader'
 import type { SubtitleSegment, Speaker, Emotion } from '../types'
 
 interface EditorSectionProps {
@@ -10,14 +7,9 @@ interface EditorSectionProps {
   subtitleSegments: SubtitleSegment[]
   speakers: Speaker[]
   emotions: Emotion[]
-  currentTime: number
-  duration: number
-  zoom: number
   selectedSegment: string | null
+  duration: number
   timelineRef: React.RefObject<HTMLDivElement | null>
-  onTimeUpdate: (time: number) => void
-  onZoomChange: (zoom: number) => void
-  onTimelineClick: (e: React.MouseEvent<HTMLDivElement>) => void
   onDragStart: (e: React.MouseEvent, segmentId: string) => void
   onResizeStart: (e: React.MouseEvent, segmentId: string, resizeType: 'start' | 'end') => void
   onSegmentClick: (segmentId: string) => void
@@ -29,14 +21,9 @@ const EditorSection: React.FC<EditorSectionProps> = ({
   subtitleSegments,
   speakers,
   emotions,
-  currentTime,
-  duration,
-  zoom,
   selectedSegment,
+  duration,
   timelineRef,
-  onTimeUpdate,
-  onZoomChange,
-  onTimelineClick,
   onDragStart,
   onResizeStart,
   onSegmentClick,
@@ -47,10 +34,7 @@ const EditorSection: React.FC<EditorSectionProps> = ({
     <>
       {/* 메인 편집 영역 */}
       <div className="grid grid-cols-12 gap-4">
-        {/* 스피커 패널 */}
-        <SpeakerPanel speakers={speakers} videoUrl={videoUrl} />
-
-        {/* 타임라인 편집 영역 */}
+        {/* 타임라인 편집 영역만 전체 사용 */}
         <TimelineEditor
           speakers={speakers}
           subtitleSegments={subtitleSegments}
@@ -62,16 +46,17 @@ const EditorSection: React.FC<EditorSectionProps> = ({
           onResizeStart={onResizeStart}
           onSegmentClick={onSegmentClick}
           onTextChange={onTextChange}
+          timelineRef={timelineRef}
         />
       </div>
 
       {/* 미리보기 패널 */}
-      <SubtitlePreview
+      {/* <SubtitlePreview
         subtitleSegments={subtitleSegments}
         speakers={speakers}
         emotions={emotions}
         videoUrl={videoUrl}
-      />
+      /> */}
     </>
   )
 }

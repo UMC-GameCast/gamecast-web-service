@@ -1,10 +1,11 @@
 import React, { useState, useRef } from 'react'
 
 interface VideoUploaderProps {
-  onVideoUploaded: (videoUrl: string, videoFile: File) => void
+  onVideoUploaded: (videoUrl: string, videoFile: File, videoIndex: number) => void
+  videoIndex: number
 }
 
-const VideoUploader: React.FC<VideoUploaderProps> = ({ onVideoUploaded }) => {
+const VideoUploader: React.FC<VideoUploaderProps> = ({ onVideoUploaded, videoIndex }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [error, setError] = useState<string>('')
   const [isUploading, setIsUploading] = useState(false)
@@ -58,7 +59,7 @@ const VideoUploader: React.FC<VideoUploaderProps> = ({ onVideoUploaded }) => {
       // 업로드 시뮬레이션 (실제로는 서버로 업로드)
       await new Promise(resolve => setTimeout(resolve, 1000))
       
-      onVideoUploaded(videoUrl, selectedFile)
+      onVideoUploaded(videoUrl, selectedFile, videoIndex)
     } catch (err) {
       setError('동영상 업로드에 실패했습니다.')
     } finally {

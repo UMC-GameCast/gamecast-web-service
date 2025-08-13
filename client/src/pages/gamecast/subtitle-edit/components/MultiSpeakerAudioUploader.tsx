@@ -91,10 +91,11 @@ const MultiSpeakerAudioUploader: React.FC<MultiSpeakerAudioUploaderProps> = ({
     formData.append('response_format', 'verbose_json')
     formData.append('timestamp_granularities', 'word')
 
+    const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
       headers: {
-        'Authorization': 'Bearer '
+        'Authorization': `Bearer ${OPENAI_API_KEY}`
       },
       body: formData,
     })

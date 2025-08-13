@@ -15,7 +15,6 @@ interface VideoSectionProps {
   isPlaying: boolean
   showVideoUploader: boolean
   showAudioUploader: boolean
-  showMultiSpeakerUploader: boolean
   onTimeUpdate: (time: number) => void
   onDurationChange: (duration: number) => void
   onPlayPause: () => void
@@ -33,7 +32,6 @@ const VideoSection: React.FC<VideoSectionProps> = ({
   isPlaying,
   showVideoUploader,
   showAudioUploader,
-  showMultiSpeakerUploader,
   onTimeUpdate,
   onDurationChange,
   onPlayPause,
@@ -44,7 +42,7 @@ const VideoSection: React.FC<VideoSectionProps> = ({
     <>
       {/* 동영상 업로더 */}
       {showVideoUploader && (
-        <VideoUploader onVideoUploaded={onVideoUploaded} />
+        <VideoUploader onVideoUploaded={onVideoUploaded} videoIndex={0} />
       )}
 
       {/* 오디오 업로더 */}
@@ -52,13 +50,7 @@ const VideoSection: React.FC<VideoSectionProps> = ({
         <AudioUploader onSubtitlesGenerated={onSubtitlesGenerated} />
       )}
 
-      {/* 다중 화자 오디오 업로더 */}
-      {showMultiSpeakerUploader && (
-        <MultiSpeakerAudioUploader 
-          speakers={speakers} 
-          onSubtitlesGenerated={onSubtitlesGenerated} 
-        />
-      )}
+      {/* 다중 화자 오디오 업로더는 이제 하단에서 렌더링 */}
 
       {/* 동영상 플레이어 */}
       <div className="mb-20 flex justify-center">

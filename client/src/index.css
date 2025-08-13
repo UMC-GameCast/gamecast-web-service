@@ -39,3 +39,30 @@ html, body {
   --variable-collection-bg: rgba(0, 0, 0, 0.2);
   --variable-collection-color: rgba(255, 0, 0, 1);
 }
+
+/* SmallVideoList custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 366px;
+  border-radius: 2.744px;
+  background: #272E51;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #272E51;
+  border-radius: 2.744px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #B3C8FD;
+  border-radius: 6.402px;
+  min-height: 24px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #8faee6;
+}
+
+/* For Firefox */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #B3C8FD #272E51;
+}

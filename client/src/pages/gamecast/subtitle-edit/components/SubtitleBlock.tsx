@@ -121,15 +121,18 @@ const SubtitleBlock: React.FC<SubtitleBlockProps> = ({
 
   return (
     <div
-      className={`absolute top-1 bottom-1 rounded cursor-move transition-all hover:scale-105 ${
+      className={`rounded cursor-move transition-all hover:scale-105 ${
         isSelected 
           ? 'ring-2 ring-blue-400 ring-offset-2 ring-offset-gray-700' 
           : ''
       }`}
       style={{
+        position: 'absolute',
+        top: '50%',
+        transform: 'translateY(-50%)',
         left: `${startPercent}%`,
         width: `${width}%`,
-        minWidth: '60px'
+        minWidth: '60px',
       }}
       onMouseDown={(e) => onDragStart(e, segment.id)}
       onClick={onClick}
@@ -150,15 +153,26 @@ const SubtitleBlock: React.FC<SubtitleBlockProps> = ({
         <span className="text-xs flex-shrink-0">{emotion?.icon || 'T'}</span>
         
         {isEditing ? (
-          <input
+          <textarea
             ref={inputRef}
-            type="text"
             value={editText}
             onChange={(e) => setEditText(e.target.value)}
             onBlur={handleEditComplete}
             onKeyDown={handleKeyDown}
             className="flex-1 bg-transparent border-none outline-none text-xs font-medium min-w-0"
-            style={{ color: 'inherit' }}
+            style={{
+              background: 'rgba(255, 255, 255, 0.11)',
+              display: 'flex',
+              padding: '9px',
+              flexDirection: 'column',
+              alignItems: 'flex-start',
+              gap: '9.262px',
+              flex: '1 0 0',
+              alignSelf: 'stretch',
+              color: 'inherit',
+              resize: 'none',
+            }}
+            rows={2}
           />
         ) : (
           <span className="truncate flex-1" title={segment.text}>

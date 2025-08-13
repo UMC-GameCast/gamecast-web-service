@@ -18,6 +18,8 @@ interface SubtitleHeaderProps {
   onTogglePlayback: () => void
   onFFmpegRender: () => void
   onCanvasRender: () => void
+  onMainVideoUpload: () => void // 추가
+  onMainVideoDelete: () => void // 추가
 }
 
 const SubtitleHeader: React.FC<SubtitleHeaderProps> = ({
@@ -36,15 +38,44 @@ const SubtitleHeader: React.FC<SubtitleHeaderProps> = ({
   onAddSubtitleSegment,
   onTogglePlayback,
   onFFmpegRender,
-  onCanvasRender
+  onCanvasRender,
+  onMainVideoUpload, // 추가
+  onMainVideoDelete // 추가
 }) => {
   return (
     <>
       {/* 헤더 */}
-      <div className="bg-gray-800 border-b border-gray-700 p-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-white">Subtitle Editor</h1>
+      <div className="bg-gray-800 border-b border-gray-700 p-4"></div>
+      {/* 도움말 패널 */}
+      <HelpPanel isVisible={showHelp} />
+      {/* 버튼들을 아래로만 렌더링 */}
+      <div className="bg-gray-800 border-t border-gray-700 p-4 mt-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-center">
           <div className="flex items-center space-x-4">
+            {!videoUrl && (
+              <button
+                onClick={onMainVideoUpload}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+              >
+                메인 동영상 업로드
+              </button>
+            )}
+            {videoUrl && (
+              <>
+                <button
+                  onClick={onMainVideoUpload}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors"
+                >
+                  동영상 교체
+                </button>
+                <button
+                  onClick={onMainVideoDelete}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors"
+                >
+                  삭제
+                </button>
+              </>
+            )}
             <button
               onClick={onToggleHelp}
               className="bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded-lg font-medium transition-colors"
@@ -123,9 +154,6 @@ const SubtitleHeader: React.FC<SubtitleHeaderProps> = ({
           </div>
         </div>
       </div>
-
-      {/* 도움말 패널 */}
-      <HelpPanel isVisible={showHelp} />
     </>
   )
 }

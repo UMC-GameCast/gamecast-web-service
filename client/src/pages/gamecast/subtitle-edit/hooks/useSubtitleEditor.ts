@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import type { SubtitleSegment, Speaker, Emotion } from '../types'
 
-export const useSubtitleEditor = () => {
+export const useSubtitleEditor = (timelineRef: React.RefObject<HTMLDivElement | null>) => {
   // 기본 자막 데이터
   const [subtitleSegments, setSubtitleSegments] = useState<SubtitleSegment[]>([
     {
@@ -63,6 +63,8 @@ export const useSubtitleEditor = () => {
   
   // 메인 동영상 URL (하위 호환성을 위해)
   const videoUrl = videos[0]?.url || null
+  console.log('useSubtitleEditor - videoUrl:', videoUrl)
+  console.log('useSubtitleEditor - videos:', videos)
   const [isRendering, setIsRendering] = useState(false)
   const [renderProgress, setRenderProgress] = useState(0)
   
@@ -71,7 +73,7 @@ export const useSubtitleEditor = () => {
   const [selectedEmphasis, setSelectedEmphasis] = useState<'normal' | 'emotion'>('normal')
   const [selectedEmotion, setSelectedEmotion] = useState<'happy' | 'angry' | 'sad' | 'surprised'>('happy')
   
-  const timelineRef = useRef<HTMLDivElement>(null)
+  // const timelineRef = useRef<HTMLDivElement>(null)
 
   // 스피커와 감정 데이터
   const speakers: Speaker[] = [
@@ -91,12 +93,15 @@ export const useSubtitleEditor = () => {
   ]
 
   // 동영상 업로드 처리
-  const handleVideoUploaded = (url: string, _file: File) => {
-    if (activeVideoIndex !== null) {
-      setVideos(prev => prev.map((video, index) => 
-        index === activeVideoIndex ? { ...video, url } : video
-      ))
-    }
+  const handleVideoUploaded = (url: string, _file: File, index: number) => {
+    console.log('handleVideoUploaded called with url:', url, 'index:', index)
+    setVideos(prev => {
+      const updated = prev.map((video, i) => 
+        i === index ? { ...video, url } : video
+      )
+      console.log('setVideos updated:', updated)
+      return updated
+    })
     setShowVideoUploader(false)
     setActiveVideoIndex(null)
     // 동영상이 업로드되면 duration을 초기화하지 않음 (VideoPlayer에서 실제 duration으로 업데이트됨)
@@ -105,6 +110,7 @@ export const useSubtitleEditor = () => {
 
   // 특정 인덱스의 동영상 업로드 시작
   const handleVideoUploadStart = (index: number) => {
+    console.log('handleVideoUploadStart called with index:', index)
     setActiveVideoIndex(index)
     setShowVideoUploader(true)
   }
@@ -209,6 +215,7 @@ export const useSubtitleEditor = () => {
     e.stopPropagation()
     setIsDragging(true)
     setDragStartX(e.clientX)
+    setSelectedSegment(segmentId) // 드래그 시작 시 해당 자막을 선택
     
     const segment = subtitleSegments.find(s => s.id === segmentId)
     if (segment) {
