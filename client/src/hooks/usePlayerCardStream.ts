@@ -17,11 +17,6 @@ export function usePlayerCardStream(
   isLocalPlayer: boolean
 ): UsePlayerCardStreamResult {
   // TODO: WebRTC 기능 비활성화 - 기본값 반환
-  console.log('🚫 [usePlayerCardStream] WebRTC 기능이 비활성화되어 있습니다.', {
-    playerNickname: player.nickname,
-    hasPropsStream: !!propsStream,
-    isLocalPlayer
-  });
 
   const [effectiveStream] = useState<MediaStream | null>(null);
   const [searchLog] = useState<string[]>(['WebRTC 기능 비활성화됨']);

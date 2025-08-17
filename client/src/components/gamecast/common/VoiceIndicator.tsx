@@ -22,10 +22,6 @@ const useIsSpeaking = (stream: MediaStream | null): boolean => {
   // - 말하는 상태 감지 (볼륨 임계값 기반)
   // - 애니메이션 프레임을 이용한 지속적 모니터링
   
-  console.log('🚫 [useIsSpeaking] 오디오 분석 기능이 비활성화되어 있습니다.', {
-    hasStream: !!stream
-  });
-  
   /*
   원래 구현:
   - AudioContext/webkitAudioContext 생성

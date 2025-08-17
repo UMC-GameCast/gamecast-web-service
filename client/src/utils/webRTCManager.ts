@@ -66,56 +66,49 @@ export class WebRTCManager {
     this.nickname = nickname;
     this.guestUserId = getCurrentUserId();
     
-    console.log('🚫 [WebRTCManager] WebRTC 기능이 비활성화되어 있습니다.', {
-      roomCode: this.roomCode,
-      nickname: this.nickname,
-      guestUserId: this.guestUserId
-    });
+    // TODO: WebRTC 기능이 비활성화되어 있습니다
   }
 
   // TODO: WebRTC 재구현 시 실제 로직으로 교체할 메서드들
   
   async start(): Promise<MediaStream | null> {
-    console.log('🚫 [WebRTCManager] start() 비활성화됨');
+    // WebRTC 비활성화됨
     return null;
   }
 
   close(): void {
-    console.log('🚫 [WebRTCManager] close() 비활성화됨');
+    // WebRTC 비활성화됨
   }
 
   sendChatMessage(message: string): void {
-    console.log('🚫 [WebRTCManager] sendChatMessage() 비활성화됨:', message);
+    // WebRTC 비활성화됨
   }
 
   startRecording(): void {
-    console.log('🚫 [WebRTCManager] startRecording() 비활성화됨');
+    // WebRTC 비활성화됨
   }
 
   stopRecording(): void {
-    console.log('🚫 [WebRTCManager] stopRecording() 비활성화됨');
+    // WebRTC 비활성화됨
   }
 
   updatePreparationStatus(characterSetup: boolean, screenSetup: boolean): void {
-    console.log('🚫 [WebRTCManager] updatePreparationStatus() 비활성화됨:', { characterSetup, screenSetup });
+    // WebRTC 비활성화됨
   }
 
   requestRoomUsers(): void {
-    console.log('🚫 [WebRTCManager] requestRoomUsers() 비활성화됨');
+    // WebRTC 비활성화됨
   }
 
   muteLocalAudio(): boolean {
-    console.log('🚫 [WebRTCManager] muteLocalAudio() 비활성화됨');
     return false;
   }
 
   unmuteLocalAudio(): boolean {
-    console.log('🚫 [WebRTCManager] unmuteLocalAudio() 비활성화됨');
     return false;
   }
 
   toggleLocalAudio(): boolean {
-    console.log('🚫 [WebRTCManager] toggleLocalAudio() 비활성화됨');
     return false;
   }
 

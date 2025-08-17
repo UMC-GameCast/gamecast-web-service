@@ -32,8 +32,6 @@ export const CreateRoomCard = ({ onCreateSuccess }: Props) => {
 
   // 클릭 시 유효성 검사 함수
   const validateInput = (): string | null => {
-    console.log("🔍 CreateRoom validation - roomName:", `"${roomName}"`);
-    
     // 1. 빈 문자열 체크
     if (!roomName) {
       return "방 이름을 입력해주세요.";

@@ -407,12 +407,6 @@ export const PlayerCard = ({
               }}
             />
           )}
-          {/* 캐릭터 정보 디버그 (개발 모드에서만 표시) */}
-          {import.meta.env.DEV && finalCharacterData && (
-            <div className="absolute top-2 right-2 text-xs bg-black bg-opacity-50 text-white p-1 rounded">
-              {finalCharacterData.selectedOptions?.face || 'N/A'}
-            </div>
-          )}
         </div>
       </div>
 
@@ -442,25 +436,6 @@ export const PlayerCard = ({
       )}
       */}
       
-      {/* TODO: WebRTC 기능 비활성화 - 디버깅 정보 업데이트 */}
-      {import.meta.env.DEV && !isLocalPlayer && (
-        <div style={{ 
-          position: 'absolute', 
-          top: '2px', 
-          right: '2px', 
-          background: 'rgba(0,0,0,0.95)', 
-          color: '#ffffff', 
-          fontSize: '11px', 
-          padding: '4px 6px',
-          borderRadius: '3px',
-          border: '1px solid #333',
-          fontFamily: 'monospace',
-          fontWeight: 'bold',
-          zIndex: 1000
-        }}>
-          🚫 WebRTC: DISABLED | 🎮 Local: {isLocalPlayer ? '✅' : '❌'}
-        </div>
-      )}
 
       {/* TODO: WebRTC 기능 비활성화 - 오디오 활성화 알림 비활성화 */}
       {/*

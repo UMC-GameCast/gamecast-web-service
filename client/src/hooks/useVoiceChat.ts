@@ -33,11 +33,6 @@ export const useVoiceChat = (
   onStateUpdate?: () => void
 ) => {
   // TODO: WebRTC 기능 비활성화 - 모든 상태를 기본값으로 반환
-  console.log('🚫 [useVoiceChat] WebRTC 기능이 비활성화되어 있습니다.', {
-    roomCode,
-    nickname,
-    enabled
-  });
   
   // 기본 상태값들 (WebRTC 없이)
   const [localStream] = useState<MediaStream | null>(null);
@@ -59,37 +54,34 @@ export const useVoiceChat = (
 
   // TODO: WebRTC 재구현 시 실제 로직으로 교체할 함수들
   const sendChatMessage = (message: string) => {
-    console.log('🚫 [useVoiceChat] sendChatMessage 비활성화됨:', message);
+    // WebRTC 비활성화됨
   };
 
   const startRecording = () => {
-    console.log('🚫 [useVoiceChat] startRecording 비활성화됨');
+    // WebRTC 비활성화됨
   };
 
   const stopRecording = () => {
-    console.log('🚫 [useVoiceChat] stopRecording 비활성화됨');
+    // WebRTC 비활성화됨
   };
 
   const updatePreparationStatus = (characterSetup: boolean, screenSetup: boolean) => {
-    console.log('🚫 [useVoiceChat] updatePreparationStatus 비활성화됨:', { characterSetup, screenSetup });
+    // WebRTC 비활성화됨
   };
 
   const requestRoomUsers = () => {
-    console.log('🚫 [useVoiceChat] requestRoomUsers 비활성화됨');
+    // WebRTC 비활성화됨
   };
 
   const muteLocalAudio = () => {
-    console.log('🚫 [useVoiceChat] muteLocalAudio 비활성화됨');
     return false;
   };
 
   const unmuteLocalAudio = () => {
-    console.log('🚫 [useVoiceChat] unmuteLocalAudio 비활성화됨');
     return false;
   };
 
   const toggleLocalAudio = () => {
-    console.log('🚫 [useVoiceChat] toggleLocalAudio 비활성화됨');
     return false;
   };
 
@@ -102,11 +94,11 @@ export const useVoiceChat = (
   };
 
   const setOnRealtimeParticipantsUpdate = (callback: (participants: unknown[]) => void) => {
-    console.log('🚫 [useVoiceChat] setOnRealtimeParticipantsUpdate 비활성화됨');
+    // WebRTC 비활성화됨
   };
 
   const setOnRealtimeConnectionStateChanged = (callback: (isConnected: boolean) => void) => {
-    console.log('🚫 [useVoiceChat] setOnRealtimeConnectionStateChanged 비활성화됨');
+    // WebRTC 비활성화됨
   };
 
   return { 

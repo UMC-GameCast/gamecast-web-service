@@ -18,8 +18,6 @@ export const ParticipationCodeCard = ({ onJoinSuccess }: Props) => {
 
   // 클릭 시 유효성 검사 함수
   const validateInput = (): string | null => {
-    console.log("🔍 Participate validation - entryCode:", `"${entryCode}"`);
-    
     // 1. 빈 문자열 체크
     if (!entryCode) {
       return "입장코드를 입력해주세요.";
