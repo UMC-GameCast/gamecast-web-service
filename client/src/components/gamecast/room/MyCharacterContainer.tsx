@@ -1,8 +1,9 @@
 import React from "react";
 import type { Player } from "../../../types/room";
 import HostBig from "../../../assets/gamecast/Room/Host_big.svg?react";
-import CharacterSample from "../../../assets/gamecast/Room/캐릭터 샘플.png";
-// import { VoiceIndicator } from "../common/VoiceIndicator"; // <- 제거
+import { renderCharacterLayers } from "../../../utils/characterRenderer";
+// import type { CharacterData } from "../../../types/room"; // 사용하지 않음
+import { VoiceIndicator } from "../common/VoiceIndicator";
 
 /**
  * MyCharacterContainer Props 인터페이스
@@ -10,13 +11,33 @@ import CharacterSample from "../../../assets/gamecast/Room/캐릭터 샘플.png"
 interface MyCharacterContainerProps {
   isHost: boolean;
   currentPlayer: Player | null;
+  localStream?: MediaStream | null;
+  isLocalMuted?: boolean;
+  voiceChatConnected?: boolean;
 }
 
 /**
  * 내 캐릭터와 관련된 UI 요소들을 포함하는 컨테이너 컴포넌트
  */
-export const MyCharacterContainer: React.FC<MyCharacterContainerProps> = ({ isHost, currentPlayer }) => {
-  const hasCharacter = !!(currentPlayer?.character);
+export const MyCharacterContainer: React.FC<MyCharacterContainerProps> = ({ 
+  isHost, 
+  currentPlayer,
+  localStream = null,
+  isLocalMuted = false,
+  voiceChatConnected = false
+}) => {
+  // ✨ 단순화된 캐릭터 설정 상태 체크: isCustomized만 확인
+  const hasCharacter = currentPlayer?.characterInfo?.isCustomized || false;
+  
+  // ✨ 캐릭터 데이터: isCustomized가 true일 때만 사용
+  const characterData = hasCharacter ? {
+    selectedOptions: currentPlayer?.characterInfo?.selectedOptions || {},
+    selectedColors: currentPlayer?.characterInfo?.selectedColors || {},
+    nickname: currentPlayer?.nickname || ''
+  } : null;
+  
+  // ✨ 단순화된 디버깅 (개발 환경에서만)
+  // 디버깅 로그 제거 (콘솔 스팸 방지)
 
   return (
     <div className="w-[579px] h-[499px] pl-[30px] justify-end items-center inline-flex relative">
@@ -45,13 +66,20 @@ export const MyCharacterContainer: React.FC<MyCharacterContainerProps> = ({ isHo
               }}
             >
               캐릭터를 설정 해주세요
+              {/* ✨ 단순화된 디버깅 정보 */}
+              {import.meta.env.DEV && (
+                <div className="mt-2 text-xs text-red-400">
+                  DEBUG: hasCharacter={hasCharacter ? 'true' : 'false'} | 
+                  isCustomized={currentPlayer?.characterInfo?.isCustomized ? 'Y' : 'N'}
+                </div>
+              )}
             </div>
           )}
           
-          {/* 캐릭터가 설정되었을 때 - 캐릭터 이미지 표시 */}
+          {/* 캐릭터가 설정되었을 때 - 안전한 실시간 캐릭터 표시 */}
           {hasCharacter && (
             <div 
-              className="absolute flex justify-center items-start"
+              className="absolute"
               style={{
                 width: '480px',
                 height: '480px',
@@ -61,16 +89,27 @@ export const MyCharacterContainer: React.FC<MyCharacterContainerProps> = ({ isHo
                 overflow: 'hidden'
               }}
             >
-              <img 
-                src={CharacterSample}
-                alt="내 캐릭터"
-                style={{
-                  width: '480px',
-                  height: '642px',
-                  objectFit: 'cover',
-                  objectPosition: 'top'
-                }}
-              />
+              {/* 🎨 안전한 캐립터 렌더링 */}
+              <div className="relative w-full h-full">
+                {(() => {
+                  try {
+                    return renderCharacterLayers({
+                      selectedOptions: characterData!.selectedOptions,
+                      selectedColors: characterData!.selectedColors,
+                      nickname: characterData!.nickname || currentPlayer?.nickname || 'Me'
+                    });
+                  } catch (error) {
+                    if (import.meta.env.DEV) {
+                      console.error('❌ [MyCharacterContainer] 캐릭터 렌더링 오류:', error);
+                    }
+                    return (
+                      <div className="flex items-center justify-center w-full h-full text-white opacity-50">
+                        캐릭터 렌더링 오류
+                      </div>
+                    );
+                  }
+                })()}
+              </div>
             </div>
           )}
         </div>
@@ -85,6 +124,26 @@ export const MyCharacterContainer: React.FC<MyCharacterContainerProps> = ({ isHo
           />
         </div>
       </div>
+      {/* 음성 표시기 */}
+      {voiceChatConnected && (
+        <div
+          style={{
+            position: 'absolute',
+            right: '20px',
+            top: '20px',
+            zIndex: 10
+          }}
+        >
+          <VoiceIndicator
+            stream={localStream}
+            isMuted={isLocalMuted}
+            isConnected={voiceChatConnected}
+            nickname={currentPlayer?.nickname || ''}
+            size="large"
+          />
+        </div>
+      )}
+
       {/* 현재 플레이어가 방장일 때만 아이콘 표시 */}
       {isHost && (
         <div

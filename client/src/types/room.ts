@@ -1,30 +1,37 @@
-// 방 관련 타입 정의
+// 방 관련 타입 정의 (레거시 지원용)
+// 새로운 코드에서는 types/game.ts, types/api.ts, types/webrtc.ts 사용 권장
 
-export interface Player {
-  id: string;
-  name: string;
-  isHost: boolean; // 방장 여부
-  character?: string | null; // 캐릭터 설정 여부 (설정된 캐릭터 이름 또는 null)
-  recording?: boolean; // 녹화화면 설정 여부
+// 레거시 타입들 - 하위 호환성을 위해 유지
+export type { CharacterData, Player, Room } from './game';
+export type { 
+  ParticipantUpdateEvent, 
+  VoiceChatState, 
+  PeerConnectionState,
+  WebRTCOfferData as WebRTCOffer,
+  WebRTCAnswerData as WebRTCAnswer,
+  WebRTCIceCandidateData as WebRTCIceCandidate,
+} from './webrtc';
+
+// 추가 레거시 인터페이스
+export interface PreparationStatus {
+  characterSetup: boolean;
+  screenSetup: boolean;
+  isReady?: boolean;
 }
 
-export interface RecodeRoom {
-  id: string;
-  roomName: string;
-  entryCode: string; // 입장코드 (6자리)
-  hostId: string; // 방장 ID
-  maxPlayers: number; // 최대 인원
-  players: Player[]; // 현재 참여자 목록
-  createdAt: string; // 생성 시간
+// 기존 코드 호환성을 위한 추가 타입들
+export interface LegacyCharacterOptions {
+  face: string[];
+  hair: string[];
+  top: string[];
+  bottom: string[];
+  accessory: string[];
 }
 
-export interface CreateRoomRequest {
-  roomName: string;
-  maxPlayers: number;
-  // hostName 제거 - 자동으로 "Nickname1"로 설정
+export interface LegacyCharacterColors {
+  face: string[];
+  hair: string[];
+  top: string[];
+  bottom: string[];
+  accessory: string[];
 }
-
-export interface JoinRoomRequest {
-  entryCode: string;
-  // playerName 제거 - 자동으로 순서대로 설정
-} 

@@ -56,8 +56,8 @@ const AssemblyAITestPage: React.FC = () => {
       if (!transcriptData.id) throw new Error("트랜스크립트 요청 실패");
 
       // (3) 트랜스크립트 완료까지 폴링
-      let status = transcriptData.status;
-      let transcriptId = transcriptData.id;
+      // const status = transcriptData.status; // 향후 상태 확인용
+      const transcriptId = transcriptData.id;
       let resultData = null;
       for (let i = 0; i < 60; i++) { // 최대 60초 대기
         const res = await fetch(`${ASSEMBLY_API_URL}/transcript/${transcriptId}`, {

@@ -99,7 +99,7 @@ export const Button1 = ({
         disabled={disabled || loading}
         className={`
           relative
-          bg-transparent bg-contain bg-center bg-no-repeat
+          bg-transparent bg-center bg-no-repeat
           font-semibold text-white 
           outline-none focus:outline-none
           border-none
