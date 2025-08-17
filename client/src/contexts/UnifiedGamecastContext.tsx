@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
 import type { Room, Player, CharacterData } from '../types/game';
-import { WebRTCManager } from '../utils/webRTCManager';
 import { SOCKET_URL } from '../config/server.config';
 import { 
   getCurrentRoom, 
@@ -9,6 +9,17 @@ import {
   getRoomInfo, 
   leaveRoom as leaveRoomUtil 
 } from '../utils/roomManager';
+
+// 전역 Socket 인스턴스 (중복 연결 방지 + 지속적 재연결)
+let globalSocket: Socket | null = null;
+
+// Socket 연결 상태 추적
+let currentRoomCode: string | null = null;
+let currentGuestUserId: string | null = null;
+let isSocketDisconnecting = false; // 의도적 연결 해제 중인지 플래그
+
+// Context 초기화 중복 방지
+let isInitializing = false;
 
 // 통합 전역 상태 인터페이스
 interface UnifiedGamecastState {
@@ -28,14 +39,10 @@ interface UnifiedGamecastState {
     isReady: boolean;
   };
   
-  // 실시간 연결 상태 통합
+  // 실시간 연결 상태 (WebRTC 제거됨)
   realtime: {
     socket: Socket | null;
-    webrtc: WebRTCManager | null;
-    voiceConnected: boolean;
-    localStream: MediaStream | null;
-    remoteStreams: Map<string, MediaStream>;
-    isLocalMuted: boolean;
+    voiceConnected: boolean; // 항상 false
   };
   
   // 녹화 상태
@@ -61,11 +68,7 @@ type UnifiedGamecastAction =
   | { type: 'UPDATE_PARTICIPANT'; payload: { guestUserId: string; updates: Partial<Player> } }
   | { type: 'SET_PREPARATION'; payload: Partial<UnifiedGamecastState['preparation']> }
   | { type: 'SET_SOCKET'; payload: Socket | null }
-  | { type: 'SET_WEBRTC'; payload: WebRTCManager | null }
   | { type: 'SET_VOICE_CONNECTED'; payload: boolean }
-  | { type: 'SET_LOCAL_STREAM'; payload: MediaStream | null }
-  | { type: 'UPDATE_REMOTE_STREAM'; payload: { guestUserId: string; stream: MediaStream | null } }
-  | { type: 'SET_LOCAL_MUTED'; payload: boolean }
   | { type: 'SET_RECORDING_STATE'; payload: Partial<UnifiedGamecastState['recording']> }
   | { type: 'SET_UI_STATE'; payload: Partial<UnifiedGamecastState['ui']> }
   | { type: 'RESET_STATE' };
@@ -84,11 +87,7 @@ const initialState: UnifiedGamecastState = {
   },
   realtime: {
     socket: null,
-    webrtc: null,
-    voiceConnected: false,
-    localStream: null,
-    remoteStreams: new Map(),
-    isLocalMuted: false
+    voiceConnected: false
   },
   recording: {
     isRecording: false,
@@ -144,40 +143,10 @@ const unifiedGamecastReducer = (state: UnifiedGamecastState, action: UnifiedGame
         realtime: { ...state.realtime, socket: action.payload }
       };
     
-    case 'SET_WEBRTC':
-      return {
-        ...state,
-        realtime: { ...state.realtime, webrtc: action.payload }
-      };
-    
     case 'SET_VOICE_CONNECTED':
       return {
         ...state,
         realtime: { ...state.realtime, voiceConnected: action.payload }
-      };
-    
-    case 'SET_LOCAL_STREAM':
-      return {
-        ...state,
-        realtime: { ...state.realtime, localStream: action.payload }
-      };
-    
-    case 'UPDATE_REMOTE_STREAM':
-      const newRemoteStreams = new Map(state.realtime.remoteStreams);
-      if (action.payload.stream) {
-        newRemoteStreams.set(action.payload.guestUserId, action.payload.stream);
-      } else {
-        newRemoteStreams.delete(action.payload.guestUserId);
-      }
-      return {
-        ...state,
-        realtime: { ...state.realtime, remoteStreams: newRemoteStreams }
-      };
-    
-    case 'SET_LOCAL_MUTED':
-      return {
-        ...state,
-        realtime: { ...state.realtime, isLocalMuted: action.payload }
       };
     
     case 'SET_RECORDING_STATE':
@@ -207,6 +176,7 @@ const UnifiedGamecastContext = createContext<{
     // 방 관련
     refreshRoomState: () => Promise<void>;
     leaveRoom: () => Promise<void>;
+    clearRoomData: () => Promise<void>;
     updateParticipant: (guestUserId: string, updates: Partial<Player>) => void;
     
     // 준비 상태 관리
@@ -214,8 +184,6 @@ const UnifiedGamecastContext = createContext<{
     
     // 실시간 연결 관리
     initializeSocket: (roomCode: string, currentPlayer: Player) => void;
-    initializeWebRTC: (roomCode: string, nickname: string) => Promise<void>;
-    toggleLocalAudio: () => void;
     
     // 캐릭터 관리
     updateCharacter: (characterData: CharacterData) => void;
@@ -233,6 +201,41 @@ const UnifiedGamecastContext = createContext<{
 // Provider 컴포넌트
 export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(unifiedGamecastReducer, initialState);
+  const [pathname, setPathname] = useState(window.location.pathname);
+  
+  // 경로 변경 감지
+  useEffect(() => {
+    const handleLocationChange = () => {
+      const newPath = window.location.pathname;
+      if (newPath !== pathname) {
+        console.log('🚗 [UnifiedContext] 경로 변경 감지:', pathname, '→', newPath);
+        setPathname(newPath);
+      }
+    };
+
+    // popstate 이벤트 리스너 (뒤로가기/앞으로가기)
+    window.addEventListener('popstate', handleLocationChange);
+    
+    // pushState/replaceState 감지를 위한 override
+    const originalPushState = history.pushState;
+    const originalReplaceState = history.replaceState;
+    
+    history.pushState = function(...args) {
+      originalPushState.apply(this, args);
+      handleLocationChange();
+    };
+    
+    history.replaceState = function(...args) {
+      originalReplaceState.apply(this, args);
+      handleLocationChange();
+    };
+
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+      history.pushState = originalPushState;
+      history.replaceState = originalReplaceState;
+    };
+  }, [pathname]);
 
   // 방 상태 새로고침
   const refreshRoomState = async () => {
@@ -279,23 +282,121 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
     }
   };
 
+  // 방 데이터 완전 초기화 (메인/참여/생성 페이지 진입 시 사용)
+  const clearRoomData = async () => {
+    console.log('🧹 [UnifiedContext] 방 데이터 완전 초기화 시작');
+    
+    try {
+      // Socket 완전 정리 (clearRoomData는 페이지 이동용이므로 완전 초기화)
+      console.log('🔌 [UnifiedContext] Socket 완전 정리 시작');
+      isSocketDisconnecting = true;
+      
+      if (state.realtime.socket) {
+        console.log('🔌 [UnifiedContext] Context Socket 정리');
+        state.realtime.socket.removeAllListeners();
+        state.realtime.socket.disconnect();
+      }
+
+      if (globalSocket) {
+        console.log('🔌 [UnifiedContext] 전역 Socket 정리');
+        globalSocket.removeAllListeners();
+        globalSocket.disconnect();
+        globalSocket = null;
+      }
+
+      // 전역 상태 초기화
+      currentRoomCode = null;
+      currentGuestUserId = null;
+
+      // localStorage와 sessionStorage 완전 초기화
+      const { debugClearAllData } = await import('../utils/roomManager');
+      debugClearAllData();
+      
+      // Context 상태 완전 초기화
+      dispatch({ type: 'RESET_STATE' });
+      
+      console.log('✅ [UnifiedContext] 방 데이터 완전 초기화 완료');
+    } catch (error) {
+      console.error('❌ [UnifiedContext] 방 데이터 초기화 실패:', error);
+    }
+  };
+
   // 방 나가기
   const leaveRoom = async () => {
+    console.log('🚪 [UnifiedContext] 방 나가기 시작', {
+      hasSocket: !!state.realtime.socket,
+      hasRoom: !!state.currentRoom,
+      hasPlayer: !!state.currentPlayer,
+      guestUserId: state.currentPlayer?.guestUserId
+    });
+    
     try {
-      // WebRTC 정리
-      if (state.realtime.webrtc) {
-        state.realtime.webrtc.close();
+      // 1. Socket을 통한 방 나가기 알림 (서버 API 호출 전)
+      if (state.realtime.socket && state.currentRoom && state.currentPlayer) {
+        console.log('📤 [UnifiedContext] Socket으로 방 나가기 알림 전송');
+        state.realtime.socket.emit('leave-room', {
+          roomCode: state.currentRoom.roomCode,
+          guestUserId: state.currentPlayer.guestUserId,
+          nickname: state.currentPlayer.nickname
+        });
       }
+
+      // 2. Socket 완전 초기화 (방 나가기 시 재연결 방지)
+      console.log('🔌 [UnifiedContext] Socket 완전 초기화 시작');
       
-      // Socket 정리
+      // 의도적 연결 해제 플래그 설정 (재연결 방지)
+      isSocketDisconnecting = true;
+      
       if (state.realtime.socket) {
+        console.log('🔌 [UnifiedContext] Context Socket 연결 해제');
+        state.realtime.socket.removeAllListeners(); // 모든 이벤트 리스너 제거
         state.realtime.socket.disconnect();
       }
       
-      await leaveRoomUtil();
+      // 전역 Socket도 완전 정리
+      if (globalSocket) {
+        console.log('🔌 [UnifiedContext] 전역 Socket 완전 정리');
+        globalSocket.removeAllListeners(); // 모든 이벤트 리스너 제거
+        globalSocket.disconnect();
+        globalSocket = null;
+      }
+
+      // 전역 상태 초기화
+      currentRoomCode = null;
+      currentGuestUserId = null;
+      
+      console.log('✅ [UnifiedContext] Socket 완전 초기화 완료');
+      
+      // 3. 서버 API 호출 및 세션 정리
+      console.log('🧹 [UnifiedContext] 서버 API 호출 및 세션 정리 시작');
+      const result = await leaveRoomUtil();
+      
+      if (result.success) {
+        console.log('✅ [UnifiedContext] 서버 방 나가기 성공:', result.message);
+        
+        // 성공 시 간단한 알림 (선택적)
+        if (result.message) {
+          console.log('📢 [UnifiedContext] 방 나가기 메시지:', result.message);
+        }
+      } else {
+        console.warn('⚠️ [UnifiedContext] 서버 방 나가기 실패, 로컬 정리는 완료:', result.error);
+      }
+      
+      // 4. Context 상태 초기화
+      console.log('♻️ [UnifiedContext] Context 상태 초기화');
       dispatch({ type: 'RESET_STATE' });
+      
+      console.log('✅ [UnifiedContext] 방 나가기 완료');
+      return { success: true };
+      
     } catch (error) {
-      console.error('방 나가기 실패:', error);
+      console.error('❌ [UnifiedContext] 방 나가기 실패:', error);
+      
+      // 에러 발생 시에도 로컬 정리는 수행
+      console.log('🧹 [UnifiedContext] 에러 상황에서 로컬 정리 수행');
+      dispatch({ type: 'RESET_STATE' });
+      
+      return { success: false, error: error instanceof Error ? error.message : '방 나가기 중 오류가 발생했습니다.' };
     }
   };
 
@@ -318,12 +419,57 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
     }
   };
 
-  // Socket 초기화
+  // 강화된 Socket 초기화 (지속적 재연결 지원)
   const initializeSocket = (roomCode: string, currentPlayer: Player) => {
-    if (state.realtime.socket) {
-      console.log('Socket 이미 연결됨, 재사용');
+    console.log('🔌 [initializeSocket] Socket 초기화 시작:', {
+      requestedRoom: roomCode,
+      currentGlobalRoom: currentRoomCode,
+      playerGuestId: currentPlayer.guestUserId,
+      hasGlobalSocket: !!globalSocket,
+      isGlobalSocketConnected: globalSocket?.connected || false,
+      isDisconnecting: isSocketDisconnecting
+    });
+
+    // 의도적 연결 해제 중이면 초기화 무시
+    if (isSocketDisconnecting) {
+      console.log('⏭️ [initializeSocket] 연결 해제 중, 초기화 건너뜀');
       return;
     }
+
+    // 전역 Socket이 있고 같은 방/같은 유저면 재사용
+    if (globalSocket && globalSocket.connected && 
+        currentRoomCode === roomCode && 
+        currentGuestUserId === currentPlayer.guestUserId) {
+      console.log('✅ [initializeSocket] 기존 Socket 재사용:', { 
+        socketId: globalSocket.id, 
+        roomCode,
+        guestUserId: currentPlayer.guestUserId
+      });
+      dispatch({ type: 'SET_SOCKET', payload: globalSocket });
+      return;
+    }
+
+    // 기존 Socket이 있지만 다른 방/다른 유저면 정리 후 새로 생성
+    if (globalSocket) {
+      console.log('🔄 [initializeSocket] 기존 Socket 정리 (방/유저 변경):', { 
+        oldRoom: currentRoomCode, 
+        newRoom: roomCode,
+        oldUser: currentGuestUserId,
+        newUser: currentPlayer.guestUserId
+      });
+      
+      // 재연결 방지를 위해 일시적으로 플래그 설정
+      isSocketDisconnecting = true;
+      globalSocket.disconnect();
+      globalSocket = null;
+      
+      // 잠시 후 플래그 해제
+      setTimeout(() => {
+        isSocketDisconnecting = false;
+      }, 1000);
+    }
+
+    console.log('🔌 [initializeSocket] 새 Socket 연결 시작:', { roomCode, playerId: currentPlayer.guestUserId });
 
     const socket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
@@ -331,21 +477,117 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
+      query: {
+        roomCode: roomCode,
+        guestUserId: currentPlayer.guestUserId
+      }
     });
 
-    // 이벤트 리스너 설정
+    // 전역 상태 업데이트
+    currentRoomCode = roomCode;
+    currentGuestUserId = currentPlayer.guestUserId;
+
+    // 강화된 이벤트 리스너 설정
     socket.on('connect', () => {
-      console.log('✅ Socket 연결됨:', socket.id);
+      console.log('✅ Socket 연결됨:', {
+        socketId: socket.id,
+        roomCode,
+        guestUserId: currentPlayer.guestUserId,
+        nickname: currentPlayer.nickname
+      });
+      
       socket.emit('join-room', {
         roomCode,
         guestUserId: currentPlayer.guestUserId,
         nickname: currentPlayer.nickname
       });
+
+      // 연결 후 현재 방 상태 요청
+      setTimeout(() => {
+        console.log('🔄 [Socket] 현재 방 상태 요청');
+        socket.emit('get-room-state', { roomCode });
+      }, 1000);
+    });
+
+    // 재연결 이벤트 처리
+    socket.on('reconnect', (attemptNumber) => {
+      console.log('🔄 Socket 재연결됨:', {
+        attempt: attemptNumber,
+        socketId: socket.id,
+        roomCode: currentRoomCode
+      });
+      
+      // 재연결 시 자동으로 방에 다시 참여
+      if (currentRoomCode && currentGuestUserId) {
+        socket.emit('join-room', {
+          roomCode: currentRoomCode,
+          guestUserId: currentGuestUserId,
+          nickname: currentPlayer.nickname
+        });
+      }
+    });
+
+    // 연결 해제 시 재연결 시도
+    socket.on('disconnect', (reason) => {
+      console.log('🔌 Socket 연결 해제:', { reason, isDisconnecting: isSocketDisconnecting });
+      
+      // 의도적 해제가 아닌 경우에만 재연결 로직 활성화
+      if (!isSocketDisconnecting) {
+        if (reason === 'io server disconnect') {
+          console.log('⚠️ 서버에서 강제 연결 해제, 재연결 시도');
+          dispatch({ type: 'SET_ERROR', payload: '서버와의 연결이 끊어졌습니다. 재연결 시도 중...' });
+        } else if (reason === 'transport close' || reason === 'ping timeout') {
+          console.log('🔄 네트워크 이슈로 연결 해제, 자동 재연결 대기');
+        }
+      }
     });
 
     socket.on('participants-update', (data: { participants: Player[] }) => {
-      console.log('👥 참여자 목록 업데이트:', data.participants.length);
+      console.log('👥 [Socket] participants-update 이벤트 수신:', {
+        participantsCount: data.participants.length,
+        participants: data.participants.map(p => ({
+          guestUserId: p.guestUserId,
+          nickname: p.nickname,
+          role: p.role
+        }))
+      });
       dispatch({ type: 'SET_PARTICIPANTS', payload: data.participants });
+    });
+
+    // 새로운 참여자가 방에 입장했을 때 (서버에서 user-joined 이벤트)
+    socket.on('user-joined', (data: { 
+      participants: Player[];
+      newParticipant: {
+        guestUserId: string;
+        nickname: string;
+        role: string;
+        joinedAt: string;
+      };
+      currentCapacity: number;
+      maxCapacity: number;
+    }) => {
+      console.log('🎉 새로운 참여자 입장:', {
+        newUser: data.newParticipant.nickname,
+        guestUserId: data.newParticipant.guestUserId,
+        totalParticipants: data.participants.length,
+        capacity: `${data.currentCapacity}/${data.maxCapacity}`
+      });
+
+      // 참여자 목록 업데이트
+      dispatch({ type: 'SET_PARTICIPANTS', payload: data.participants });
+
+      // 방 정보의 현재 인원 수도 업데이트
+      if (state.currentRoom) {
+        const updatedRoom = {
+          ...state.currentRoom,
+          currentCapacity: data.currentCapacity,
+          participants: data.participants
+        };
+        dispatch({ type: 'SET_ROOM', payload: updatedRoom });
+      }
+
+      // 환영 메시지 표시 (선택적)
+      console.log(`🎊 ${data.newParticipant.nickname}님이 방에 입장했습니다!`);
     });
 
     socket.on('character-update', (data: { guestUserId: string; characterInfo: any }) => {
@@ -368,58 +610,41 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
       dispatch({ type: 'SET_RECORDING_STATE', payload: { isRecording: false } });
     });
 
+    // 방 해체 이벤트 (방장이 나갔을 때)
+    socket.on('room-dissolved', (data: { reason: string; message: string; timestamp: string; roomCode: string }) => {
+      console.log('🚪 방 해체 알림 수신:', data);
+      dispatch({ type: 'SET_ERROR', payload: data.message });
+      
+      // 잠시 후 자동으로 메인 페이지로 이동
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 3000);
+    });
+
+    // 참여자 나가기 이벤트 (다른 참여자가 나갔을 때)
+    socket.on('user-left', (data: { guestUserId: string; nickname: string; participants: Player[] }) => {
+      console.log('👤 참여자 나가기 알림:', data);
+      dispatch({ type: 'SET_PARTICIPANTS', payload: data.participants });
+    });
+
+    // 이미 위에서 처리된 disconnect 이벤트이므로 중복 제거
+
+    // 모든 Socket 이벤트 수신 디버깅
+    socket.onAny((eventName, ...args) => {
+      console.log(`🎯 [Socket] 이벤트 수신:`, { eventName, args });
+    });
+
+    // Socket 에러 처리
+    socket.on('error', (error) => {
+      console.error('❌ [Socket] 에러:', error);
+    });
+
+    // 전역 Socket으로 저장
+    globalSocket = socket;
     dispatch({ type: 'SET_SOCKET', payload: socket });
   };
 
-  // WebRTC 초기화
-  const initializeWebRTC = async (roomCode: string, nickname: string) => {
-    if (state.realtime.webrtc) {
-      console.log('WebRTC 이미 초기화됨');
-      return;
-    }
-
-    try {
-      const webrtcManager = new WebRTCManager(roomCode, nickname);
-      
-      // 이벤트 바인딩
-      webrtcManager.onRemoteStream = (guestUserId: string, stream: MediaStream) => {
-        console.log('🎵 Remote stream 수신:', guestUserId);
-        dispatch({ type: 'UPDATE_REMOTE_STREAM', payload: { guestUserId, stream } });
-        updateParticipant(guestUserId, { hasWebRTCConnection: true, remoteStream: stream });
-      };
-
-      webrtcManager.onUserLeft = (guestUserId: string) => {
-        console.log('👋 사용자 퇴장:', guestUserId);
-        dispatch({ type: 'UPDATE_REMOTE_STREAM', payload: { guestUserId, stream: null } });
-        updateParticipant(guestUserId, { hasWebRTCConnection: false, remoteStream: null });
-      };
-
-      // 로컬 스트림 시작
-      const localStream = await webrtcManager.start();
-      dispatch({ type: 'SET_WEBRTC', payload: webrtcManager });
-      dispatch({ type: 'SET_LOCAL_STREAM', payload: localStream });
-      dispatch({ type: 'SET_VOICE_CONNECTED', payload: true });
-
-      console.log('✅ WebRTC 초기화 완료');
-    } catch (error) {
-      console.error('❌ WebRTC 초기화 실패:', error);
-      dispatch({ type: 'SET_ERROR', payload: 'WebRTC 초기화에 실패했습니다.' });
-    }
-  };
-
-  // 로컬 오디오 토글
-  const toggleLocalAudio = () => {
-    if (state.realtime.localStream) {
-      const audioTracks = state.realtime.localStream.getAudioTracks();
-      const newMutedState = !state.realtime.isLocalMuted;
-      
-      audioTracks.forEach(track => {
-        track.enabled = !newMutedState;
-      });
-      
-      dispatch({ type: 'SET_LOCAL_MUTED', payload: newMutedState });
-    }
-  };
+  // WebRTC 제거됨 - 나중에 구현 예정
 
   // 캐릭터 업데이트
   const updateCharacter = (characterData: CharacterData) => {
@@ -459,34 +684,115 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
     dispatch({ type: 'SET_ERROR', payload: error });
   };
 
-  // 초기화 useEffect
+  // 간단한 초기화 useEffect - 경로 변경 감지
   useEffect(() => {
     const initializeRoom = async () => {
-      const room = getCurrentRoom();
-      const userId = getCurrentUserId();
-
-      if (!room || !userId) {
-        dispatch({ type: 'SET_LOADING', payload: false });
+      const currentPath = window.location.pathname;
+      
+      // 중복 초기화 방지
+      if (isInitializing) {
+        console.log('⏭️ [UnifiedContext] 이미 초기화 중, 건너뜀');
         return;
       }
+      
+      isInitializing = true;
+      console.log('🔄 [UnifiedContext] 경로 변경 감지, 초기화 시작:', currentPath);
+      
+      try {
+        const room = getCurrentRoom();
+        const userId = getCurrentUserId();
 
-      dispatch({ type: 'SET_ROOM', payload: room });
-      await refreshRoomState();
-      dispatch({ type: 'SET_LOADING', payload: false });
+        console.log('🔍 [UnifiedContext] 세션 데이터 확인:', { 
+          hasRoom: !!room,
+          hasUserId: !!userId,
+          roomCode: room?.roomCode,
+          currentPath: currentPath
+        });
+
+        // /room 페이지가 아니면 초기화 안함
+        if (currentPath !== '/room') {
+          console.log('🏠 [UnifiedContext] 방 페이지가 아님, 초기화 건너뜀');
+          dispatch({ type: 'SET_LOADING', payload: false });
+          return;
+        }
+
+        // /room 페이지에서 방 정보가 있으면 바로 설정
+        if (room && userId) {
+          console.log('✅ [UnifiedContext] 방 정보 있음, 기본값으로 바로 설정');
+          
+          // 기존 데이터가 이미 설정되어 있는지 확인
+          if (state.currentRoom && state.currentRoom.roomCode === room.roomCode && state.currentPlayer) {
+            console.log('🔄 [UnifiedContext] 동일한 방 데이터가 이미 설정됨');
+            
+            // 기존 Socket 상태 확인 및 복구
+            if (!state.realtime.socket && globalSocket && globalSocket.connected) {
+              console.log('🔌 [UnifiedContext] 기존 Socket 복구:', {
+                socketId: globalSocket.id,
+                roomCode: room.roomCode,
+                isConnected: globalSocket.connected
+              });
+              dispatch({ type: 'SET_SOCKET', payload: globalSocket });
+            }
+            
+            dispatch({ type: 'SET_LOADING', payload: false });
+            return;
+          }
+          
+          // 기본 플레이어 정보 생성 (API 없이)
+          const basicPlayer: Player = {
+            id: userId,
+            guestUserId: userId,
+            nickname: "Nickname1", // 기본 닉네임 (방장은 항상 Nickname1)
+            role: "host", // 방 생성자는 항상 호스트
+            isHost: true,
+            joinedAt: new Date().toISOString(),
+            preparationStatus: {
+              characterSetup: false,
+              screenSetup: false,
+              isReady: false
+            },
+            characterInfo: null
+          };
+
+          // Context에 바로 설정
+          dispatch({ type: 'SET_ROOM', payload: room });
+          dispatch({ type: 'SET_PLAYER', payload: basicPlayer });
+          dispatch({ type: 'SET_PARTICIPANTS', payload: [] }); // 빈 배열
+          dispatch({ type: 'SET_PREPARATION', payload: { 
+            characterSetup: false, 
+            screenSetup: false, 
+            isReady: false 
+          }});
+          
+          console.log('🎯 [UnifiedContext] 기본값 설정 완료:', {
+            room: room.roomCode,
+            player: basicPlayer.guestUserId,
+            isHost: basicPlayer.isHost
+          });
+        } else {
+          console.log('⚠️ [UnifiedContext] 방 정보 없음, 로딩만 완료');
+        }
+
+        // API 호출 없이 바로 로딩 완료
+        dispatch({ type: 'SET_LOADING', payload: false });
+        
+      } finally {
+        // 초기화 완료 후 플래그 리셋
+        isInitializing = false;
+      }
     };
 
     initializeRoom();
-  }, []);
+  }, [pathname]); // pathname 변경 시마다 초기화 실행
 
   // 액션들
   const actions = {
     refreshRoomState,
     leaveRoom,
+    clearRoomData,
     updateParticipant,
     updatePreparation,
     initializeSocket,
-    initializeWebRTC,
-    toggleLocalAudio,
     updateCharacter,
     startRecording,
     stopRecording,
@@ -526,14 +832,13 @@ export const useUnifiedRoom = () => {
 };
 
 export const useUnifiedVoiceChat = () => {
-  const { state, actions } = useUnifiedGamecast();
+  const { state } = useUnifiedGamecast();
   return {
-    localStream: state.realtime.localStream,
-    remoteStreams: state.realtime.remoteStreams,
-    voiceChatConnected: state.realtime.voiceConnected,
-    isLocalMuted: state.realtime.isLocalMuted,
-    toggleLocalAudio: actions.toggleLocalAudio,
-    initializeWebRTC: actions.initializeWebRTC
+    localStream: null, // WebRTC 제거됨
+    remoteStreams: new Map<string, MediaStream>(), // 빈 맵
+    voiceChatConnected: false, // 항상 false
+    isLocalMuted: false,
+    toggleLocalAudio: () => {}, // 빈 함수
   };
 };
 

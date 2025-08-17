@@ -1,4 +1,4 @@
-import React, { Component, useEffect } from "react";
+import React, { Component, useEffect, useState } from "react";
 import type { ErrorInfo } from "react";
 import { Navigation } from "../../../components/gamecast/common/Navigation";
 import { Footer } from "../../../components/gamecast/common/Footer";
@@ -21,7 +21,6 @@ import {
   useUnifiedRecording
 } from "../../../contexts/UnifiedGamecastContext";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -80,8 +79,7 @@ export const RoomPage = () => {
     remoteStreams,
     voiceChatConnected,
     isLocalMuted,
-    toggleLocalAudio,
-    initializeWebRTC
+    toggleLocalAudio
   } = useUnifiedVoiceChat();
 
   const {
@@ -107,32 +105,31 @@ export const RoomPage = () => {
   // 캐릭터 설정 상태 확인
   const hasCharacterSetup = currentPlayer?.characterInfo?.isCustomized || false;
 
+
   // 🚀 실시간 연결 초기화
   useEffect(() => {
+    // 방과 플레이어 정보가 모두 있고, Socket이 연결되지 않았을 때만 초기화
     if (currentRoom && currentPlayer && !state.realtime.socket) {
-      console.log('🔌 Socket 초기화:', currentRoom.roomCode);
+      console.log('🔌 [RoomPage] Socket 초기화 요청:', { 
+        roomCode: currentRoom.roomCode, 
+        playerId: currentPlayer.guestUserId,
+        roomId: currentRoom.id 
+      });
       actions.initializeSocket(currentRoom.roomCode, currentPlayer);
+    } else if (state.realtime.socket) {
+      console.log('✅ [RoomPage] Socket 이미 연결됨:', { 
+        socketId: state.realtime.socket.id,
+        roomCode: currentRoom?.roomCode 
+      });
     }
-  }, [currentRoom, currentPlayer, state.realtime.socket]);
+  }, [currentRoom?.id]); // roomId로 의존성 변경 (roomCode보다 안정적)
 
-  useEffect(() => {
-    if (currentRoom && currentPlayer && !state.realtime.webrtc && localStream === null) {
-      console.log('🎤 WebRTC 초기화:', currentPlayer.nickname);
-      initializeWebRTC(currentRoom.roomCode, currentPlayer.nickname || 'Unknown');
-    }
-  }, [currentRoom, currentPlayer, state.realtime.webrtc, localStream]);
+  // WebRTC 초기화 제거됨 - 나중에 구현 예정
 
   // 준비하기 버튼 활성화 조건
   const isReadyEnabled = characterSetupComplete && screenSetupComplete;
 
-  // 로딩 중 처리
-  if (loading) {
-    return (
-      <div className="h-full flex items-center justify-center bg-[linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,6,72,1)_100%)]">
-        <p className="text-white">방 정보를 불러오는 중...</p>
-      </div>
-    );
-  }
+  // 로딩 상태는 무시하고 바로 진행
 
   // 심각한 에러만 처리
   if (error && !error.includes('음성') && !error.includes('WebRTC')) {
@@ -153,31 +150,23 @@ export const RoomPage = () => {
     );
   }
 
-  // 방 정보가 없는 경우
-  if (!currentRoom || !currentPlayer) {
-    return (
-      <div className="h-full flex items-center justify-center bg-[linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,6,72,1)_100%)]">
-        <p className="text-white">방 정보를 찾을 수 없습니다.</p>
-      </div>
-    );
-  }
+  // 방 정보가 없어도 UI 렌더링 계속 진행 (Context에서 자동 초기화)
 
   console.log('🎮 [RoomPage] 통합 Context 렌더링:', {
     loading,
     error,
     currentRoom: !!currentRoom,
     currentPlayer: !!currentPlayer,
-    showCharacterSetup,
     roomCode: currentRoom?.roomCode,
     playerNickname: currentPlayer?.nickname,
+    showCharacterSetup,
     participantsCount: participants.length,
     voiceChatConnected,
     isReadyEnabled,
     characterSetupComplete,
     screenSetupComplete,
     hasCharacterSetup,
-    socketConnected: !!state.realtime.socket,
-    webrtcInitialized: !!state.realtime.webrtc
+    socketConnected: !!state.realtime.socket
   });
 
   return (
@@ -190,7 +179,7 @@ export const RoomPage = () => {
               <div className="h-screen w-screen flex flex-col items-center justify-center bg-[linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,6,72,1)_100%)]">
                 <p className="text-white text-xl mb-4">캐릭터 설정 로딩 중 오류가 발생했습니다</p>
                 <button 
-                  onClick={() => setShowCharacterSetup(false)}
+                  onClick={() => setUIState({ showCharacterSetup: false })}
                   className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
                 >
                   돌아가기
@@ -367,19 +356,33 @@ export const RoomPage = () => {
               {/* 왼쪽 세로 flex 컨테이너 */}
               <div className="flex flex-col justify-between flex-1 max-w-[609px] min-h-[775px]">
                 {/* 방이름&입장코드 컨테이너 */}
-                <RoomInfoContainer roomName={currentRoom.roomName} entryCode={currentRoom.roomCode} />
+                {currentRoom ? (
+                  <RoomInfoContainer roomName={currentRoom.roomName} entryCode={currentRoom.roomCode} />
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-[120px] bg-gray-800/50 rounded-lg animate-pulse">
+                    <div className="w-48 h-6 bg-gray-600 rounded mb-2"></div>
+                    <div className="w-32 h-4 bg-gray-600 rounded"></div>
+                  </div>
+                )}
                 
                 {/* 내 캐릭터 컨테이너 */}
-                <MyCharacterContainer 
-                  isHost={currentRoom.hostGuestId === currentPlayer.guestUserId} 
-                  currentPlayer={currentPlayer}
-                  localStream={localStream}
-                  isLocalMuted={isLocalMuted}
-                  voiceChatConnected={voiceChatConnected}
-                />
+                {currentRoom && currentPlayer ? (
+                  <MyCharacterContainer 
+                    isHost={currentRoom.hostGuestId === currentPlayer.guestUserId} 
+                    currentPlayer={currentPlayer}
+                    localStream={localStream}
+                    isLocalMuted={isLocalMuted}
+                    voiceChatConnected={voiceChatConnected}
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-[300px] bg-gray-800/50 rounded-lg animate-pulse">
+                    <div className="w-24 h-24 bg-gray-600 rounded-full mb-4"></div>
+                    <div className="w-32 h-4 bg-gray-600 rounded"></div>
+                  </div>
+                )}
                 
                 {/* Context 기반 캐릭터 상태 디버깅 패널 */}
-                {import.meta.env.DEV && (
+                {import.meta.env.DEV && currentRoom && currentPlayer && (
                   <div style={{ 
                     position: 'fixed', 
                     bottom: '16px', 
@@ -441,23 +444,45 @@ export const RoomPage = () => {
                 )}
                 
                 {/* 닉네임 표기 컨테이너 */}
-                <NicknameContainer nickname={currentPlayer.nickname} />
+                {currentPlayer ? (
+                  <NicknameContainer nickname={currentPlayer.nickname} />
+                ) : (
+                  <div className="flex justify-center">
+                    <div className="w-32 h-8 bg-gray-600 rounded animate-pulse"></div>
+                  </div>
+                )}
               </div>
               
               {/* 오른쪽 세로 flex 컨테이너 */}
               <div className="flex flex-col items-end justify-between flex-1 max-w-[621px] min-h-[775px]">
                 {/* 플레이어 목록 컨테이너 */}
-                <PlayerGrid 
-                  currentRoom={currentRoom} 
-                  currentPlayer={currentPlayer}
-                  realtimeParticipants={participants}
-                  remoteStreams={remoteStreams}
-                  voiceChatConnected={voiceChatConnected}
-                  playersReadyStatus={[]}
-                />
+                {currentRoom && currentPlayer ? (
+                  <PlayerGrid 
+                    currentRoom={currentRoom} 
+                    currentPlayer={currentPlayer}
+                    realtimeParticipants={participants}
+                    remoteStreams={remoteStreams}
+                    voiceChatConnected={voiceChatConnected}
+                    playersReadyStatus={[]}
+                  />
+                ) : (
+                  <div className="flex flex-col space-y-4 w-full">
+                    {/* 플레이어 카드 스켈레톤들 */}
+                    {[1, 2].map(i => (
+                      <div key={i} className="flex items-center space-x-4 p-4 bg-gray-800/50 rounded-lg animate-pulse">
+                        <div className="w-16 h-16 bg-gray-600 rounded-full"></div>
+                        <div className="flex-1">
+                          <div className="w-24 h-4 bg-gray-600 rounded mb-2"></div>
+                          <div className="w-16 h-3 bg-gray-600 rounded"></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 
                 {/* 버튼 컨테이너 */}
-                <ButtonContainer 
+                {currentRoom && currentPlayer ? (
+                  <ButtonContainer 
                   isReadyEnabled={isReadyEnabled}
                   onStateUpdate={refreshRoomState}
                   currentRoom={currentRoom}
@@ -479,7 +504,14 @@ export const RoomPage = () => {
                   recordingTime={recordingTime}
                   onRecordingStart={startRecording}
                   onRecordingStop={stopRecording}
-                />
+                  />
+                ) : (
+                  <div className="flex space-x-2">
+                    <div className="w-24 h-10 bg-gray-600 rounded animate-pulse"></div>
+                    <div className="w-24 h-10 bg-gray-600 rounded animate-pulse"></div>
+                    <div className="w-24 h-10 bg-gray-600 rounded animate-pulse"></div>
+                  </div>
+                )}
 
                 {/* Context 기반 상태 표시 */}
                 <div className="mt-4 p-4 bg-gray-800 rounded-lg text-white text-sm">
@@ -530,6 +562,7 @@ export const RoomPage = () => {
           </div>
         </div>
       )}
+
     </React.Fragment>
   );
 };

@@ -92,7 +92,8 @@ export const PlayerGrid: React.FC<PlayerGridProps> = ({
       const isCurrentPlayer = p.guestUserId === currentPlayer.guestUserId;
       const isNotWebRTCConnection = !p.nickname?.startsWith('WEBRTC_');
       
-      const shouldInclude = !isCurrentPlayer && isNotWebRTCConnection;
+      // ✅ 모든 참여자 표시 (현재 플레이어 포함) - 실시간 업데이트 확인용
+      const shouldInclude = isNotWebRTCConnection;
       
       console.log(`🔍 [PlayerGrid] 참여자 필터링:`, {
         participant: p.nickname,

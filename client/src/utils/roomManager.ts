@@ -102,9 +102,36 @@ const getUserSession = (): UserSession => {
 };
 
 const updateUserSession = (updates: Partial<UserSession>): void => {
+  console.log('🔧 [updateUserSession] 시작:', { updates });
+  
   const currentSession = getUserSession();
+  console.log('📋 [updateUserSession] 현재 세션:', currentSession);
+  
   const updatedSession = { ...currentSession, ...updates };
-  localStorage.setItem(USER_SESSION_KEY, JSON.stringify(updatedSession));
+  console.log('🔄 [updateUserSession] 업데이트된 세션:', updatedSession);
+  
+  const serializedSession = JSON.stringify(updatedSession);
+  localStorage.setItem(USER_SESSION_KEY, serializedSession);
+  
+  // 저장 후 즉시 검증
+  const savedData = localStorage.getItem(USER_SESSION_KEY);
+  const parsedData = savedData ? JSON.parse(savedData) : null;
+  
+  console.log('💾 [updateUserSession] 저장 검증:', {
+    stored: !!savedData,
+    hasCurrentRoom: !!(parsedData?.currentRoom),
+    hasGuestUserId: !!(parsedData?.guestUserId),
+    roomCode: parsedData?.currentRoom?.roomCode
+  });
+};
+
+// 완전한 세션 초기화 함수
+const clearUserSession = (): void => {
+  console.log('🧹 [clearUserSession] 세션 완전 초기화 수행');
+  localStorage.removeItem(SESSION_ID_KEY);
+  localStorage.removeItem(USER_SESSION_KEY);
+  sessionStorage.removeItem(SESSION_ID_KEY);
+  sessionStorage.removeItem(USER_SESSION_KEY);
 };
 
 // API 요청 헬퍼
@@ -200,7 +227,7 @@ const apiRequest = async <T>(
 };
 
 // 방 생성
-export const createRoom = async (request: CreateRoomRequest): Promise<{ success: boolean; room?: Room; error?: string }> => {
+export const createRoom = async (request: CreateRoomRequest): Promise<{ resultType: 'SUCCESS' | 'ERROR'; success?: any; error?: string }> => {
   try {
     // const session = getUserSession(); // createRoom에서는 세션 불필요
     
@@ -224,45 +251,93 @@ export const createRoom = async (request: CreateRoomRequest): Promise<{ success:
 
     if (response.resultType === 'SUCCESS' && response.success) {
       const roomData = response.success;
-      console.log('✅ 방 생성 성공, 세션 정보 업데이트 중:', roomData);
-      
-      const roomInfo: Room = {
-        id: roomData.roomId,
+      console.log('✅ [createRoom] 서버 방 생성 성공:', {
+        roomId: roomData.roomId,
         roomCode: roomData.roomCode,
         roomName: roomData.roomName,
-        maxCapacity: roomData.maxCapacity,
-        currentCapacity: roomData.currentCapacity,
-        roomState: roomData.roomState as Room['roomState'],
         hostGuestId: roomData.hostGuestId,
-        createdAt: roomData.createdAt,
-        expiresAt: roomData.expiresAt,
-        participants: []
-      };
-      
-      // 세션 정보 업데이트
-      updateUserSession({
-        guestUserId: roomData.hostGuestId,
-        currentRoom: roomInfo
-      });
-      
-      console.log('💾 세션 업데이트 완료:', {
-        guestUserId: roomData.hostGuestId,
-        roomCode: roomData.roomCode
+        capacity: `${roomData.currentCapacity}/${roomData.maxCapacity}`
       });
 
-      return { 
-        success: true, 
-        room: roomInfo
-      };
+      // 방 생성 후 추가 방 정보 조회 (방 참여와 동일한 패턴)
+      const roomResponse = await getRoomInfo(roomData.roomCode);
+      if (roomResponse.success && roomResponse.room) {
+        console.log('📋 [createRoom] 방 정보 조회 성공:', {
+          roomName: roomResponse.room.roomName,
+          participants: roomResponse.room.participants?.length || 0,
+          capacity: `${roomResponse.room.currentCapacity}/${roomResponse.room.maxCapacity}`,
+          hostInfo: roomResponse.room.participants?.find(p => p.role === 'host')?.nickname
+        });
+
+        // 세션 정보 업데이트 전/후 상태 확인
+        const beforeSession = getUserSession();
+        console.log('📋 [createRoom] 세션 업데이트 전:', {
+          hasGuestUserId: !!beforeSession.guestUserId,
+          hasCurrentRoom: !!beforeSession.currentRoom
+        });
+
+        updateUserSession({
+          guestUserId: roomData.hostGuestId,
+          currentRoom: roomResponse.room
+        });
+
+        const afterSession = getUserSession();
+        console.log('💾 [createRoom] 세션 업데이트 후:', {
+          guestUserId: afterSession.guestUserId,
+          roomCode: afterSession.currentRoom?.roomCode,
+          participantsCount: afterSession.currentRoom?.participants?.length || 0
+        });
+
+        return { 
+          resultType: 'SUCCESS',
+          success: roomResponse.room, // 추가 조회된 완전한 방 정보 반환
+          error: null
+        };
+      } else {
+        console.error('❌ [createRoom] 방 정보 조회 실패:', roomResponse.error);
+        
+        // 방 정보 조회 실패 시에도 기본 Room 객체는 생성
+        const basicRoomInfo: Room = {
+          id: roomData.roomId,
+          roomCode: roomData.roomCode,
+          roomName: roomData.roomName,
+          maxCapacity: roomData.maxCapacity,
+          currentCapacity: roomData.currentCapacity,
+          roomState: roomData.roomState as Room['roomState'],
+          hostGuestId: roomData.hostGuestId,
+          createdAt: roomData.createdAt,
+          expiresAt: roomData.expiresAt,
+          participants: [] // 빈 배열로 시작
+        };
+
+        console.log('⚠️ [createRoom] 기본 방 정보로 fallback:', basicRoomInfo);
+        
+        updateUserSession({
+          guestUserId: roomData.hostGuestId,
+          currentRoom: basicRoomInfo
+        });
+
+        return { 
+          resultType: 'SUCCESS',
+          success: basicRoomInfo,
+          error: null
+        };
+      }
     } else {
+      console.error('❌ [createRoom] 서버 방 생성 실패:', response.error);
       return { 
-        success: false, 
+        resultType: 'ERROR',
+        success: null,
         error: response.error?.reason || '방 생성에 실패했습니다.' 
       };
     }
   } catch (error) {
     console.error('방 생성 오류:', error);
-    return { success: false, error: '방 생성 중 오류가 발생했습니다.' };
+    return { 
+      resultType: 'ERROR',
+      success: null,
+      error: '방 생성 중 오류가 발생했습니다.' 
+    };
   }
 };
 
@@ -285,21 +360,48 @@ export const joinRoom = async (request: JoinRoomRequest): Promise<{ success: boo
 
     if (response.resultType === 'SUCCESS' && response.success) {
       const joinData = response.success;
+      console.log('✅ [joinRoom] 서버 방 참여 성공:', {
+        guestUserId: joinData.guestUserId,
+        nickname: joinData.nickname,
+        role: joinData.role,
+        roomCode: request.roomCode
+      });
       
       // 방 정보 조회
       const roomResponse = await getRoomInfo(request.roomCode);
       if (roomResponse.success && roomResponse.room) {
-        // 세션 정보 업데이트
+        console.log('📋 [joinRoom] 방 정보 조회 성공:', {
+          roomName: roomResponse.room.roomName,
+          participants: roomResponse.room.participants?.length || 0,
+          capacity: `${roomResponse.room.currentCapacity}/${roomResponse.room.maxCapacity}`
+        });
+
+        // 세션 정보 업데이트 전/후 상태 확인
+        const beforeSession = getUserSession();
+        console.log('📋 [joinRoom] 세션 업데이트 전:', {
+          hasGuestUserId: !!beforeSession.guestUserId,
+          hasCurrentRoom: !!beforeSession.currentRoom
+        });
+
         updateUserSession({
           guestUserId: joinData.guestUserId,
           currentRoom: roomResponse.room
         });
 
+        const afterSession = getUserSession();
+        console.log('💾 [joinRoom] 세션 업데이트 후:', {
+          guestUserId: afterSession.guestUserId,
+          roomCode: afterSession.currentRoom?.roomCode,
+          participantsCount: afterSession.currentRoom?.participants?.length || 0
+        });
+
         return { success: true, room: roomResponse.room };
       } else {
-        return { success: false, error: '방 정보 조회에 실패했습니다.' };
+        console.error('❌ [joinRoom] 방 정보 조회 실패:', roomResponse.error);
+        return { success: false, error: roomResponse.error || '방 정보 조회에 실패했습니다.' };
       }
     } else {
+      console.error('❌ [joinRoom] 서버 방 참여 실패:', response.error);
       return { 
         success: false, 
         error: response.error?.reason || '방 참여에 실패했습니다.' 
@@ -357,12 +459,8 @@ export const leaveRoom = async (): Promise<{ success: boolean; error?: string }>
     
     if (!session.guestUserId) {
       console.log('⚠️ guestUserId가 없어서 서버 호출 없이 로컬 정리만 수행');
-      // 로컬 세션 정리
-      updateUserSession({
-        guestUserId: undefined,
-        currentRoom: undefined,
-        currentPlayer: undefined
-      });
+      // 완전한 세션 초기화
+      clearUserSession();
       return { success: true };
     }
 
@@ -375,37 +473,24 @@ export const leaveRoom = async (): Promise<{ success: boolean; error?: string }>
 
     console.log('📡 방 나가기 응답:', response);
 
-    if (response.resultType === 'SUCCESS') {
-      // 세션 정보에서 방 정보 제거
-      updateUserSession({
-        guestUserId: undefined,
-        currentRoom: undefined,
-        currentPlayer: undefined
-      });
-
-      return { success: true };
+    if (response.resultType === 'SUCCESS' && response.success) {
+      console.log('✅ 서버 방 나가기 성공:', response.success);
     } else {
-      // 서버 호출 실패해도 로컬 정리는 수행
-      updateUserSession({
-        guestUserId: undefined,
-        currentRoom: undefined,
-        currentPlayer: undefined
-      });
-      
-      return { 
-        success: false, 
-        error: response.error?.reason || '방 나가기에 실패했습니다.' 
-      };
+      console.warn('⚠️ 서버 방 나가기 응답 확인 필요:', response.error);
     }
+
+    // API 호출 성공 여부와 관계없이 로컬 세션 완전 초기화
+    clearUserSession();
+    
+    return { 
+      success: true, 
+      message: response.success?.message || '방을 나갔습니다.' 
+    };
   } catch (error) {
     console.error('방 나가기 오류:', error);
     
     // 네트워크 오류여도 로컬 정리는 수행
-    updateUserSession({
-      guestUserId: undefined,
-      currentRoom: undefined,
-      currentPlayer: undefined
-    });
+    clearUserSession();
     
     return { success: false, error: '방 나가기 중 오류가 발생했습니다.' };
   }
@@ -474,7 +559,18 @@ export const updatePreparationStatus = async (
 // 현재 방 조회
 export const getCurrentRoom = (): Room | null => {
   const session = getUserSession();
-  return session.currentRoom || null;
+  
+  console.log('🔍 [getCurrentRoom] 세션 확인:', {
+    hasSession: !!session,
+    hasCurrentRoom: !!session.currentRoom,
+    roomCode: session.currentRoom?.roomCode,
+    sessionKeys: Object.keys(session)
+  });
+  
+  const result = session.currentRoom || null;
+  console.log('📤 [getCurrentRoom] 반환값:', { hasRoom: !!result, roomCode: result?.roomCode });
+  
+  return result;
 };
 
 // 현재 플레이어 조회
@@ -569,9 +665,17 @@ export const debugGetAllData = (): {
 };
 
 export const debugClearAllData = (): void => {
+  console.log('🧹 [debugClearAllData] 모든 세션 데이터 완전 초기화 시작');
+  
+  // localStorage 모든 관련 데이터 제거
+  localStorage.removeItem(SESSION_ID_KEY);
   localStorage.removeItem(USER_SESSION_KEY);
+  
+  // sessionStorage 모든 관련 데이터 제거
   sessionStorage.removeItem(SESSION_ID_KEY);
-  console.log('🗑️ All session data cleared');
+  sessionStorage.removeItem(USER_SESSION_KEY);
+  
+  console.log('✅ [debugClearAllData] 모든 세션 데이터 완전 초기화 완료');
 };
 
 export const debugLogRoomData = (): void => {
