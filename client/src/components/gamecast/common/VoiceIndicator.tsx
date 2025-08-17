@@ -13,58 +13,27 @@ interface CustomWindow extends Window {
   webkitAudioContext: typeof AudioContext
 }
 
+// TODO: WebRTC 기능 비활성화 - 오디오 분석 비활성화
 const useIsSpeaking = (stream: MediaStream | null): boolean => {
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const animationFrameRef = useRef<number>(0);
-
-  useEffect(() => {
-    if (!stream) {
-      return;
-    }
-
-    if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || (window as unknown as CustomWindow).webkitAudioContext)();
-    }
-    const audioContext = audioContextRef.current;
-    
-    if (!analyserRef.current) {
-      analyserRef.current = audioContext.createAnalyser();
-    }
-    const analyser = analyserRef.current;
-    
-    const source = audioContext.createMediaStreamSource(stream);
-    source.connect(analyser);
-    
-    analyser.fftSize = 512;
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-    
-    const SPEAKING_THRESHOLD = 5; // 말하는 것으로 간주할 볼륨 임계값
-    let speakingTimer: ReturnType<typeof setTimeout> | null = null;
-    
-    const checkSpeaking = () => {
-      analyser.getByteFrequencyData(dataArray);
-      const average = dataArray.reduce((acc, val) => acc + val, 0) / bufferLength;
-      
-      if (average > SPEAKING_THRESHOLD) {
-        if (!isSpeaking) setIsSpeaking(true);
-        if (speakingTimer) clearTimeout(speakingTimer);
-        speakingTimer = setTimeout(() => setIsSpeaking(false), 500); // 0.5초간 소리가 없으면 멈춤
-      }
-      
-      animationFrameRef.current = requestAnimationFrame(checkSpeaking);
-    };
-    
-    checkSpeaking();
-
-    return () => {
-      cancelAnimationFrame(animationFrameRef.current);
-      source.disconnect();
-      if (speakingTimer) clearTimeout(speakingTimer);
-    };
-  }, [stream, isSpeaking]);
+  const [isSpeaking] = useState(false);
+  
+  // TODO: WebRTC 재구현 시 다음 기능 복원:
+  // - AudioContext를 사용한 실시간 오디오 분석
+  // - 말하는 상태 감지 (볼륨 임계값 기반)
+  // - 애니메이션 프레임을 이용한 지속적 모니터링
+  
+  console.log('🚫 [useIsSpeaking] 오디오 분석 기능이 비활성화되어 있습니다.', {
+    hasStream: !!stream
+  });
+  
+  /*
+  원래 구현:
+  - AudioContext/webkitAudioContext 생성
+  - MediaStreamSource 연결
+  - AnalyserNode를 통한 주파수 분석
+  - 볼륨 임계값 기반 말하기 감지
+  - requestAnimationFrame으로 실시간 업데이트
+  */
 
   return isSpeaking;
 };
@@ -86,43 +55,24 @@ export const VoiceIndicator: React.FC<VoiceIndicatorProps> = ({
   };
 
   const getIndicatorState = () => {
-    if (!isConnected) {
-      return {
-        bg: 'bg-gray-400',
-        opacity: 'opacity-50',
-        scale: 'scale-100',
-        shadow: '0 0 5px rgba(156, 163, 175, 0.5)',
-        icon: '❌'
-      };
-    }
-    
-    if (isMuted) {
-      return {
-        bg: 'bg-red-500',
-        opacity: 'opacity-75',
-        scale: 'scale-100',
-        shadow: '0 0 8px rgba(239, 68, 68, 0.6)',
-        icon: '🔇'
-      };
-    }
-    
-    if (isSpeaking) {
-      return {
-        bg: 'bg-green-500',
-        opacity: 'opacity-90',
-        scale: 'scale-110',
-        shadow: '0 0 12px rgba(74, 222, 128, 0.8)',
-        icon: '🎤'
-      };
-    }
-    
+    // TODO: WebRTC 기능 비활성화 - 비활성화 상태 표시
     return {
-      bg: 'bg-blue-500',
-      opacity: 'opacity-60',
+      bg: 'bg-gray-500',
+      opacity: 'opacity-40',
       scale: 'scale-100',
-      shadow: '0 0 6px rgba(59, 130, 246, 0.5)',
-      icon: '🎧'
+      shadow: '0 0 5px rgba(107, 114, 128, 0.3)',
+      icon: '🚫'
     };
+    
+    /*
+    원래 상태 로직:
+    - 연결 안됨: 회색, ❌
+    - 음소거: 빨강, 🔇  
+    - 말하는 중: 초록, 🎤
+    - 연결됨: 파랑, 🎧
+    
+    TODO: WebRTC 재구현 시 위 로직 복원
+    */
   };
 
   const state = getIndicatorState();

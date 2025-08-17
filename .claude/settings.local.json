@@ -28,7 +28,8 @@
       "Bash(cp:*)",
       "Bash(git add:*)",
       "Bash(npm run build:*)",
-      "Bash(npx vite:*)"
+      "Bash(npx vite:*)",
+      "Bash(git push:*)"
     ],
     "deny": []
   }

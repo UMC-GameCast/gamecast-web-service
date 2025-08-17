@@ -48,7 +48,7 @@ export const PlayerCard = ({
   const audioRef = useRef<HTMLAudioElement>(null);
   const [needsAudioActivation, setNeedsAudioActivation] = useState(false);
   
-  // 🎵 스트림 검색 전용 훅 사용
+  // TODO: WebRTC 기능 비활성화 - 스트림 검색 비활성화
   const { effectiveStream, streamFound } = usePlayerCardStream(player, stream, isLocalPlayer);
   
   const playerId = player.guestUserId || player.id;
@@ -108,7 +108,8 @@ export const PlayerCard = ({
     loadingIconStyle
   } = useCharacterAnimation(finalPlayerHasCharacter, isReady);
 
-  // 🎵 오디오 엘리먼트에 스트림 연결 처리
+  // TODO: WebRTC 기능 비활성화 - 오디오 스트림 처리 비활성화
+  /*
   useEffect(() => {
     const audioElement = audioRef.current;
     
@@ -274,6 +275,9 @@ export const PlayerCard = ({
       }
     };
   }, [effectiveStream, isLocalPlayer, player.nickname]);
+  */
+  
+  // TODO: WebRTC 재구현 시 위 오디오 스트림 처리 로직 복원 필요
 
   return (
     <div className="w-[230px] h-[288px] flex flex-col items-center justify-between">
@@ -424,19 +428,21 @@ export const PlayerCard = ({
         </div>
       </div>
       
-      {/* 원격 오디오 재생을 위한 숨겨진 audio 엘리먼트 */}
-      {/* 로그 제거 - 무한 루프 방지 */}
+      {/* TODO: WebRTC 기능 비활성화 - 오디오 엘리먼트 비활성화 */}
+      {/*
+      원격 오디오 재생을 위한 숨겨진 audio 엘리먼트 (비활성화됨)
       {!isLocalPlayer && (effectiveStream || import.meta.env.DEV) && (
         <audio 
           ref={audioRef}
           style={{ display: import.meta.env.DEV ? 'block' : 'none' }}
           autoPlay
           playsInline
-          controls={import.meta.env.DEV} // 개발 모드에서는 컨트롤 표시
+          controls={import.meta.env.DEV}
         />
       )}
+      */}
       
-      {/* 디버깅: audio 엘리먼트 정보 */}
+      {/* TODO: WebRTC 기능 비활성화 - 디버깅 정보 업데이트 */}
       {import.meta.env.DEV && !isLocalPlayer && (
         <div style={{ 
           position: 'absolute', 
@@ -452,45 +458,19 @@ export const PlayerCard = ({
           fontWeight: 'bold',
           zIndex: 1000
         }}>
-          🎵 Stream: {effectiveStream ? '✅' : '❌'} | 🎮 Local: {isLocalPlayer ? '✅' : '❌'} | 🔍 Found: {streamFound ? '✅' : '❌'}
+          🚫 WebRTC: DISABLED | 🎮 Local: {isLocalPlayer ? '✅' : '❌'}
         </div>
       )}
 
-      {/* 오디오 활성화 필요 알림 */}
+      {/* TODO: WebRTC 기능 비활성화 - 오디오 활성화 알림 비활성화 */}
+      {/*
+      오디오 활성화 필요 알림 (비활성화됨)
       {(needsAudioActivation || import.meta.env.DEV) && !isLocalPlayer && effectiveStream && (
-        <div style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          background: 'rgba(255, 0, 0, 0.9)',
-          color: '#ffffff',
-          padding: '12px 16px',
-          borderRadius: '8px',
-          fontSize: '12px',
-          fontWeight: 'bold',
-          zIndex: 1001,
-          textAlign: 'center',
-          cursor: 'pointer',
-          border: '2px solid #ffffff',
-          boxShadow: '0 0 20px rgba(255, 0, 0, 0.5)'
-        }}
-        onClick={async () => {
-          const audioElement = audioRef.current;
-          if (audioElement) {
-            try {
-              await audioElement.play();
-              setNeedsAudioActivation(false);
-              // console.log(`✅ [PlayerCard] Audio activated by user click for ${player.nickname}`);
-            } catch (err) {
-              console.error('Failed to activate audio:', err);
-            }
-          }
-        }}
-        >
+        <div style={{...}} onClick={...}>
           🔊 클릭하여<br />음성 활성화
         </div>
       )}
+      */}
     </div>
   );
 };
