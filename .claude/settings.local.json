@@ -26,7 +26,9 @@
       "Bash(git checkout:*)",
       "Bash(npm uninstall:*)",
       "Bash(cp:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(npm run build:*)",
+      "Bash(npx vite:*)"
     ],
     "deny": []
   }

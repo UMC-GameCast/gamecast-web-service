@@ -207,9 +207,9 @@ export const PlayerGrid: React.FC<PlayerGridProps> = ({
               stream={playerStream}
               isLocalPlayer={false}
               voiceChatConnected={voiceChatConnected}
-              character={characterData}
+              character={characterData || undefined}
               hasCharacter={hasCharacter}
-              preparationStatus={playerPreparationStatus}
+              preparationStatus={playerPreparationStatus || undefined}
             />
           );
         }

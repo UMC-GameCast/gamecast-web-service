@@ -4,7 +4,6 @@ import { SOCKET_URL } from '../config/server.config';
 import type { 
   ParticipantUpdateEvent, 
   WebRTCOffer, 
-  WebRTCAnswer, 
   WebRTCIceCandidate,
   PeerConnectionState,
   VoiceChatState
@@ -1255,7 +1254,7 @@ export class WebRTCManager {
     });
 
     // Socket.IO 방 참여 실행 - WebRTC 전용 식별자 사용하되 부모 정보 포함
-    const joinRoomData = {
+    const joinRoomRequestData = {
       roomCode: this.roomCode,
       nickname: webrtcIdentifier,
       guestUserId: `${webrtcIdentifier}_${Date.now()}`, // WebRTC 전용 ID (중복 방지)

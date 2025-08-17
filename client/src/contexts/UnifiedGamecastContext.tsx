@@ -372,12 +372,10 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
       const result = await leaveRoomUtil();
       
       if (result.success) {
-        console.log('✅ [UnifiedContext] 서버 방 나가기 성공:', result.message);
+        console.log('✅ [UnifiedContext] 서버 방 나가기 성공');
         
         // 성공 시 간단한 알림 (선택적)
-        if (result.message) {
-          console.log('📢 [UnifiedContext] 방 나가기 메시지:', result.message);
-        }
+        console.log('📢 [UnifiedContext] 방 나가기 완료');
       } else {
         console.warn('⚠️ [UnifiedContext] 서버 방 나가기 실패, 로컬 정리는 완료:', result.error);
       }
@@ -387,7 +385,6 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
       dispatch({ type: 'RESET_STATE' });
       
       console.log('✅ [UnifiedContext] 방 나가기 완료');
-      return { success: true };
       
     } catch (error) {
       console.error('❌ [UnifiedContext] 방 나가기 실패:', error);
@@ -395,8 +392,6 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
       // 에러 발생 시에도 로컬 정리는 수행
       console.log('🧹 [UnifiedContext] 에러 상황에서 로컬 정리 수행');
       dispatch({ type: 'RESET_STATE' });
-      
-      return { success: false, error: error instanceof Error ? error.message : '방 나가기 중 오류가 발생했습니다.' };
     }
   };
 
@@ -743,14 +738,18 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
             id: userId,
             guestUserId: userId,
             nickname: "Nickname1", // 기본 닉네임 (방장은 항상 Nickname1)
+            name: "Nickname1", // 호환성을 위한 alias
             role: "host", // 방 생성자는 항상 호스트
             isHost: true,
             joinedAt: new Date().toISOString(),
+            isConnected: true,
+            hasWebRTCConnection: false,
             preparationStatus: {
               characterSetup: false,
               screenSetup: false,
               isReady: false
             },
+            isReady: false,
             characterInfo: null
           };
 
@@ -832,7 +831,7 @@ export const useUnifiedRoom = () => {
 };
 
 export const useUnifiedVoiceChat = () => {
-  const { state } = useUnifiedGamecast();
+  const { } = useUnifiedGamecast();
   return {
     localStream: null, // WebRTC 제거됨
     remoteStreams: new Map<string, MediaStream>(), // 빈 맵

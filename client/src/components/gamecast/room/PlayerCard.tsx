@@ -49,7 +49,7 @@ export const PlayerCard = ({
   const [needsAudioActivation, setNeedsAudioActivation] = useState(false);
   
   // 🎵 스트림 검색 전용 훅 사용
-  const { effectiveStream, streamFound, searchLog } = usePlayerCardStream(player, stream, isLocalPlayer);
+  const { effectiveStream, streamFound } = usePlayerCardStream(player, stream, isLocalPlayer);
   
   const playerId = player.guestUserId || player.id;
   
@@ -238,7 +238,7 @@ export const PlayerCard = ({
               console.log(`🎆 [DEBUG] Testing audio for ${nickname}:`, {
                 hasAudioElement: !!audioElement,
                 hasStream: !!stream,
-                audioTracks: stream.getAudioTracks().length,
+                audioTracks: stream?.getAudioTracks().length || 0,
                 audioElement: {
                   paused: audioElement.paused,
                   muted: audioElement.muted,
@@ -420,7 +420,7 @@ export const PlayerCard = ({
           <CardBottomUnready className="w-full h-full" />
         )}
         <div className="absolute inset-0 flex items-center justify-center text-white text-lg font-medium">
-          {player.name}
+          {player.name || player.nickname}
         </div>
       </div>
       

@@ -11,7 +11,7 @@ GameCast 프로젝트의 복잡한 상태 관리를 React Context 기반으로 �
 
 ## 주요 구성 요소
 
-### 1. GamecastContext.tsx
+### 1. UnifiedGamecastContext.tsx
 메인 Context 파일로 다음 기능들을 제공합니다:
 
 #### 상태 관리 영역
@@ -22,87 +22,61 @@ GameCast 프로젝트의 복잡한 상태 관리를 React Context 기반으로 �
 - **UI 상태**: `showMicGuide`, `screenSetupComplete`
 
 #### Provider 컴포넌트
-- `GamecastProvider`: 애플리케이션 최상위에서 Context 제공
+- `UnifiedGamecastProvider`: 애플리케이션 최상위에서 Context 제공
 - 자동 초기화 및 정리 로직 포함
 - WebRTC 매니저 싱글톤 관리
 
 #### 특화된 Hook들
-- `useGamecastRoom()`: 방 관련 상태 및 액션
-- `useGamecastVoiceChat()`: 음성 채팅 관련 상태 및 액션  
-- `useGamecastCharacter()`: 캐릭터 관련 상태 및 액션
-- `useGamecastUI()`: UI 상태 관련 액션
-
-### 2. useGamecastSimple.ts
-기존 Hook 인터페이스와의 호환성을 위한 래퍼 Hook들:
-
-- `useRoom()`: 기존 `useRoom` Hook과 동일한 인터페이스
-- `useVoiceChat()`: 기존 `useVoiceChat` Hook과 동일한 인터페이스
-- `useCharacter()`: 기존 `useCharacter` Hook과 동일한 인터페이스
-- `useGameRecording()`: 기존 `useGameRecording` Hook과 동일한 인터페이스
+- `useUnifiedRoom()`: 방 관련 상태 및 액션 통합 관리
+- `useUnifiedVoiceChat()`: 음성 채팅 관련 상태 및 액션  
+- `useUnifiedCharacter()`: 캐릭터 관련 상태 및 액션
+- `useUnifiedGameRecording()`: 게임 녹화 관련 기능
 
 ## 사용 방법
 
 ### 1. App.tsx에서 Provider 설정
 
 ```tsx
-import { GamecastProvider } from './contexts/GamecastContext';
+import { UnifiedGamecastProvider } from './contexts/UnifiedGamecastContext';
 
 function App() {
   return (
-    <GamecastProvider>
+    <UnifiedGamecastProvider>
       {/* 애플리케이션 라우트들 */}
-    </GamecastProvider>
+    </UnifiedGamecastProvider>
   );
 }
 ```
 
 ### 2. 컴포넌트에서 Context 사용
 
-#### 방법 1: 특화된 Hook 사용 (권장)
+#### 통합된 Hook 사용 (현재 방식)
 ```tsx
 import { 
-  useGamecastRoom, 
-  useGamecastVoiceChat, 
-  useGamecastCharacter 
-} from '../contexts/GamecastContext';
+  useUnifiedRoom, 
+  useUnifiedVoiceChat, 
+  useUnifiedCharacter 
+} from '../contexts/UnifiedGamecastContext';
 
 const MyComponent = () => {
-  const { currentRoom, currentPlayer, loading } = useGamecastRoom();
-  const { localStream, toggleLocalAudio } = useGamecastVoiceChat();
-  const { characterData, setShowCharacterSetup } = useGamecastCharacter();
+  const { currentRoom, currentPlayer, loading } = useUnifiedRoom();
+  const { localStream, toggleLocalAudio } = useUnifiedVoiceChat();
+  const { characterData, setShowCharacterSetup } = useUnifiedCharacter();
   
   // 컴포넌트 로직...
 };
 ```
 
-#### 방법 2: 레거시 Hook 사용 (점진적 마이그레이션)
+## 통합 컨텍스트 아키텍처
+
+### 현재 구조 (UnifiedGamecastContext)
+
+#### 통합된 상태 관리
 ```tsx
-import { useRoom, useVoiceChat } from '../hooks/useGamecastSimple';
-
-const MyComponent = () => {
-  const { currentRoom, currentPlayer } = useRoom();
-  const { localStream, toggleLocalAudio } = useVoiceChat();
-  
-  // 기존 코드 그대로 작동
-};
-```
-
-## 마이그레이션 가이드
-
-### 기존 코드 → Context 기반
-
-#### Before (기존 방식)
-```tsx
-const { currentRoom, currentPlayer } = useRoom();
-const { localStream, remoteStreams } = useVoiceChat(roomCode, nickname);
-const { characterData } = useCharacter();
-```
-
-#### After (Context 기반)
-```tsx
-const { currentRoom, currentPlayer } = useGamecastRoom();
-const { localStream, remoteStreams } = useGamecastVoiceChat();
-const { characterData } = useGamecastCharacter();
+const { currentRoom, currentPlayer } = useUnifiedRoom();
+const { localStream, remoteStreams } = useUnifiedVoiceChat();
+const { characterData } = useUnifiedCharacter();
+const { startRecording, stopRecording } = useUnifiedGameRecording();
 ```
 
 ### 주요 변경사항

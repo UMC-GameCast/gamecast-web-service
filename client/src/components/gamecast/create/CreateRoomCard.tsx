@@ -77,7 +77,7 @@ export const CreateRoomCard = ({ onCreateSuccess }: Props) => {
       });
       
       if (result.success) {
-        console.log("방 생성 성공:", result.room);
+        console.log("방 생성 성공:", result.success);
         onCreateSuccess?.();
       } else {
         const errorMessage = result.error || "방 생성에 실패했습니다.";

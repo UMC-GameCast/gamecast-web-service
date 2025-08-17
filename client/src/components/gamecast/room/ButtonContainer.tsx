@@ -42,15 +42,15 @@ export const ButtonContainer = ({
   setCharacterSetup,
   setScreenSetup,
   // 캐릭터 설정 페이지 이동 콜백
-  onCharacterSetupClick,
-  // 준비 상태 관리
-  onReadyToggle,
-  allPlayersReady: allPlayersReadyProp,
-  // 녹화 관련
-  isRecording = false,
-  recordingTime = 0,
-  onRecordingStart,
-  onRecordingStop
+  onCharacterSetupClick
+  // 준비 상태 관리 - 현재 사용하지 않음
+  // onReadyToggle,
+  // allPlayersReady: allPlayersReadyProp,
+  // 녹화 관련 - 현재 사용하지 않음
+  // isRecording = false,
+  // recordingTime = 0,
+  // onRecordingStart,
+  // onRecordingStop
 }: ButtonContainerProps) => {
   const [isTooltipVisible, setIsTooltipVisible] = useState(false);
   const [isHoveringHostButton, setIsHoveringHostButton] = useState(false);

@@ -6,6 +6,7 @@ export interface Player {
   id: string;
   guestUserId: string;
   nickname: string;
+  name?: string; // 호환성을 위한 alias
   role: 'host' | 'participant';
   joinedAt: string;
   isHost?: boolean;
@@ -31,6 +32,9 @@ export interface Player {
     screenSetup: boolean;
     isReady?: boolean;
   };
+  
+  // 호환성을 위한 직접 접근 속성들
+  isReady?: boolean;
   
   // UI/오디오 상태
   isMuted?: boolean;
