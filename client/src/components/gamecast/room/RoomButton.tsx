@@ -7,12 +7,13 @@ interface RoomButtonProps {
   onClick?: () => void;
   className?: string;
   disabled?: boolean;
+  style?: React.CSSProperties;
 }
 
 /**
  * 방에서 사용하는 기본 버튼 컴포넌트 (기본, 호버, 클릭 상태만 가짐)
  */
-export const RoomButton = ({ children, onClick, className = "", disabled = false }: RoomButtonProps) => {
+export const RoomButton = ({ children, onClick, className = "", disabled = false, style }: RoomButtonProps) => {
   const [isHovered, setIsHovered] = useState(false);
   const [isClicked, setIsClicked] = useState(false);
 
@@ -42,12 +43,13 @@ export const RoomButton = ({ children, onClick, className = "", disabled = false
       onClick={handleClick}
       onMouseEnter={() => !disabled && setIsHovered(true)}
       onMouseLeave={() => !disabled && setIsHovered(false)}
-      className={`relative bg-transparent bg-contain bg-center bg-no-repeat outline-none focus:outline-none border-none transition-all duration-200 transform ${getStateStyles()} ${className}`}
+      className={`relative bg-transparent bg-center bg-no-repeat outline-none focus:outline-none border-none transition-all duration-200 transform ${getStateStyles()} ${className}`}
       style={{
         backgroundImage: `url(${getBackgroundImage()})`,
         width: '192px',
         height: '64.6px',
-        backgroundSize: '100% 100%'
+        backgroundSize: '100% 100%',
+        ...style
       }}
       disabled={disabled}
     >

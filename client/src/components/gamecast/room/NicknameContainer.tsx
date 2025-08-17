@@ -1,4 +1,3 @@
-import React from "react";
 import BigLabelDesign from "../../../assets/gamecast/Room/big_label_Design.svg?react";
 
 interface NicknameContainerProps {

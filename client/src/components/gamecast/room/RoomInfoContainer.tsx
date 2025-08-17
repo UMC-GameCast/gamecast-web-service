@@ -1,4 +1,3 @@
-import React from "react";
 import SmallLabelDesign from "../../../assets/gamecast/Room/small_label_Design.svg?react";
 
 interface RoomInfoContainerProps {

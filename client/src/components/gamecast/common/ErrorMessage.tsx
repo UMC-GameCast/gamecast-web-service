@@ -1,4 +1,3 @@
-import React from "react";
 import errorIcon from "../../../assets/gamecast/common/button/error_icon.png";
 
 interface ErrorMessageProps {

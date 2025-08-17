@@ -4,7 +4,7 @@ import participateLogo from "../../../assets/gamecast/participate/participateLog
 import participatetextinputcardD1 from "../../../assets/gamecast/participate/participateTextInputCard_D1.png";
 import { Button1 } from "../common/Button1";
 import { ErrorMessage } from "../common/ErrorMessage";
-import { joinRoom } from "../../../utils/roomManager";
+import { joinRoom, getRoomInfo } from "../../../utils/roomManager";
 
 interface Props {
   onJoinSuccess?: () => void;
@@ -61,9 +61,28 @@ export const ParticipationCodeCard = ({ onJoinSuccess }: Props) => {
     setError("");
     
     try {
-      const result = joinRoom({
-        entryCode: entryCode.trim().toUpperCase()
-        // playerName 제거 - 자동으로 순서대로 닉네임 설정됨
+      // 1단계: 방 정보 조회하여 현재 참여자 수 확인
+      const roomInfo = await getRoomInfo(entryCode.trim().toUpperCase());
+      
+      if (!roomInfo.success || !roomInfo.room) {
+        const errorMessage = roomInfo.error || "방을 찾을 수 없습니다.";
+        console.log("🔴 RoomInfo error:", errorMessage);
+        setError(errorMessage);
+        triggerExternalError();
+        return;
+      }
+      
+      // 2단계: 현재 참여자 수에 따라 순차적 닉네임 생성
+      const currentCapacity = roomInfo.room.currentCapacity || 0;
+      const nextNicknameNumber = currentCapacity + 1;
+      const nickname = `Nickname${nextNicknameNumber}`;
+      
+      console.log(`🏷️ 자동 닉네임 생성: ${nickname} (현재 참여자: ${currentCapacity}명)`);
+      
+      // 3단계: 생성된 닉네임으로 방 참여
+      const result = await joinRoom({
+        roomCode: entryCode.trim().toUpperCase(),
+        nickname: nickname // 순차적 닉네임 (Nickname2, Nickname3, ...)
       });
       
       if (result.success) {
@@ -76,9 +95,26 @@ export const ParticipationCodeCard = ({ onJoinSuccess }: Props) => {
         // API 에러 시에도 진동 효과 트리거
         triggerExternalError();
       }
-    } catch {
-      const errorMessage = "방 참여 중 오류가 발생했습니다.";
-      console.log("🔴 JoinRoom exception:", errorMessage);
+    } catch (error) {
+      let errorMessage = "방 참여 중 오류가 발생했습니다.";
+      
+      // 에러 객체에서 더 구체적인 메시지 추출
+      if (error instanceof Error) {
+        if (error.message.includes('CONFLICT')) {
+          errorMessage = "방 인원이 가득 찼습니다.";
+        } else if (error.message.includes('NOT_FOUND')) {
+          errorMessage = "존재하지 않는 방입니다.";
+        } else if (error.message.includes('NETWORK_ERROR')) {
+          errorMessage = "네트워크 연결을 확인해주세요.";
+        } else if (error.message.includes('CORS')) {
+          errorMessage = "서버 접근 권한 오류가 발생했습니다.";
+        } else {
+          // 기타 에러 메시지 그대로 사용
+          errorMessage = error.message || errorMessage;
+        }
+      }
+      
+      console.log("🔴 JoinRoom exception:", error, "→ 사용자 메시지:", errorMessage);
       setError(errorMessage);
       // Exception 시에도 진동 효과 트리거
       triggerExternalError();
