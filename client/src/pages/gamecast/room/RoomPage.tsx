@@ -1,4 +1,4 @@
-import React, { Component, useEffect, useState } from "react";
+import React, { Component, useEffect, useState, useMemo } from "react";
 import type { ErrorInfo } from "react";
 import { Navigation } from "../../../components/gamecast/common/Navigation";
 import { Footer } from "../../../components/gamecast/common/Footer";
@@ -170,6 +170,73 @@ export const RoomPage = () => {
     }
   }, [currentRoom, currentPlayer, state.realtime.socket?.connected]);
 
+  // 🔍 임시 디버깅: participants 변화 모니터링 (강화)
+  useEffect(() => {
+    console.log('🚨🚨 [RoomPage] participants 변경 감지!', {
+      count: participants?.length || 0,
+      participants: participants?.map(p => ({
+        nickname: p.nickname,
+        guestUserId: p.guestUserId,
+        isHost: p.isHost
+      })) || [],
+      participantsRef: participants,
+      directStateParticipants: state.participants?.length || 0,
+      areSame: participants === state.participants,
+      timestamp: new Date().toLocaleTimeString()
+    });
+  }, [participants, state.participants]);
+
+  // 🔧 React 배칭 문제 해결: Context 값 직접 구독
+  const [forceUpdate, setForceUpdate] = useState(0);
+  
+  // 🎯 실제 사용할 participants - state.participants를 우선으로 사용
+  const actualParticipants = useMemo(() => {
+    // state.participants가 있고 길이가 다르면 state 사용
+    if (state.participants && state.participants.length !== participants?.length) {
+      console.log('🔄 [actualParticipants] state.participants 우선 사용:', {
+        stateCount: state.participants.length,
+        propsCount: participants?.length || 0
+      });
+      return state.participants;
+    }
+    // 그 외의 경우 기존 participants 사용
+    return state.participants || participants;
+  }, [state.participants, participants, state.participants?.length, participants?.length]);
+
+  // 🔧 Context 참여자 변경 감지 시 강제 리렌더링
+  useEffect(() => {
+    if (state.participants && state.participants !== participants) {
+      console.log('🔄 [RoomPage] 강제 리렌더링 트리거:', {
+        stateCount: state.participants?.length || 0,
+        propsCount: participants?.length || 0,
+        trigger: forceUpdate
+      });
+      setForceUpdate(prev => prev + 1);
+    }
+  }, [state.participants?.length, participants?.length]);
+
+  // 🔍 actualParticipants 모니터링
+  useEffect(() => {
+    console.log('🎯 [RoomPage] actualParticipants 변경:', {
+      actualCount: actualParticipants?.length || 0,
+      propsCount: participants?.length || 0,
+      stateCount: state.participants?.length || 0,
+      usingState: !!state.participants,
+      forceUpdate,
+      timestamp: new Date().toLocaleTimeString()
+    });
+  }, [actualParticipants, participants, state.participants, forceUpdate]);
+
+  // 🔍 추가 디버깅: state 전체 모니터링
+  useEffect(() => {
+    console.log('🔍 [RoomPage] state 전체 변경:', {
+      participantsLength: state.participants?.length || 0,
+      currentPlayerExists: !!state.currentPlayer,
+      currentRoomExists: !!state.currentRoom,
+      timestamp: new Date().toLocaleTimeString()
+    });
+  }, [state]);
+
   // WebRTC 초기화 제거됨 - 나중에 구현 예정
 
   // 준비하기 버튼 활성화 조건
@@ -314,7 +381,7 @@ export const RoomPage = () => {
                 
                 {/* 닉네임 표기 컨테이너 */}
                 {currentPlayer ? (
-                  <NicknameContainer nickname={getDisplayNickname(currentPlayer, participants)} />
+                  <NicknameContainer nickname={getDisplayNickname(currentPlayer, actualParticipants)} />
                 ) : (
                   <div className="flex justify-center">
                     <div className="w-32 h-8 bg-gray-600 rounded animate-pulse"></div>
@@ -329,12 +396,12 @@ export const RoomPage = () => {
                   <PlayerGrid 
                     currentRoom={currentRoom} 
                     currentPlayer={currentPlayer}
-                    realtimeParticipants={participants}
+                    realtimeParticipants={actualParticipants}
                     remoteStreams={remoteStreams}
                     voiceChatConnected={voiceChatConnected}
-                    playersReadyStatus={(participants || []).map(p => ({
+                    playersReadyStatus={(actualParticipants || []).map(p => ({
                       playerId: p.guestUserId || p.id,
-                      playerName: getDisplayNickname(p, participants),
+                      playerName: getDisplayNickname(p, actualParticipants),
                       characterSetup: p.preparationStatus?.characterSetup || false,
                       screenSetup: p.preparationStatus?.screenSetup || false,
                       isReady: p.preparationStatus?.isReady || false
@@ -372,7 +439,7 @@ export const RoomPage = () => {
                   onReadyToggle={(ready) => {
                     updatePreparation({ isReady: ready });
                   }}
-                  allPlayersReady={(participants || []).every(p => p.preparationStatus?.isReady)}
+                  allPlayersReady={(actualParticipants || []).every(p => p.preparationStatus?.isReady)}
                   isRecording={isRecording}
                   recordingTime={recordingTime}
                   onRecordingStart={startRecording}

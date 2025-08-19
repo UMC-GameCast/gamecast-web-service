@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
 import type { Room, Player, CharacterData } from '../types/game';
@@ -73,7 +73,7 @@ const normalizeParticipants = (participants: Player[]): Player[] => {
   const hostPlayers = participants.filter(p => p.role === 'host' || p.isHost);
   const participantPlayers = participants.filter(p => p.role !== 'host' && !p.isHost);
   
-  // 호스트는 항상 "Nickname1"
+  // 호스트는 항상 "Nickname1" (새 객체 생성으로 React 리렌더링 보장)
   const normalizedHosts = hostPlayers.map(player => ({
     ...player,
     nickname: "Nickname1"
@@ -81,9 +81,9 @@ const normalizeParticipants = (participants: Player[]): Player[] => {
   
   // 참여자들은 순번에 따라 "Nickname2", "Nickname3", ...
   const normalizedParticipants = participantPlayers.map((player, index) => {
-    // 이미 올바른 닉네임 패턴이면 그대로 사용
+    // 이미 올바른 닉네임 패턴이면 새 객체로 복사 (React 리렌더링 보장)
     if (player.nickname && player.nickname.startsWith('Nickname') && /^Nickname\d+$/.test(player.nickname)) {
-      return player;
+      return { ...player }; // 새 객체 생성
     }
     
     // 순번 기반으로 닉네임 생성 (2부터 시작)
@@ -279,7 +279,33 @@ const unifiedGamecastReducer = (state: UnifiedGamecastState, action: UnifiedGame
       return { ...state, currentPlayer: action.payload };
     
     case 'SET_PARTICIPANTS':
-      return { ...state, participants: normalizeParticipants(action.payload || []) };
+      const normalizedParticipants = normalizeParticipants(action.payload || []);
+      
+      // 🚨 중복 업데이트 방지: 동일한 데이터면 기존 state 반환
+      const isSameData = JSON.stringify(state.participants) === JSON.stringify(normalizedParticipants);
+      
+      console.log('🔄 [Reducer] SET_PARTICIPANTS:', {
+        before: state.participants?.length || 0,
+        after: normalizedParticipants.length,
+        payload: action.payload?.map(p => ({ nickname: p.nickname, guestUserId: p.guestUserId })) || [],
+        normalized: normalizedParticipants.map(p => ({ nickname: p.nickname, guestUserId: p.guestUserId })),
+        stateChanged: !isSameData,
+        참조변경여부: state.participants !== normalizedParticipants,
+        중복업데이트방지: isSameData ? 'SKIPPED' : 'UPDATED',
+        timestamp: new Date().toLocaleTimeString()
+      });
+      
+      // 동일한 데이터면 업데이트 건너뛰기
+      if (isSameData) {
+        console.log('⚠️ [Reducer] 동일한 participants 데이터, 업데이트 건너뜀');
+        return state;
+      }
+      
+      // 🔧 강제 새 배열 생성으로 React 리렌더링 보장
+      return { 
+        ...state, 
+        participants: [...normalizedParticipants] // 새 배열 참조 생성
+      };
     
     case 'UPDATE_PARTICIPANT':
       return {
@@ -362,6 +388,10 @@ const UnifiedGamecastContext = createContext<{
 export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(unifiedGamecastReducer, initialState);
   const [pathname, setPathname] = useState(window.location.pathname);
+  
+  // 🔧 최신 state를 참조하기 위한 ref
+  const stateRef = useRef(state);
+  stateRef.current = state;
   
   // 경로 변경 감지
   useEffect(() => {
@@ -1018,12 +1048,19 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
     socket.on('join-room-success', (data: { message: string; participants: Player[]; roomState?: any }) => {
       console.log('🎉 [Socket] 방 참여 성공 (join-room-success):', data);
       
-      // 참여자 목록 업데이트 (안전하게 처리)
+      // 🚨 임시 비활성화: joined-room-success에서 participants 업데이트 방지
+      // (user-joined 이벤트와 충돌을 피하기 위해)
+      console.log('🔄 [joined-room-success] participants 업데이트 건너뜀 (user-joined에서 처리):', {
+        hasParticipants: !!(data.participants && Array.isArray(data.participants)),
+        participantsLength: data.participants?.length || 0
+      });
+      /*
       if (data.participants && Array.isArray(data.participants)) {
         dispatch({ type: 'SET_PARTICIPANTS', payload: data.participants });
       } else {
         console.warn('⚠️ join-room-success에서 잘못된 participants 데이터:', data.participants);
       }
+      */
       
       // 방 상태 업데이트
       if (data.roomState) {
@@ -1088,44 +1125,92 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
       }
     });
 
-    // 새로운 참여자가 방에 입장했을 때 (서버에서 user-joined 이벤트)
-    socket.on('user-joined', (data: { 
-      participants: Player[];
-      newParticipant: {
-        guestUserId: string;
-        nickname: string;
-        role: string;
-        joinedAt: string;
-      };
-      currentCapacity: number;
-      maxCapacity: number;
-    }) => {
-      console.log('🎉 새로운 참여자 입장:', {
-        newUser: data.newParticipant?.nickname || 'Unknown',
-        guestUserId: data.newParticipant?.guestUserId || 'Unknown',
-        totalParticipants: data.participants?.length || 0,
-        capacity: `${data.currentCapacity || 0}/${data.maxCapacity || 0}`
+    // 새로운 참여자가 방에 입장했을 때 (user-left와 동일한 방식으로 처리)
+    socket.on('user-joined', (data: { socketId: string; guestUserId: string; nickname: string; joinedAt: Date }) => {
+      console.log('🚨 [user-joined] 이벤트 수신!', {
+        socketId: data.socketId,
+        guestUserId: data.guestUserId,
+        nickname: data.nickname,
+        currentParticipantsCount: stateRef.current.participants?.length || 0,
+        currentParticipants: stateRef.current.participants?.map(p => ({
+          nickname: p.nickname,
+          guestUserId: p.guestUserId,
+          socketId: p.socketId
+        })) || []
       });
 
-      // 참여자 목록 업데이트 (안전하게 처리)
-      if (data.participants && Array.isArray(data.participants)) {
-        dispatch({ type: 'SET_PARTICIPANTS', payload: data.participants });
-      } else {
-        console.warn('⚠️ 참여자 데이터가 올바르지 않음:', data.participants);
-      }
+      // 🔧 최신 state를 사용하여 현재 participants 배열에 새 참여자 추가 (user-left와 동일한 방식)
+      const currentParticipants = stateRef.current.participants || [];
+      console.log('🔍 입장 처리 전 상태:', {
+        추가할_guestUserId: data.guestUserId,
+        현재_참여자들: currentParticipants.map(p => ({
+          nickname: p.nickname,
+          guestUserId: p.guestUserId,
+          socketId: p.socketId
+        }))
+      });
 
-      // 방 정보의 현재 인원 수도 업데이트
-      if (state.currentRoom) {
-        const updatedRoom = {
-          ...state.currentRoom,
-          currentCapacity: data.currentCapacity,
-          participants: data.participants
+      // 중복 확인
+      const isAlreadyExists = currentParticipants.some(p => 
+        p.guestUserId === data.guestUserId || p.id === data.guestUserId
+      );
+
+      if (!isAlreadyExists) {
+        // 새 참여자 생성
+        const newParticipant: Player = {
+          id: data.guestUserId,
+          guestUserId: data.guestUserId,
+          nickname: data.nickname,
+          socketId: data.socketId,
+          isHost: false,
+          role: 'participant',
+          preparationStatus: {
+            characterSetup: false,
+            screenSetup: false,
+            isReady: false
+          },
+          characterInfo: null,
+          isConnected: true
         };
-        dispatch({ type: 'SET_ROOM', payload: updatedRoom });
-      }
 
-      // 환영 메시지 표시 (선택적)
-      console.log(`🎊 ${data.newParticipant.nickname}님이 방에 입장했습니다!`);
+        // user-left와 동일한 방식으로 배열 업데이트
+        const updatedParticipants = [...currentParticipants, newParticipant];
+        
+        console.log('✅ 참여자 추가 완료:', {
+          before: currentParticipants.length,
+          after: updatedParticipants.length,
+          joinedParticipant: data.nickname
+        });
+        
+        // Context 업데이트 → 자동 리렌더링 트리거
+        dispatch({ type: 'SET_PARTICIPANTS', payload: updatedParticipants });
+        
+        // 🔧 React 배칭 문제 해결을 위한 강제 리렌더링
+        setTimeout(() => {
+          // 강제로 다시 한번 동일한 데이터로 dispatch (참조 변경 강제)
+          dispatch({ type: 'SET_PARTICIPANTS', payload: [...updatedParticipants] });
+          console.log('🔄 [user-joined] 강제 리렌더링 완료:', {
+            participantsCount: updatedParticipants.length,
+            timestamp: new Date().toLocaleTimeString()
+          });
+        }, 0);
+        
+        // 방 정보의 현재 인원 수도 업데이트
+        if (stateRef.current.currentRoom) {
+          dispatch({ 
+            type: 'SET_ROOM', 
+            payload: { 
+              ...stateRef.current.currentRoom, 
+              currentCapacity: updatedParticipants.length
+            } 
+          });
+        }
+
+        // 환영 메시지 표시
+        console.log(`🎊 ${data.nickname}님이 방에 입장했습니다.`);
+      } else {
+        console.log('⚠️ 추가할 참여자가 이미 존재함:', data.guestUserId);
+      }
     });
 
     // 🎨 캐릭터 업데이트 이벤트 - 검증 강화
@@ -1191,20 +1276,95 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
     });
 
     // 참여자 나가기 이벤트 (다른 참여자가 나갔을 때)
-    socket.on('user-left', (data: { guestUserId: string; nickname: string; participants: Player[] }) => {
-      console.log('👤 참여자 나가기 알림:', data);
-      if (data.participants && Array.isArray(data.participants)) {
-        dispatch({ type: 'SET_PARTICIPANTS', payload: data.participants });
+    // 서버 실제 데이터 구조에 맞춤: { socketId, guestUserId, nickname }
+    socket.on('user-left', (data: { socketId: string; guestUserId: string; nickname: string }) => {
+      console.log('🚨 [user-left] 이벤트 수신!', {
+        socketId: data.socketId,
+        guestUserId: data.guestUserId,
+        nickname: data.nickname,
+        currentParticipantsCount: stateRef.current.participants?.length || 0,
+        currentParticipants: stateRef.current.participants?.map(p => ({
+          nickname: p.nickname,
+          guestUserId: p.guestUserId,
+          socketId: p.socketId
+        })) || []
+      });
+
+      // 🔧 최신 state를 사용하여 participants 배열에서 해당 참여자 제거
+      const currentParticipants = stateRef.current.participants || [];
+      console.log('🔍 퇴장 처리 전 상태:', {
+        찾을_guestUserId: data.guestUserId,
+        현재_참여자들: currentParticipants.map(p => ({
+          nickname: p.nickname,
+          guestUserId: p.guestUserId,
+          socketId: p.socketId
+        }))
+      });
+      
+      const updatedParticipants = currentParticipants.filter(p => 
+        p.guestUserId !== data.guestUserId && p.id !== data.guestUserId
+        // socketId는 제외 - 닉네임 정규화로 인해 다를 수 있음
+      );
+
+      if (updatedParticipants.length !== currentParticipants.length) {
+        console.log('✅ 참여자 제거 완료:', {
+          before: currentParticipants.length,
+          after: updatedParticipants.length,
+          leftParticipant: data.nickname
+        });
+        
+        // Context 업데이트 → 자동 리렌더링 트리거
+        dispatch({ type: 'SET_PARTICIPANTS', payload: updatedParticipants });
+        
+        // 방 정보의 현재 인원 수도 업데이트
+        if (stateRef.current.currentRoom) {
+          dispatch({ 
+            type: 'SET_ROOM', 
+            payload: { 
+              ...stateRef.current.currentRoom, 
+              currentCapacity: updatedParticipants.length
+            } 
+          });
+        }
+
+        // 퇴장 메시지 표시
+        console.log(`👋 ${data.nickname}님이 방을 나갔습니다.`);
       } else {
-        console.warn('⚠️ user-left 이벤트에서 잘못된 participants 데이터:', data.participants);
+        console.log('⚠️ 제거할 참여자를 찾을 수 없음:', data.guestUserId);
       }
     });
 
-    // 이미 위에서 처리된 disconnect 이벤트이므로 중복 제거
+    // 🔍 추가 퇴장 이벤트 리스너들 (다양한 케이스 처리)
+    
+    // 일반적인 disconnect 시 참여자 제거 (user-left 보완용)
+    socket.on('disconnect', (reason) => {
+      console.log('🔌 [disconnect] 이벤트 발생:', { reason });
+      // disconnect는 자신의 연결이 끊어진 것이므로 참여자 제거 안 함
+      // 다른 참여자의 퇴장은 user-left에서 처리
+    });
 
-    // 모든 Socket 이벤트 수신 디버깅
+    // 혹시 다른 이벤트명으로 퇴장 알림이 올 수 있음
+    socket.on('participant-left', (data: any) => {
+      console.log('🚨 [participant-left] 이벤트 수신!', data);
+      // user-left와 동일한 처리
+      if (data.guestUserId) {
+        const currentParticipants = state.participants || [];
+        const updatedParticipants = currentParticipants.filter(p => 
+          p.guestUserId !== data.guestUserId && p.id !== data.guestUserId
+        );
+        if (updatedParticipants.length !== currentParticipants.length) {
+          dispatch({ type: 'SET_PARTICIPANTS', payload: updatedParticipants });
+        }
+      }
+    });
+
+    // 모든 Socket 이벤트 수신 디버깅 (퇴장 관련 이벤트 특별 표시)
     socket.onAny((eventName, ...args) => {
-      console.log(`🎯 [Socket] 이벤트 수신:`, { eventName, args });
+      if (eventName.includes('left') || eventName.includes('disconnect') || eventName.includes('leave')) {
+        console.log(`🚨 [Socket] 퇴장 관련 이벤트:`, { eventName, args });
+      } else {
+        console.log(`🎯 [Socket] 이벤트 수신:`, { eventName, args });
+      }
     });
 
     // 🚨 포괄적 Socket 에러 처리
@@ -1539,8 +1699,42 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
     setError
   };
 
+  // 🔧 Context value 최적화로 React 배칭 문제 해결
+  const contextValue = useMemo(() => {
+    // participants 변경 시 완전히 새로운 참조 생성
+    const enhancedState = {
+      ...state,
+      participants: state.participants ? [...state.participants] : state.participants,
+      // 강제 업데이트를 위한 타임스탬프 추가
+      _participantsUpdateTime: state.participants?.length ? Date.now() : 0
+    };
+    
+    console.log('🔄 [Context] contextValue 재생성:', {
+      participantsLength: state.participants?.length || 0,
+      timestamp: new Date().toLocaleTimeString(),
+      participantsData: state.participants?.map(p => ({
+        nickname: p.nickname,
+        guestUserId: p.guestUserId,
+        isHost: p.isHost
+      })) || []
+    });
+    
+    return { 
+      state: enhancedState, 
+      actions 
+    };
+  }, [
+    state.participants?.length, // participants 길이 변경 시 새 참조
+    state.participants, // participants 전체 참조도 감시
+    state.currentRoom?.roomCode,
+    state.currentPlayer?.guestUserId,
+    state.error,
+    state.loading,
+    // actions는 안정적이므로 제외
+  ]);
+
   return (
-    <UnifiedGamecastContext.Provider value={{ state, actions }}>
+    <UnifiedGamecastContext.Provider value={contextValue}>
       {children}
     </UnifiedGamecastContext.Provider>
   );

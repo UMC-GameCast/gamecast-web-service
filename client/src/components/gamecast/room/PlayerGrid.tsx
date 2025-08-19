@@ -76,11 +76,31 @@ export const PlayerGrid: React.FC<PlayerGridProps> = ({
   playersReadyStatus = [],
 }) => {
   
+  // 🔍 PlayerGrid 입력 데이터 디버깅  
+  console.log('🎯 [PlayerGrid] 입력 데이터 확인:', {
+    realtimeParticipantsCount: realtimeParticipants?.length || 0,
+    realtimeParticipants: realtimeParticipants?.map(p => ({
+      nickname: p.nickname,
+      guestUserId: p.guestUserId,
+      isHost: p.isHost
+    })) || [],
+    currentRoomParticipantsCount: currentRoom?.participants?.length || 0,
+    timestamp: new Date().toLocaleTimeString()
+  });
     
-  // 무한 렌더링 방지를 위해 디버깅 로그 제거
   // 서버 우선순위: Socket.IO 실시간 데이터가 절대 우선, REST API는 폴백만
   const participants = realtimeParticipants.length > 0 ? realtimeParticipants : (currentRoom?.participants || []);
   const isUsingServerData = realtimeParticipants.length > 0;
+  
+  console.log('🎯 [PlayerGrid] 사용할 participants 결정:', {
+    finalParticipantsCount: participants.length,
+    isUsingRealtimeData: isUsingServerData,
+    finalParticipants: participants.map(p => ({
+      nickname: p.nickname,
+      guestUserId: p.guestUserId,
+      isHost: p.isHost
+    }))
+  });
   
   
   // 서버 데이터 구조 우선 (최소 변환)
