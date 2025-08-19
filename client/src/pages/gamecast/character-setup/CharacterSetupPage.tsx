@@ -15,8 +15,8 @@ interface CharacterSetupPageProps {
 /**
  * 캐릭터 설정 페이지 컴포넌트
  * RoomPage와 동일한 레이아웃을 사용하며, 메인 콘텐츠만 캐릭터 설정으로 변경
+ * Socket.IO 실시간 업데이트만 사용 (REST API 사용 안함)
  */
-const API_BASE_URL = "http://3.37.34.211:8889"; // WebRTC Manager와 동일한 서버 사용
 
 export const CharacterSetupPage = ({ onBack, onCharacterComplete }: CharacterSetupPageProps) => {
   const navigate = useNavigate();
@@ -68,127 +68,58 @@ export const CharacterSetupPage = ({ onBack, onCharacterComplete }: CharacterSet
 
     try {
       setIsLoading(true);
-      console.log('🎨 [CharacterSetupPage] REST API로 캐릭터 전송 시작');
+      console.log('🎨 [CharacterSetupPage] Socket.IO로만 캐릭터 전송 시작');
 
-      // 🎯 서버 검증에 맞춰 null 대신 undefined 사용하여 빈 필드 제거
-      const characterSetup: any = {};
+      // 캐릭터 데이터 준비
+      const selectedOptions: Record<string, string> = {};
+      const selectedColors: Record<string, string> = {};
       
       // selectedOptions - 값이 있는 경우에만 포함
-      const selectedOptions: Record<string, string> = {};
       if (characterData?.selectedOptions?.face) selectedOptions.face = characterData.selectedOptions.face;
       if (characterData?.selectedOptions?.hair) selectedOptions.hair = characterData.selectedOptions.hair;
       if (characterData?.selectedOptions?.top) selectedOptions.top = characterData.selectedOptions.top;
       if (characterData?.selectedOptions?.bottom) selectedOptions.bottom = characterData.selectedOptions.bottom;
       if (characterData?.selectedOptions?.accessory) selectedOptions.accessory = characterData.selectedOptions.accessory;
       
-      if (Object.keys(selectedOptions).length > 0) {
-        characterSetup.selectedOptions = selectedOptions;
-      }
-      
       // selectedColors - 값이 있는 경우에만 포함
-      const selectedColors: Record<string, string> = {};
       if (characterData?.selectedColors?.face) selectedColors.face = characterData.selectedColors.face;
       if (characterData?.selectedColors?.hair) selectedColors.hair = characterData.selectedColors.hair;
       if (characterData?.selectedColors?.top) selectedColors.top = characterData.selectedColors.top;
       if (characterData?.selectedColors?.bottom) selectedColors.bottom = characterData.selectedColors.bottom;
       if (characterData?.selectedColors?.accessory) selectedColors.accessory = characterData.selectedColors.accessory;
-      
-      if (Object.keys(selectedColors).length > 0) {
-        characterSetup.selectedColors = selectedColors;
-      }
 
       // 🧪 테스트용: 캐릭터 데이터가 없으면 예시 데이터 사용
-      if (!characterData || (Object.keys(characterSetup).length === 0)) {
+      if (!characterData || (Object.keys(selectedOptions).length === 0 && Object.keys(selectedColors).length === 0)) {
         console.log('📝 [CharacterSetupPage] 캐릭터 데이터 없음 - 예시 데이터 사용');
-        characterSetup.selectedOptions = {
-          face: 'face2',
-          hair: 'hair1', 
-          top: 'top2',
-          bottom: 'bottom3',
-          accessory: 'accessories1'
-        };
-        characterSetup.selectedColors = {
-          face: 'beige',
-          hair: 'red',
-          top: 'blue', 
-          bottom: 'black',
-          accessory: 'gold'
-        };
+        selectedOptions.face = 'face2';
+        selectedOptions.hair = 'hair1';
+        selectedOptions.top = 'top2';
+        selectedOptions.bottom = 'bottom3';
+        selectedOptions.accessory = 'accessories1';
+        
+        selectedColors.face = 'beige';
+        selectedColors.hair = 'red';
+        selectedColors.top = 'blue';
+        selectedColors.bottom = 'black';
+        selectedColors.accessory = 'gold';
       }
 
-      const guestUserId = currentPlayer.guestUserId || currentPlayer.id;
-      
-      // UUID v4 형식 검증
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-      if (!uuidRegex.test(guestUserId)) {
-        console.error('❌ [CharacterSetupPage] 잘못된 UUID 형식:', guestUserId);
-        throw new Error('잘못된 사용자 ID 형식입니다.');
-      }
-      
-      const requestBody = {
-        guestUserId,
-        characterSetup
+      const characterUpdateData = {
+        selectedOptions,
+        selectedColors,
+        nickname: currentPlayer.nickname
       };
 
-      console.log('📡 [CharacterSetupPage] REST API로 캐릭터 전송:', {
-        url: `${API_BASE_URL}/api/rooms/preparation`,
-        guestUserId,
-        guestUserIdValid: uuidRegex.test(guestUserId),
-        realUserNickname: currentPlayer.nickname,
-        characterSetup,
-        requestBodyString: JSON.stringify(requestBody, null, 2)
-      });
+      console.log('🔌 [CharacterSetupPage] Socket.IO로 캐릭터 상태 업데이트:', characterUpdateData);
       
-      // ✨ REST API를 통해 캐릭터 전송 (실제 사용자 신원으로)
-      const response = await fetch(`${API_BASE_URL}/api/rooms/preparation`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(requestBody)
-      });
-      
-      if (!response.ok) {
-        let errorData;
-        try {
-          errorData = await response.json();
-        } catch {
-          errorData = await response.text();
-        }
-        console.error('❌ [CharacterSetupPage] API 응답 에러:', {
-          status: response.status,
-          statusText: response.statusText,
-          headers: Object.fromEntries(response.headers.entries()),
-          errorData
-        });
-        throw new Error(`HTTP ${response.status}: ${JSON.stringify(errorData)}`);
-      }
-      
-      const result = await response.json();
-      console.log('✅ [CharacterSetupPage] REST API 캐릭터 전송 완료:', result);
-      
-      // 🔌 Socket.IO로 실시간 캐릭터 업데이트 전송 (우선)
-      console.log('🔌 [CharacterSetupPage] Socket.IO로 캐릭터 상태 업데이트');
-      try {
-        updateCharacter({
-          selectedOptions: characterSetup.selectedOptions || {},
-          selectedColors: characterSetup.selectedColors || {},
-          nickname: currentPlayer.nickname
-        });
-        console.log('✅ [CharacterSetupPage] Socket.IO 캐릭터 업데이트 완료');
-      } catch (socketError) {
-        console.warn('⚠️ [CharacterSetupPage] Socket.IO 캐릭터 업데이트 실패:', socketError);
-      }
-      
-      // 🔄 방 정보 새로고침 제거: Socket.IO로 이미 실시간 업데이트됨
-      // await refreshRoomState(); // 제거: 캐릭터 설정 상태를 덮어쓰는 문제 발생
-      console.log('✅ [CharacterSetupPage] Socket.IO 실시간 업데이트 완료, 새로고침 생략');
+      // Socket.IO로만 실시간 캐릭터 업데이트 전송
+      updateCharacter(characterUpdateData);
+      console.log('✅ [CharacterSetupPage] Socket.IO 캐릭터 업데이트 완료');
       
       // 콜백 함수 호출 (하위 호환성)
       if (onCharacterComplete) {
         console.log('🔌 [CharacterSetupPage] 추가 콜백 실행');
-        onCharacterComplete(characterSetup);
+        onCharacterComplete(characterUpdateData);
       }
       
       // 짧은 지연 후 RoomPage로 돌아가기 (SPA 라우팅)
@@ -207,7 +138,7 @@ export const CharacterSetupPage = ({ onBack, onCharacterComplete }: CharacterSet
     } finally {
       setIsLoading(false);
     }
-  }, [characterData, isLoading, onBack, currentRoom, currentPlayer, refreshRoomState, updateCharacter]);
+  }, [characterData, isLoading, onBack, currentRoom, currentPlayer, updateCharacter, navigate, onCharacterComplete]);
 
   const handleBackClick = useCallback(() => {
     if (onBack) {

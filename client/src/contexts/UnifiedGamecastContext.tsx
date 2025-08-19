@@ -449,6 +449,21 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
         if (result.success && result.room) {
           dispatch({ type: 'SET_ROOM', payload: result.room });
           
+          // 🎯 participants 배열 업데이트 (캐릭터 정보 포함)
+          if (result.room.participants && Array.isArray(result.room.participants)) {
+            console.log('🔄 [refreshRoomState] 서버에서 participants 업데이트:', {
+              participantCount: result.room.participants.length,
+              participantIds: result.room.participants.map(p => p.guestUserId),
+              hasCharacterInfo: result.room.participants.map(p => ({
+                id: p.guestUserId,
+                hasCharacterInfo: !!p.characterInfo,
+                isCustomized: p.characterInfo?.isCustomized
+              }))
+            });
+            
+            dispatch({ type: 'SET_PARTICIPANTS', payload: result.room.participants });
+          }
+          
           // 🎯 guestUserId를 주 식별자로 사용 (통합 정책)
           const serverPlayer = result.room.participants?.find(p => p.guestUserId === userId);
           
@@ -458,16 +473,24 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
               id: serverPlayer.guestUserId, // 🎯 guestUserId를 기본 id로 사용
               guestUserId: serverPlayer.guestUserId,
               preparationStatus: serverPlayer.preparationStatus || {
-                characterSetup: false,
+                characterSetup: serverPlayer.characterInfo?.isCustomized || false,
                 screenSetup: false,
                 isReady: false
               },
               isHost: serverPlayer.role === 'host',
               characterInfo: serverPlayer.characterInfo || null
             };
+            
+            console.log('🔄 [refreshRoomState] currentPlayer 업데이트:', {
+              guestUserId: playerInfo.guestUserId,
+              hasCharacterInfo: !!playerInfo.characterInfo,
+              isCustomized: playerInfo.characterInfo?.isCustomized,
+              characterSetup: playerInfo.preparationStatus?.characterSetup
+            });
+            
             dispatch({ type: 'SET_PLAYER', payload: playerInfo });
             
-            // 준비 상태 동기화
+            // 준비 상태 동기화 (캐릭터 설정 상태 포함)
             dispatch({ 
               type: 'SET_PREPARATION', 
               payload: playerInfo.preparationStatus 

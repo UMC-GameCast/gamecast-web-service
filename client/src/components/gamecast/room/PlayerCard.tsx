@@ -82,7 +82,29 @@ export const PlayerCard = ({
   const finalCharacterData = character;
   const playerHasCharacter = hasCharacter ?? (player.characterInfo?.isCustomized || false);
   
-  // 디버깅 로그 제거 (콘솔 스팸 방지)
+  // 🔍 디버깅 로그 (캐릭터 있을 때만 한 번 출력)
+  if (playerHasCharacter && finalCharacterData) {
+    console.log('🎭 [PlayerCard] 캐릭터 렌더링 준비:', {
+      playerId: player.guestUserId || player.id,
+      nickname: player.nickname,
+      finalPlayerHasCharacter,
+      hasCharacterData: !!finalCharacterData,
+      selectedOptionsCount: Object.keys(finalCharacterData?.selectedOptions || {}).length,
+      selectedColorsCount: Object.keys(finalCharacterData?.selectedColors || {}).length,
+      timestamp: new Date().toLocaleTimeString()
+    });
+  } else if (player.characterInfo?.isCustomized) {
+    console.warn('⚠️ [PlayerCard] 캐릭터 설정되었지만 렌더링 안됨:', {
+      playerId: player.guestUserId || player.id,
+      nickname: player.nickname,
+      hasCharacterProp: hasCharacter,
+      characterProp: !!character,
+      playerCharacterInfo: !!player.characterInfo,
+      isCustomized: player.characterInfo?.isCustomized,
+      finalPlayerHasCharacter,
+      finalCharacterData: !!finalCharacterData
+    });
+  }
   
   // ✨ 단순화된 캐릭터 존재 여부: preparation status 우선, 그 다음 isCustomized 
   const finalPlayerHasCharacter = preparationStatus?.characterSetup ?? playerHasCharacter;

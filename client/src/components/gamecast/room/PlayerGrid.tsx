@@ -206,6 +206,20 @@ export const PlayerGrid: React.FC<PlayerGridProps> = ({
             nickname: getDisplayNickname(player, realtimeParticipants || [], currentRoom)
           } : null;
           
+          // 🔍 PlayerCard에 전달할 데이터 디버깅 (캐릭터 있을 때만 출력)
+          if (hasCharacter && Math.random() < 0.2) {
+            console.log('🎭 [PlayerGrid] PlayerCard에 캐릭터 데이터 전달:', {
+              playerId: player.guestUserId || player.id,
+              nickname: player.nickname,
+              hasCharacter,
+              characterData,
+              playerCharacterInfo: player.characterInfo,
+              isCustomized: player.characterInfo?.isCustomized,
+              preparationStatus: playerPreparationStatus,
+              timestamp: new Date().toLocaleTimeString()
+            });
+          }
+          
           // 🎯 해당 플레이어의 preparation status 조회
           const playerPreparationStatus = Array.isArray(playersReadyStatus) 
             ? playersReadyStatus.find(ps => ps.playerId === (player.guestUserId || player.id))
