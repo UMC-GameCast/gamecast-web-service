@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Navigation } from "../../../components/gamecast/common/Navigation";
 import { Footer } from "../../../components/gamecast/common/Footer";
 import { BackButton1 } from "../../../components/gamecast/common/BackButton1";
@@ -18,8 +19,9 @@ interface CharacterSetupPageProps {
 const API_BASE_URL = "http://3.37.34.211:8889"; // WebRTC Manager와 동일한 서버 사용
 
 export const CharacterSetupPage = ({ onBack, onCharacterComplete }: CharacterSetupPageProps) => {
+  const navigate = useNavigate();
   // 통합 Context 사용
-  const { currentRoom, currentPlayer, handleLeaveRoom, refreshRoomState } = useUnifiedRoom();
+  const { currentRoom, currentPlayer, handleLeaveRoom, refreshRoomState, updateCharacter } = useUnifiedRoom();
   const [characterData, setCharacterData] = useState<CharacterData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -166,21 +168,37 @@ export const CharacterSetupPage = ({ onBack, onCharacterComplete }: CharacterSet
       const result = await response.json();
       console.log('✅ [CharacterSetupPage] REST API 캐릭터 전송 완료:', result);
       
-      // 🔄 방 정보 새로고침으로 최신 상태 반영
-      console.log('🔄 [CharacterSetupPage] 방 정보 새로고침 중...');
-      await refreshRoomState();
-      console.log('✅ [CharacterSetupPage] 방 정보 새로고침 완료');
+      // 🔌 Socket.IO로 실시간 캐릭터 업데이트 전송 (우선)
+      console.log('🔌 [CharacterSetupPage] Socket.IO로 캐릭터 상태 업데이트');
+      try {
+        updateCharacter({
+          selectedOptions: characterSetup.selectedOptions || {},
+          selectedColors: characterSetup.selectedColors || {},
+          nickname: currentPlayer.nickname
+        });
+        console.log('✅ [CharacterSetupPage] Socket.IO 캐릭터 업데이트 완료');
+      } catch (socketError) {
+        console.warn('⚠️ [CharacterSetupPage] Socket.IO 캐릭터 업데이트 실패:', socketError);
+      }
       
-      // 🔌 Socket.IO로 실시간 캐릭터 업데이트 전송
+      // 🔄 방 정보 새로고침 제거: Socket.IO로 이미 실시간 업데이트됨
+      // await refreshRoomState(); // 제거: 캐릭터 설정 상태를 덮어쓰는 문제 발생
+      console.log('✅ [CharacterSetupPage] Socket.IO 실시간 업데이트 완료, 새로고침 생략');
+      
+      // 콜백 함수 호출 (하위 호환성)
       if (onCharacterComplete) {
-        console.log('🔌 [CharacterSetupPage] Socket으로 캐릭터 업데이트 전송');
+        console.log('🔌 [CharacterSetupPage] 추가 콜백 실행');
         onCharacterComplete(characterSetup);
       }
       
-      // 짧은 지연 후 RoomPage로 돌아가기
+      // 짧은 지연 후 RoomPage로 돌아가기 (SPA 라우팅)
       setTimeout(() => {
-        console.log('🔄 [CharacterSetupPage] RoomPage로 돌아가기');
-        onBack?.();
+        console.log('🔄 [CharacterSetupPage] RoomPage로 돌아가기 (SPA 라우팅)');
+        if (onBack) {
+          onBack();
+        } else {
+          navigate('/room');
+        }
       }, 300);
       
     } catch (error) {
@@ -189,15 +207,16 @@ export const CharacterSetupPage = ({ onBack, onCharacterComplete }: CharacterSet
     } finally {
       setIsLoading(false);
     }
-  }, [characterData, isLoading, onBack, currentRoom, currentPlayer, refreshRoomState]);
+  }, [characterData, isLoading, onBack, currentRoom, currentPlayer, refreshRoomState, updateCharacter]);
 
   const handleBackClick = useCallback(() => {
     if (onBack) {
       onBack(); // 부모가 제공한 특별한 돌아가기 로직
     } else {
-      handleLeaveRoom(); // 기본: 방 나가기 + 메인페이지 이동
+      // SPA 라우팅으로 RoomPage로 돌아가기
+      navigate('/room');
     }
-  }, [onBack, handleLeaveRoom]);
+  }, [onBack, navigate]);
 
   // 조건부 렌더링은 모든 Hook 호출 후에
   if (!currentRoom || !currentPlayer) {

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { RoomButton } from "./RoomButton";
 import NoticeIcon from "../../../assets/gamecast/Room/notice.svg?react";
 // updateCurrentPlayer 제거 - Socket.IO 단일 소스 사용
@@ -42,16 +43,17 @@ export const ButtonContainer = ({
   setCharacterSetup,
   setScreenSetup,
   // 캐릭터 설정 페이지 이동 콜백
-  onCharacterSetupClick
+  onCharacterSetupClick,
   // 준비 상태 관리 - 현재 사용하지 않음
-  // onReadyToggle,
-  // allPlayersReady: allPlayersReadyProp,
+  onReadyToggle,
+  allPlayersReady: allPlayersReadyProp,
   // 녹화 관련 - 현재 사용하지 않음
-  // isRecording = false,
-  // recordingTime = 0,
-  // onRecordingStart,
-  // onRecordingStop
+  isRecording = false,
+  recordingTime = 0,
+  onRecordingStart,
+  onRecordingStop
 }: ButtonContainerProps) => {
+  const navigate = useNavigate();
   const [isTooltipVisible, setIsTooltipVisible] = useState(false);
   const [isHoveringHostButton, setIsHoveringHostButton] = useState(false);
   
@@ -73,6 +75,16 @@ export const ButtonContainer = ({
     ? playersReadyStatus.find(p => p.playerId === unifiedPlayerId || p.playerId === currentPlayer?.id)
     : null;
   const isPlayerReady = currentPlayerReadyStatus?.isReady || false;
+  
+  // 🔍 디버깅 로그 (문제 해결을 위해 임시 활성화)
+  console.log('🎭 [ButtonContainer] 렌더링 상태:', {
+    characterSetupComplete,
+    screenSetupComplete,
+    isPlayerReady,
+    unifiedPlayerId,
+    currentPlayerExists: !!currentPlayer,
+    timestamp: new Date().toLocaleTimeString()
+  });
 
   // 서버 중심 준비 상태 업데이트 (Socket.IO 단일 소스) - 현재 미사용
   // const handleServerFirstReadyUpdate = () => {
@@ -81,21 +93,10 @@ export const ButtonContainer = ({
   //   onStateUpdate?.();
   // };
   
-  // 캐릭터 설정 페이지로 이동
+  // 캐릭터 설정 페이지로 이동 (SPA 라우팅)
   const handleCharacterSettings = () => {
-    console.log('🎭 [ButtonContainer] 캐릭터 설정 페이지로 이동');
-    
-    if (onCharacterSetupClick) {
-      onCharacterSetupClick();
-    } else {
-      console.warn('⚠️ [ButtonContainer] onCharacterSetupClick 콜백이 제공되지 않음');
-      // 임시로 설정 완료 상태 토글 (fallback)
-      if (setCharacterSetup) {
-        const newState = !characterSetupComplete;
-        console.log('🎭 [ButtonContainer] 캐릭터 설정 상태 변경 (fallback):', newState);
-        setCharacterSetup(newState);
-      }
-    }
+    console.log('🎭 [ButtonContainer] 캐릭터 설정 페이지로 이동 (SPA 라우팅)');
+    navigate('/character-setup');
   };
   
   const handleRecordingSettings = async () => {

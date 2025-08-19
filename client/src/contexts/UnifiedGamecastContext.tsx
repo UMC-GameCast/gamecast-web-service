@@ -318,6 +318,12 @@ const unifiedGamecastReducer = (state: UnifiedGamecastState, action: UnifiedGame
       };
     
     case 'SET_PREPARATION':
+      console.log('🔄 [Reducer] SET_PREPARATION:', {
+        before: state.preparation,
+        after: { ...state.preparation, ...action.payload },
+        payload: action.payload,
+        timestamp: new Date().toLocaleTimeString()
+      });
       return {
         ...state,
         preparation: { ...state.preparation, ...action.payload }
@@ -342,6 +348,11 @@ const unifiedGamecastReducer = (state: UnifiedGamecastState, action: UnifiedGame
       };
     
     case 'SET_UI_STATE':
+      console.log('🎭 [Reducer] SET_UI_STATE 처리:', {
+        currentUI: state.ui,
+        payload: action.payload,
+        newUI: { ...state.ui, ...action.payload }
+      });
       return {
         ...state,
         ui: { ...state.ui, ...action.payload }
@@ -1213,19 +1224,111 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
       }
     });
 
-    // 🎨 캐릭터 업데이트 이벤트 - 검증 강화
-    socket.on('character-update', (data: { guestUserId: string; characterInfo: any; timestamp?: number }) => {
-      if (!validateAndLog('character-update', data, (d) => 
+    // 🎨 서버 캐릭터 업데이트 이벤트 (실시간 브로드캐스트)
+    socket.on('character-status-updated', (data: { 
+      guestUserId: string; 
+      nickname: string;
+      characterInfo: {
+        selectedOptions: Record<string, string>;
+        selectedColors: Record<string, string>;
+        isCustomized: boolean;
+      };
+      timestamp?: number;
+    }) => {
+      if (!validateAndLog('character-status-updated', data, (d) => 
         d && 
         typeof d.guestUserId === 'string' && 
         d.characterInfo &&
+        typeof d.characterInfo.isCustomized === 'boolean' &&
         (!d.timestamp || validateTimestamp(d.timestamp))
       )) {
-        logSocketState('캐릭터 업데이트 검증 실패');
+        logSocketState('캐릭터 상태 업데이트 검증 실패');
         return;
       }
       
-      logSocketState('캐릭터 업데이트 적용', { guestUserId: data.guestUserId });
+      console.log('🎨 [Socket] 캐릭터 상태 업데이트 수신:', {
+        guestUserId: data.guestUserId,
+        nickname: data.nickname,
+        isCustomized: data.characterInfo.isCustomized,
+        timestamp: new Date().toLocaleTimeString()
+      });
+
+      // 🔧 실시간 participants 업데이트 (user-joined와 동일한 패턴)
+      const currentParticipants = stateRef.current.participants || [];
+      const updatedParticipants = currentParticipants.map(p => 
+        p.guestUserId === data.guestUserId || p.id === data.guestUserId
+          ? { 
+              ...p, 
+              characterInfo: {
+                selectedOptions: data.characterInfo.selectedOptions,
+                selectedColors: data.characterInfo.selectedColors,
+                isCustomized: data.characterInfo.isCustomized
+              },
+              preparationStatus: {
+                ...p.preparationStatus,
+                characterSetup: data.characterInfo.isCustomized
+              }
+            }
+          : p
+      );
+
+      if (updatedParticipants.length !== currentParticipants.length || 
+          updatedParticipants.some((p, i) => p !== currentParticipants[i])) {
+        console.log('🎨 [Socket] participants 캐릭터 정보 업데이트:', {
+          targetPlayer: data.guestUserId,
+          isCustomized: data.characterInfo.isCustomized,
+          participantsCount: updatedParticipants.length
+        });
+
+        // 이중 Dispatch 패턴으로 강제 리렌더링
+        dispatch({ type: 'SET_PARTICIPANTS', payload: updatedParticipants });
+        
+        setTimeout(() => {
+          dispatch({ type: 'SET_PARTICIPANTS', payload: [...updatedParticipants] });
+          console.log('🎨 [Socket] 캐릭터 업데이트 강제 리렌더링 완료:', data.guestUserId);
+        }, 0);
+        
+        // 🎯 현재 플레이어의 캐릭터 설정인 경우 currentPlayer와 preparation 상태 모두 업데이트
+        const currentPlayer = stateRef.current.currentPlayer;
+        if (currentPlayer && (currentPlayer.guestUserId === data.guestUserId || currentPlayer.id === data.guestUserId)) {
+          console.log('🎨 [Socket] 현재 플레이어 캐릭터 설정 완료, currentPlayer와 preparation 상태 업데이트:', data.characterInfo.isCustomized);
+          
+          // 1. currentPlayer 업데이트 (가장 중요!)
+          const updatedCurrentPlayer = {
+            ...currentPlayer,
+            characterInfo: {
+              selectedOptions: data.characterInfo.selectedOptions,
+              selectedColors: data.characterInfo.selectedColors,
+              isCustomized: data.characterInfo.isCustomized
+            },
+            preparationStatus: {
+              ...currentPlayer.preparationStatus,
+              characterSetup: data.characterInfo.isCustomized
+            }
+          };
+          dispatch({ type: 'SET_PLAYER', payload: updatedCurrentPlayer });
+          
+          // 2. preparation 상태 업데이트
+          dispatch({ 
+            type: 'SET_PREPARATION', 
+            payload: { 
+              ...stateRef.current.preparation,
+              characterSetup: data.characterInfo.isCustomized
+            }
+          });
+          
+          console.log('🎨 [Socket] currentPlayer 업데이트 완료:', {
+            guestUserId: data.guestUserId,
+            isCustomized: data.characterInfo.isCustomized,
+            hasSelectedOptions: Object.keys(data.characterInfo.selectedOptions).length > 0
+          });
+        }
+      }
+      
+      logSocketState('캐릭터 상태 업데이트 적용 완료', { 
+        guestUserId: data.guestUserId,
+        isCustomized: data.characterInfo.isCustomized 
+      });
       updateParticipant(data.guestUserId, { characterInfo: data.characterInfo });
     });
 
@@ -1479,22 +1582,34 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
 
   // WebRTC 제거됨 - 나중에 구현 예정
 
-  // 🎨 서버 우선 캐릭터 업데이트
+  // 🎨 서버 Socket.IO 캐릭터 업데이트 (실시간)
   const updateCharacter = (characterData: CharacterData) => {
-    if (state.realtime.socket && state.currentPlayer) {
-      logSocketState('캐릭터 업데이트 요청', { 
+    if (state.realtime.socket && state.currentPlayer && state.currentRoom) {
+      logSocketState('캐릭터 상태 업데이트 요청', { 
         hasCharacterData: !!characterData,
-        selectedOptionsCount: Object.keys(characterData.selectedOptions || {}).length
+        selectedOptionsCount: Object.keys(characterData.selectedOptions || {}).length,
+        selectedColorsCount: Object.keys(characterData.selectedColors || {}).length
       });
       
-      state.realtime.socket.emit('update-character', {
-        roomCode: state.currentRoom?.roomCode,
+      // 🔥 서버가 기대하는 형식으로 데이터 전송
+      const characterStatusData = {
+        selectedOptions: characterData.selectedOptions || {},
+        selectedColors: characterData.selectedColors || {},
+        isCustomized: !!(characterData.selectedOptions && characterData.selectedColors &&
+          Object.keys(characterData.selectedOptions).length > 0 &&
+          Object.keys(characterData.selectedColors).length > 0)
+      };
+
+      console.log('🎨 [updateCharacter] Socket 이벤트 전송:', {
+        event: 'update-character-status',
         guestUserId: state.currentPlayer.guestUserId,
-        characterInfo: characterData,
-        timestamp: Date.now()
+        roomCode: state.currentRoom.roomCode,
+        characterData: characterStatusData
       });
+      
+      state.realtime.socket.emit('update-character-status', characterStatusData);
     } else {
-      logSocketState('캐릭터 업데이트 실패', {
+      logSocketState('캐릭터 상태 업데이트 실패', {
         hasSocket: !!state.realtime.socket,
         hasPlayer: !!state.currentPlayer
       });
@@ -1519,7 +1634,13 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
 
   // UI 상태 설정
   const setUIState = (updates: Partial<UnifiedGamecastState['ui']>) => {
+    console.log('🎭 [UnifiedGamecastContext] setUIState 호출:', {
+      updates,
+      currentUIState: state.ui,
+      timestamp: new Date().toLocaleTimeString()
+    });
     dispatch({ type: 'SET_UI_STATE', payload: updates });
+    console.log('🎭 [UnifiedGamecastContext] dispatch 완료');
   };
 
   // 에러 설정
@@ -1760,7 +1881,8 @@ export const useUnifiedRoom = () => {
     error: state.error,
     refreshRoomState: actions.refreshRoomState,
     handleLeaveRoom: actions.leaveRoom,
-    updateParticipant: actions.updateParticipant
+    updateParticipant: actions.updateParticipant,
+    updateCharacter: actions.updateCharacter
   };
 };
 

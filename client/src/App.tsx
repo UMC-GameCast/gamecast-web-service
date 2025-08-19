@@ -5,6 +5,7 @@ import { MainPage } from './pages/gamecast/main/MainPage'
 import { ParticipatePage } from './pages/gamecast/participate/ParticipatePage'
 import { CreatePage } from './pages/gamecast/create/CreatePage'
 import { RoomPage } from './pages/gamecast/room/RoomPage'
+import { CharacterSetupPage } from './pages/gamecast/character-setup/CharacterSetupPage'
 import { SourceExtractionPage } from './pages/gamecast/source-extraction/SourceExtractionPage'
 import { SourceSelectionPage } from './pages/gamecast/source-selection/SourceSelectionPage'
 import { SubtitleGenerationPage } from './pages/gamecast/subtitle-generation/SubtitleGenerationPage'
@@ -26,6 +27,7 @@ function App() {
             <Route path="/participate" element={<ParticipatePage />} />
             <Route path="/create" element={<CreatePage />} />
             <Route path="/room" element={<RoomPage />} />
+            <Route path="/character-setup" element={<CharacterSetupPage />} />
             <Route path="/source-extraction" element={<SourceExtractionPage />} />
             <Route path="/source-selection" element={<SourceSelectionPage />} />
             <Route path="/subtitle-generation" element={<SubtitleGenerationPage />} />

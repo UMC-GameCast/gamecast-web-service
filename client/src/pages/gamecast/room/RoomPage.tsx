@@ -59,11 +59,9 @@ const getDisplayNickname = (player: any, allParticipants?: any[]): string => {
   // 그 외의 경우 원래 닉네임 사용
   return player.nickname || "Nickname2";
 };
-import { CharacterSetupPage } from "../character-setup/CharacterSetupPage";
 import { 
   useUnifiedGamecast,
   useUnifiedPreparation,
-  useUnifiedUI,
   useUnifiedRecording
 } from "../../../contexts/UnifiedGamecastContext";
 import { useNavigate } from "react-router-dom";
@@ -139,11 +137,8 @@ export const RoomPage = () => {
     updatePreparation
   } = useUnifiedPreparation();
   
-  const {
-    showCharacterSetup,
-    showMicGuide,
-    setUIState
-  } = useUnifiedUI();
+  // 마이크 가이드 상태만 필요
+  const [showMicGuide, setShowMicGuide] = useState(false);
 
   const {
     isRecording,
@@ -268,36 +263,6 @@ export const RoomPage = () => {
 
   return (
     <React.Fragment>
-      {/* 캐릭터 설정 페이지 */}
-      {showCharacterSetup && (
-        <div className="fixed inset-0 z-[9999]">
-          <ErrorBoundary
-            fallback={
-              <div className="h-screen w-screen flex flex-col items-center justify-center bg-[linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,6,72,1)_100%)]">
-                <p className="text-white text-xl mb-4">캐릭터 설정 로딩 중 오류가 발생했습니다</p>
-                <button 
-                  onClick={() => setUIState({ showCharacterSetup: false })}
-                  className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-                >
-                  돌아가기
-                </button>
-              </div>
-            }
-          >
-            <CharacterSetupPage 
-              onBack={() => setUIState({ showCharacterSetup: false })}
-              onCharacterComplete={(characterData) => {
-                actions.updateCharacter(characterData);
-                updatePreparation({ characterSetup: true });
-                setUIState({ showCharacterSetup: false });
-              }}
-            />
-          </ErrorBoundary>
-        </div>
-      )}
-
-      {/* 메인 룸 페이지 */}
-      <div className={showCharacterSetup ? 'hidden' : ''}>
         <div className="min-h-screen w-full flex flex-col justify-between bg-[linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,6,72,1)_100%)] relative overflow-hidden">
 
           {/* 배경 장식 이미지 */}
@@ -334,7 +299,7 @@ export const RoomPage = () => {
                 isConnected={voiceChatConnected}
                 isLocalMuted={isLocalMuted}
                 error={error && error.includes('마이크') ? error : null}
-                onRequestPermission={() => setUIState({ showMicGuide: true })}
+                onRequestPermission={() => setShowMicGuide(true)}
               />
             </div>
 
@@ -435,7 +400,7 @@ export const RoomPage = () => {
                   setScreenSetup={(completed) => {
                     updatePreparation({ screenSetup: completed });
                   }}
-                  onCharacterSetupClick={() => setUIState({ showCharacterSetup: true })}
+                  // onCharacterSetupClick prop 제거 (이제 ButtonContainer에서 직접 navigate 사용)
                   onReadyToggle={(ready) => {
                     updatePreparation({ isReady: ready });
                   }}
@@ -460,7 +425,6 @@ export const RoomPage = () => {
           {/* 하단 푸터 영역 */}
           <Footer />
         </div>
-      </div>
 
       {/* 마이크 권한 가이드 모달 */}
       <MicrophonePermissionGuide
@@ -469,7 +433,7 @@ export const RoomPage = () => {
         onRetry={() => {
           window.location.reload();
         }}
-        onClose={() => setUIState({ showMicGuide: false })}
+        onClose={() => setShowMicGuide(false)}
       />
 
       {/* 에러 표시 */}

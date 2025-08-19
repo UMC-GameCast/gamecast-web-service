@@ -36,8 +36,16 @@ export const MyCharacterContainer: React.FC<MyCharacterContainerProps> = ({
     nickname: currentPlayer?.nickname || ''
   } : null;
   
-  // ✨ 단순화된 디버깅 (개발 환경에서만)
-  // 디버깅 로그 제거 (콘솔 스팸 방지)
+  // 🔍 디버깅 로그 (문제 해결을 위해 임시 활성화)
+  console.log('🎨 [MyCharacterContainer] 렌더링 상태:', {
+    hasCharacter,
+    playerNickname: currentPlayer?.nickname,
+    characterInfo: currentPlayer?.characterInfo,
+    isCustomized: currentPlayer?.characterInfo?.isCustomized,
+    selectedOptionsCount: Object.keys(currentPlayer?.characterInfo?.selectedOptions || {}).length,
+    selectedColorsCount: Object.keys(currentPlayer?.characterInfo?.selectedColors || {}).length,
+    timestamp: new Date().toLocaleTimeString()
+  });
 
   return (
     <div className="w-[579px] h-[499px] pl-[30px] justify-end items-center inline-flex relative">

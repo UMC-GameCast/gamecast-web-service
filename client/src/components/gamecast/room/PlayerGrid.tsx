@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import type { Player, Room } from "../../../types/room";
 import { PlayerCard } from "./PlayerCard";
 import CardBlock from "../../../assets/gamecast/Room/Card_block.svg?react";
@@ -76,13 +76,14 @@ export const PlayerGrid: React.FC<PlayerGridProps> = ({
   playersReadyStatus = [],
 }) => {
   
-  // 🔍 PlayerGrid 입력 데이터 디버깅  
+  // 🔍 PlayerGrid 입력 데이터 디버깅 (캐릭터 정보 포함)
   console.log('🎯 [PlayerGrid] 입력 데이터 확인:', {
     realtimeParticipantsCount: realtimeParticipants?.length || 0,
     realtimeParticipants: realtimeParticipants?.map(p => ({
       nickname: p.nickname,
       guestUserId: p.guestUserId,
-      isHost: p.isHost
+      isHost: p.isHost,
+      hasCharacter: p.characterInfo?.isCustomized || false
     })) || [],
     currentRoomParticipantsCount: currentRoom?.participants?.length || 0,
     timestamp: new Date().toLocaleTimeString()
@@ -98,9 +99,35 @@ export const PlayerGrid: React.FC<PlayerGridProps> = ({
     finalParticipants: participants.map(p => ({
       nickname: p.nickname,
       guestUserId: p.guestUserId,
-      isHost: p.isHost
+      isHost: p.isHost,
+      hasCharacter: p.characterInfo?.isCustomized || false,
+      characterSetupStatus: p.preparationStatus?.characterSetup || false
     }))
   });
+
+  // 🎨 캐릭터 정보 변경 감지를 위한 useEffect
+  useEffect(() => {
+    const participantsWithCharacter = participants.filter(p => p.characterInfo?.isCustomized);
+    
+    if (participantsWithCharacter.length > 0) {
+      console.log('🎨 [PlayerGrid] 캐릭터 데이터 변경 감지:', {
+        participantsWithCharacters: participantsWithCharacter.length,
+        totalParticipants: participants.length,
+        characterUpdates: participantsWithCharacter.map(p => ({
+          playerId: p.guestUserId,
+          nickname: p.nickname,
+          isCustomized: p.characterInfo?.isCustomized,
+          hasOptions: !!(p.characterInfo?.selectedOptions && Object.keys(p.characterInfo.selectedOptions).length > 0),
+          hasColors: !!(p.characterInfo?.selectedColors && Object.keys(p.characterInfo.selectedColors).length > 0)
+        })),
+        timestamp: new Date().toLocaleTimeString()
+      });
+    }
+  }, [
+    participants.map(p => p.characterInfo?.isCustomized ? '1' : '0').join(''),
+    participants.map(p => p.guestUserId).join(','),
+    participants.length
+  ]);
   
   
   // 서버 데이터 구조 우선 (최소 변환)
