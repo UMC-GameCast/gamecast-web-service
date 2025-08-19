@@ -177,6 +177,41 @@ export const useGameRecording = (currentRoom: Room | null, currentPlayer: Player
       return;
     }
 
+    // WebRTC가 비활성화된 경우 빠른 종료
+    if (!(globalThis as any).__webRTCManager__) {
+      console.log('ℹ️ [useGameRecording] WebRTC 기능이 비활성화됨, 기본 플레이어 상태만 초기화');
+      
+      // 현재 플레이어를 playersReadyStatus에 초기화 (WebRTC 없이도 동작하도록)
+      if (currentPlayer) {
+        const unifiedUserId = currentPlayer.guestUserId || currentPlayer.id;
+        const unifiedNickname = currentPlayer.nickname || '익명';
+        
+        setPlayersReadyStatus(prev => {
+          const existingPlayer = prev.find(p => 
+            p.playerId === unifiedUserId || p.playerId === currentPlayer.id
+          );
+          
+          if (!existingPlayer) {
+            console.log('➕ [useGameRecording] 현재 플레이어를 준비 상태 목록에 초기화 (WebRTC 없음):', {
+              playerId: unifiedUserId,
+              playerName: unifiedNickname
+            });
+            
+            return [...prev, {
+              playerId: unifiedUserId,
+              playerName: unifiedNickname,
+              characterSetup: false,
+              screenSetup: false,
+              isReady: false
+            }];
+          } else {
+            return prev;
+          }
+        });
+      }
+      return;
+    }
+
     // 비동기 매니저 초기화 및 콜백 설정
     const setupManager = async () => {
       try {
@@ -585,52 +620,50 @@ export const useGameRecording = (currentRoom: Room | null, currentPlayer: Player
       
       manager.emitUpdatePreparationStatus(prepStatusData);
       persistentLog('log', '📤 [setPlayerReady] emitUpdatePreparationStatus 호출 완료 - 서버 응답 대기 중...');
-      
-      // 서버는 본인에게 preparation-status-updated를 보내지 않으므로 즉시 로컬 업데이트 필요
-      // 단, 무한 루프 방지를 위해 조건부로 실행
-      const unifiedUserId = currentPlayer.guestUserId || currentPlayer.id;
-      persistentLog('log', '🔄 [setPlayerReady] 로컬 상태 업데이트 시작 (서버가 본인에게는 이벤트 안보냄):', {
-        playerId: unifiedUserId,
-        isReady,
-        characterSetup: finalCharacterSetup,
-        screenSetup: finalScreenSetup
-      });
-      
-      // 현재 플레이어만 즉시 업데이트 (다른 플레이어는 서버 이벤트로 업데이트)
-      setPlayersReadyStatus(prev => {
-        const updatedPlayers = prev.map(player => 
-          (player.playerId === unifiedUserId || player.playerId === currentPlayer.id)
-            ? { 
-                ...player, 
-                characterSetup: isReady ? finalCharacterSetup : false,
-                screenSetup: isReady ? finalScreenSetup : false,
-                isReady: isReady && finalCharacterSetup && finalScreenSetup
-              }
-            : player
-        );
-        
-        // 플레이어가 목록에 없으면 추가 (방 입장 시 초기화되지 않은 경우)
-        const existingPlayer = prev.find(p => 
-          p.playerId === unifiedUserId || p.playerId === currentPlayer.id
-        );
-        if (!existingPlayer) {
-          persistentLog('log', '➕ [setPlayerReady] 현재 플레이어를 목록에 추가');
-          updatedPlayers.push({
-            playerId: unifiedUserId,
-            playerName: currentPlayer.nickname || '익명',
-            characterSetup: isReady ? finalCharacterSetup : false,
-            screenSetup: isReady ? finalScreenSetup : false,
-            isReady: isReady && finalCharacterSetup && finalScreenSetup
-          });
-        }
-        
-        persistentLog('log', '✅ [setPlayerReady] 현재 플레이어 로컬 상태 업데이트 완료:', updatedPlayers);
-        return updatedPlayers;
-      });
-      
     } else {
-      persistentLog('error', '❌ [setPlayerReady] WebRTC Manager를 찾을 수 없음');
+      persistentLog('log', 'ℹ️ [setPlayerReady] WebRTC Manager가 비활성화됨, 로컬 상태만 업데이트');
     }
+    
+    // WebRTC 유무에 관계없이 로컬 상태 업데이트 (UI 반응성을 위해)
+    persistentLog('log', '🔄 [setPlayerReady] 로컬 상태 업데이트 시작:', {
+      playerId: unifiedUserId,
+      isReady,
+      characterSetup: finalCharacterSetup,
+      screenSetup: finalScreenSetup,
+      hasWebRTC: !!manager
+    });
+    
+    // 현재 플레이어 상태 업데이트
+    setPlayersReadyStatus(prev => {
+      const updatedPlayers = prev.map(player => 
+        (player.playerId === unifiedUserId || player.playerId === currentPlayer.id)
+          ? { 
+              ...player, 
+              characterSetup: isReady ? finalCharacterSetup : false,
+              screenSetup: isReady ? finalScreenSetup : false,
+              isReady: isReady && finalCharacterSetup && finalScreenSetup
+            }
+          : player
+      );
+      
+      // 플레이어가 목록에 없으면 추가 (방 입장 시 초기화되지 않은 경우)
+      const existingPlayer = prev.find(p => 
+        p.playerId === unifiedUserId || p.playerId === currentPlayer.id
+      );
+      if (!existingPlayer) {
+        persistentLog('log', '➕ [setPlayerReady] 현재 플레이어를 목록에 추가');
+        updatedPlayers.push({
+          playerId: unifiedUserId,
+          playerName: currentPlayer.nickname || '익명',
+          characterSetup: isReady ? finalCharacterSetup : false,
+          screenSetup: isReady ? finalScreenSetup : false,
+          isReady: isReady && finalCharacterSetup && finalScreenSetup
+        });
+      }
+      
+      persistentLog('log', '✅ [setPlayerReady] 현재 플레이어 로컬 상태 업데이트 완료:', updatedPlayers);
+      return updatedPlayers;
+    });
     
     // 처리 상태 리셋 (1초 후)
     setTimeout(() => {
@@ -651,6 +684,12 @@ export const useGameRecording = (currentRoom: Room | null, currentPlayer: Player
         roomCode: currentRoom.roomCode,
         hostId: currentPlayer?.guestUserId || ''
       });
+    } else {
+      console.log('ℹ️ [useGameRecording] WebRTC Manager가 비활성화됨, 로컬 녹화 종료만 실행');
+      // WebRTC가 비활성화된 경우에도 로컬 녹화는 종료할 수 있도록 함
+      if (gameRecorderRef.current) {
+        handleRecordingStopped();
+      }
     }
   }, [currentRoom, currentPlayer]);
 
@@ -727,6 +766,10 @@ export const useGameRecording = (currentRoom: Room | null, currentPlayer: Player
                 roomCode: currentRoom.roomCode,
                 hostId: currentPlayer?.guestUserId || ''
               });
+            } else {
+              console.log('ℹ️ [useGameRecording] WebRTC Manager가 비활성화됨, 로컬 녹화만 시작');
+              // WebRTC가 비활성화된 경우에도 로컬 녹화는 시작할 수 있도록 함
+              handleRecordingStarted();
             }
           }
         }

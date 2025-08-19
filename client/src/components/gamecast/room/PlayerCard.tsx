@@ -14,6 +14,31 @@ import { useCharacterAnimation } from "../../../hooks/useCharacterAnimation";
 import { renderCharacterLayers } from "../../../utils/characterRenderer";
 import { usePlayerCardStream } from "../../../hooks/usePlayerCardStream";
 
+// 올바른 닉네임을 표시하기 위한 유틸리티 함수 (RoomPage와 동일한 로직)
+const getDisplayNickname = (player: Player, isHostPlayer: boolean): string => {
+  // Socket 통신에서는 호스트가 guestUserId를 닉네임으로 사용하지만
+  // UI에서는 원래 의도된 닉네임 규칙을 따라야 함
+  
+  // 호스트인 경우 항상 "Nickname1"
+  if (isHostPlayer || player.role === 'host' || player.isHost) {
+    return "Nickname1";
+  }
+  
+  // 기존 닉네임이 올바른 형식이면 그대로 사용
+  if (player.nickname && player.nickname.startsWith('Nickname') && /^Nickname\d+$/.test(player.nickname)) {
+    return player.nickname;
+  }
+  
+  // UUID 형태의 닉네임인 경우 (Socket 우회로 인한 잘못된 닉네임)
+  // 기본적으로 "Nickname2"로 설정 (게스트 사용자의 기본값)
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(player.nickname)) {
+    return "Nickname2"; // UUID 닉네임의 경우 게스트로 간주
+  }
+  
+  // 그 외의 경우 원래 닉네임 사용
+  return player.nickname || "Nickname2";
+};
+
 interface PlayerCardProps {
   player: Player;
   isHost: boolean;
@@ -323,7 +348,7 @@ export const PlayerCard = ({
               wordWrap: 'break-word'
             }}
           >
-            {player.nickname}
+            {getDisplayNickname(player, isHost)}
           </span>
           
           {/* 음성 표시기 */}
@@ -417,9 +442,6 @@ export const PlayerCard = ({
         ) : (
           <CardBottomUnready className="w-full h-full" />
         )}
-        <div className="absolute inset-0 flex items-center justify-center text-white text-lg font-medium">
-          {player.name || player.nickname}
-        </div>
       </div>
       
       {/* TODO: WebRTC 기능 비활성화 - 오디오 엘리먼트 비활성화 */}

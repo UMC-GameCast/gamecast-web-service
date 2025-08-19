@@ -4,6 +4,54 @@ import { PlayerCard } from "./PlayerCard";
 import CardBlock from "../../../assets/gamecast/Room/Card_block.svg?react";
 import CardEmpty from "../../../assets/gamecast/Room/Card_empty.svg?react";
 
+// 올바른 닉네임을 표시하기 위한 유틸리티 함수 (participants 목록 기반) - RoomPage와 동일한 로직
+const getDisplayNickname = (player: Player, allParticipants: Player[], currentRoom: Room): string => {
+  // Socket 통신에서는 호스트가 guestUserId를 닉네임으로 사용하지만
+  // UI에서는 원래 의도된 닉네임 규칙을 따라야 함
+  
+  // 전체 참여자 목록이 있는 경우, 그것을 기준으로 순번 결정
+  if (Array.isArray(allParticipants) && allParticipants.length > 0) {
+    // 호스트 찾기 (서버에서 오는 데이터 기반)
+    const hostPlayer = allParticipants.find(p => p.role === 'host' || p.isHost || p.id === currentRoom.hostGuestId);
+    
+    // 현재 플레이어가 호스트인지 확인
+    if (hostPlayer && (hostPlayer.guestUserId === player.guestUserId || hostPlayer.id === player.id)) {
+      return "Nickname1";
+    }
+    
+    // 호스트가 아닌 참여자들만 필터링
+    const participantPlayers = allParticipants.filter(p => p.role !== 'host' && !p.isHost && p.id !== currentRoom.hostGuestId);
+    
+    // 현재 플레이어의 인덱스 찾기
+    const playerIndex = participantPlayers.findIndex(p => 
+      p.guestUserId === player.guestUserId || p.id === player.id
+    );
+    
+    if (playerIndex >= 0) {
+      return `Nickname${playerIndex + 2}`; // 참여자는 Nickname2부터 시작
+    }
+  }
+  
+  // 개별 플레이어 데이터만으로 호스트 확인
+  if (player.role === 'host' || player.isHost || player.id === currentRoom.hostGuestId) {
+    return "Nickname1";
+  }
+  
+  // 기존 닉네임이 올바른 형식이면 그대로 사용
+  if (player.nickname && player.nickname.startsWith('Nickname') && /^Nickname\d+$/.test(player.nickname)) {
+    return player.nickname;
+  }
+  
+  // UUID 형태의 닉네임인 경우 (Socket 우회로 인한 잘못된 닉네임)
+  // 기본적으로 "Nickname2"로 설정 (게스트 사용자의 기본값)
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(player.nickname)) {
+    return "Nickname2"; // UUID 닉네임의 경우 게스트로 간주
+  }
+  
+  // 그 외의 경우 원래 닉네임 사용
+  return player.nickname || "Nickname2";
+};
+
 interface PlayerGridProps {
   currentRoom: Room;
   currentPlayer: Player;
@@ -55,8 +103,10 @@ export const PlayerGrid: React.FC<PlayerGridProps> = ({
       // guestUserId만 사용하여 현재 플레이어 식별 (통합 정책)
       const isNotWebRTCConnection = !p.nickname?.startsWith('WEBRTC_');
       
-      // 모든 참여자 표시 (현재 플레이어 포함) - 실시간 업데이트 확인용
-      const shouldInclude = isNotWebRTCConnection;
+      // 현재 플레이어 제외 로직 (현재 플레이어는 MyCharacterContainer에서 표시됨)
+      const isNotCurrentPlayer = p.guestUserId !== currentPlayer.guestUserId && p.id !== currentPlayer.id;
+      
+      const shouldInclude = isNotWebRTCConnection && isNotCurrentPlayer;
       
       return shouldInclude;
     });
@@ -94,8 +144,8 @@ export const PlayerGrid: React.FC<PlayerGridProps> = ({
           const socketIdStream = remoteStreams.get(player.socketId);
           const playerStream = unifiedStream || fallbackStream || socketIdStream;
           
-          // 방장 여부 판단 로직 개선 (중복 방지)
-          const isPlayerHost = player.role === 'host' || player.id === currentRoom.hostGuestId;
+          // 방장 여부 판단 로직 개선 (중복 방지) - 더 강화된 체크
+          const isPlayerHost = player.role === 'host' || player.isHost || player.id === currentRoom.hostGuestId || player.guestUserId === currentRoom.hostGuestId;
           
           // Stream matching 로그 제거 (무한 로그 방지)
           
@@ -106,7 +156,7 @@ export const PlayerGrid: React.FC<PlayerGridProps> = ({
           const characterData = hasCharacter ? {
             selectedOptions: player.characterInfo?.selectedOptions || {},
             selectedColors: player.characterInfo?.selectedColors || {},
-            nickname: player.nickname
+            nickname: getDisplayNickname(player, realtimeParticipants || [], currentRoom)
           } : null;
           
           // 🎯 해당 플레이어의 preparation status 조회
@@ -118,7 +168,7 @@ export const PlayerGrid: React.FC<PlayerGridProps> = ({
           
           return (
             <PlayerCard
-              key={player.id}
+              key={player.guestUserId || player.id || `player-${index}`}
               player={player}
               isHost={isPlayerHost}
               stream={playerStream}

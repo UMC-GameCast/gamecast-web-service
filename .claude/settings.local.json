@@ -29,7 +29,8 @@
       "Bash(git add:*)",
       "Bash(npm run build:*)",
       "Bash(npx vite:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "WebFetch(domain:localhost)"
     ],
     "deny": []
   }
