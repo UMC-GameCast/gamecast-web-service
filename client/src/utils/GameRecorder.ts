@@ -44,6 +44,20 @@ export class GameRecorder {
   };
 
   /**
+   * 현재 녹화 상태 조회
+   */
+  public getRecordingState(): RecordingState {
+    return { ...this.state };
+  }
+
+  /**
+   * 녹화 준비 상태 확인
+   */
+  public isReadyToRecord(): boolean {
+    return this.screenStream !== null && this.screenStream.active;
+  }
+
+  /**
    * 화면 선택 및 녹화 준비 (녹화화면 설정 버튼용)
    */
   public async selectScreen(): Promise<{ success: boolean; error?: string }> {
@@ -100,7 +114,77 @@ export class GameRecorder {
   }
 
   /**
-   * 녹화 시작 (모든 플레이어가 준비 완료된 후 호출)
+   * 동기화 녹화 시작 (Socket 이벤트에서 호출)
+   */
+  public async startSyncRecording(): Promise<void> {
+    if (this.state.isRecording) {
+      console.warn('⚠️ [GameRecorder] Recording already in progress');
+      return;
+    }
+
+    try {
+      console.log('🎬 [GameRecorder] Starting synchronized recording...', {
+        timestamp: new Date().toISOString()
+      });
+
+      this.startTime = Date.now();
+      this.state = {
+        isRecording: true,
+        startTime: this.startTime,
+        duration: 0
+      };
+
+      // 화면 녹화와 음성 녹음을 병렬로 시작
+      await Promise.all([
+        this.startScreenRecording(),
+        this.startAudioRecording()
+      ]);
+
+      console.log('✅ [GameRecorder] Synchronized recording started successfully');
+
+    } catch (error) {
+      console.error('❌ [GameRecorder] Failed to start synchronized recording:', error);
+      this.state.isRecording = false;
+      throw new Error(`동기화 녹화 시작에 실패했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
+    }
+  }
+
+  /**
+   * 동기화 녹화 종료 및 업로드 (Socket 이벤트에서 호출)
+   */
+  public async stopSyncRecording(roomCode: string, userId: string, gameTitle: string): Promise<UploadResult | null> {
+    if (!this.state.isRecording) {
+      console.warn('⚠️ [GameRecorder] No recording in progress');
+      return null;
+    }
+
+    try {
+      console.log('🛑 [GameRecorder] Stopping synchronized recording...');
+
+      // 녹화 종료
+      await Promise.all([
+        this.stopScreenRecording(),
+        this.stopAudioRecording()
+      ]);
+
+      // 서버로 업로드
+      const uploadResult = await this.uploadToServer(roomCode, userId, gameTitle);
+
+      console.log('✅ [GameRecorder] Synchronized recording completed and uploaded:', uploadResult);
+      
+      // 리소스 정리
+      this.cleanup();
+      
+      return uploadResult;
+
+    } catch (error) {
+      console.error('❌ [GameRecorder] Failed to stop synchronized recording:', error);
+      throw new Error(`동기화 녹화 종료에 실패했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
+    }
+  }
+
+  /**
+   * 녹화 시작 (레거시 메소드 - 기존 호환성 유지)
    */
   public async startRecording(roomCode: string, userId: string, gameTitle: string): Promise<void> {
     if (this.state.isRecording) {
