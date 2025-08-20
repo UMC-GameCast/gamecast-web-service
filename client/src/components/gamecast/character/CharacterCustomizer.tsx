@@ -230,7 +230,7 @@ export const CharacterCustomizer: React.FC<CharacterCustomizerProps> = ({ onChar
       <div className="flex flex-col items-center gap-[14px] flex-shrink-0 w-[531px]">
         {/* 캐릭터 이미지 */}
         <div className="w-[470px] h-[470px] relative">
-          <div className="w-full h-full bg-gradient-to-b from-purple-900/30 to-transparent rounded-lg relative overflow-hidden flex items-center justify-center">
+          <div className="w-full h-full rounded-lg relative overflow-hidden flex items-center justify-center">
             {/* 캐릭터 레이어들 컨테이너 */}
             <div className="relative w-full h-full">
               {renderCharacterPreview()}
@@ -417,37 +417,39 @@ export const CharacterCustomizer: React.FC<CharacterCustomizerProps> = ({ onChar
                       }`}
                     >
                       <div 
-                        className={`flex justify-center bg-transparent ${
+                        className={`flex justify-center bg-transparent overflow-hidden ${
                           selectedCategory === 'top' || selectedCategory === 'bottom'
-                            ? 'items-end' // 상의, 하의는 아래 기준 정렬
+                            ? 'items-center' // 상의, 하의는 중앙 정렬로 변경 (클립을 위해)
                             : selectedCategory === 'accessory'
                             ? 'items-center' // 장신구는 중앙 정렬로 조금 아래로
                             : 'items-center' // 머리는 중앙 정렬
                         } ${
                           selectedCategory === 'hair' 
                             ? 'w-[60px] h-[60px]'
-                            : 'w-[76px] h-[76px]' // 상의, 하의, 장신구는 버튼 전체 크기로
+                            : 'w-[176px] h-[176px]' // 얼굴, 상의, 하의, 장신구는 버튼 전체 크기로
                         }`}
                       >
                         <img 
                           src={asset.defaultImage}
                           alt={asset.name}
-                          className={`object-contain bg-transparent ${
+                          className={`bg-transparent ${
                             selectedCategory === 'hair'
-                              ? 'max-w-full max-h-full'
-                              : selectedCategory === 'top'
-                              ? 'w-[210px] h-[210px]' // 상의
-                              : selectedCategory === 'bottom'
-                              ? 'w-[210px] h-[210px]' // 하의
-                              : 'w-[100px] h-[100px]' // 장신구
+                              ? 'object-contain max-w-full max-h-full'
+                              : selectedCategory === 'face'
+                              ? 'object-cover w-[120px] h-[120px]' // 얼굴 - 120x120으로 크기 증가
+                              : selectedCategory === 'top' || selectedCategory === 'bottom'
+                              ? 'object-cover w-[210px] h-[210px]' // 상의/하의 - object-cover로 컨테이너에 맞춰 크롭
+                              : 'object-contain w-[100px] h-[100px]' // 장신구
                           }`}
                           style={{
                             transform: selectedCategory === 'top' 
-                              ? 'translate(8px, 15px)' // 상의: 우측 30px, 아래 100px
+                              ? 'translate(8px, -5px)' // 상의: 우측 8px, 위로 15px (5px - 10px)
                               : selectedCategory === 'bottom'
-                              ? 'translate(10px, 0px)' // 하의: 우측 50px
+                              ? 'translate(10px, -30px)' // 하의: 우측 10px, 위로 30px (-10px - 20px)
+                              : selectedCategory === 'face'
+                              ? 'translate(8px, -5px)' // 얼굴: 우측 8px, 위로 5px
                               : selectedCategory === 'accessory'
-                              ? 'translate(5px, 10px)' // 장신구: 우측 50px
+                              ? 'translate(5px, 0px)' // 장신구: 우측 5px, 위로 10px (10px - 10px)
                               : undefined
                           }}
                           onError={(e) => {
