@@ -192,3 +192,52 @@ export interface UserPermissions {
   canChangeRoomSettings: boolean;
   canAccessDebugTools: boolean;
 }
+
+// === 새 서버 호환 타입들 ===
+
+// 새 서버 타입에 맞춘 캐릭터 설정 (REST API용)
+export interface CharacterSetup {
+  selectedOptions?: {
+    face: string;
+    hair: string;
+    top: string;
+    bottom: string;
+    accessory: string;
+  };
+  selectedColors?: {
+    face: string;
+    hair: string;
+    top: string;
+    bottom: string;
+    accessory: string;
+  };
+}
+
+// 준비 상태 업데이트 요청 (REST API용)
+export interface PreparationStatusUpdate {
+  guestUserId: string;
+  characterSetup?: CharacterSetup;
+  screenSetup?: boolean;
+}
+
+// 캐릭터 상태 업데이트 데이터 (Socket.IO용)
+export interface CharacterStatusData {
+  selectedOptions: Record<string, string>;
+  selectedColors: Record<string, string>;
+  isCustomized: boolean;
+}
+
+// API 응답 타입
+export interface ApiResponse<T = any> {
+  success: boolean;
+  data?: T;
+  message?: string;
+  error?: string;
+}
+
+// 에러 처리 타입
+export interface SaveCharacterError {
+  type: 'network' | 'server' | 'validation';
+  message: string;
+  canRetry: boolean;
+}

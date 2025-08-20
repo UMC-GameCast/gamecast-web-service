@@ -64,7 +64,7 @@ import {
   useUnifiedPreparation,
   useUnifiedRecording
 } from "../../../contexts/UnifiedGamecastContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -105,6 +105,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
  */
 export const RoomPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   
   // 🎯 통합 Context 사용 (단일 소스)
   const { state, actions } = useUnifiedGamecast();
@@ -180,6 +181,29 @@ export const RoomPage = () => {
       timestamp: new Date().toLocaleTimeString()
     });
   }, [participants, state.participants]);
+
+  // 🚀 SPA 네비게이션에서 캐릭터 업데이트 감지
+  useEffect(() => {
+    const navigationState = location.state as any;
+    if (navigationState?.characterUpdated) {
+      console.log('⚡ [RoomPage] 캐릭터 업데이트 후 SPA 복귀 감지:', {
+        timestamp: navigationState.timestamp,
+        currentPlayerCharacter: currentPlayer?.characterInfo,
+        triggeringRefresh: true
+      });
+      
+      // 🔄 상태 강제 새로고침
+      if (refreshRoomState) {
+        setTimeout(() => {
+          console.log('🔄 [RoomPage] 캐릭터 업데이트 후 방 상태 강제 새로고침');
+          refreshRoomState();
+        }, 100);
+      }
+      
+      // navigation state 정리 (한 번만 실행)
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.state, currentPlayer, refreshRoomState, navigate, location.pathname]);
 
   // 🔧 React 배칭 문제 해결: Context 값 직접 구독
   const [forceUpdate, setForceUpdate] = useState(0);
@@ -330,6 +354,7 @@ export const RoomPage = () => {
                 {/* 내 캐릭터 컨테이너 */}
                 {currentRoom && currentPlayer ? (
                   <MyCharacterContainer 
+                    key={`character-${currentPlayer.guestUserId}-${currentPlayer.characterInfo?.isCustomized ? '1' : '0'}-${Object.keys(currentPlayer.characterInfo?.selectedOptions || {}).length}-${Object.keys(currentPlayer.characterInfo?.selectedColors || {}).length}`}
                     isHost={currentRoom.hostGuestId === currentPlayer.guestUserId} 
                     currentPlayer={currentPlayer}
                     localStream={localStream}

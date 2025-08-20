@@ -30,8 +30,13 @@
       "Bash(npm run build:*)",
       "Bash(npx vite:*)",
       "Bash(git push:*)",
-      "WebFetch(domain:localhost)"
+      "WebFetch(domain:localhost)",
+      "Bash(dir)",
+      "Bash(cat:*)"
     ],
-    "deny": []
+    "deny": [],
+    "additionalDirectories": [
+      "C:\\c\\Users\\chisu\\Desktop\\merge\\gamecast-web-service"
+    ]
   }
 }

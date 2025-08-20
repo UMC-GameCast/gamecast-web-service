@@ -82,32 +82,10 @@ export const PlayerCard = ({
   const finalCharacterData = character;
   const playerHasCharacter = hasCharacter ?? (player.characterInfo?.isCustomized || false);
   
-  // 🔍 디버깅 로그 (캐릭터 있을 때만 한 번 출력)
-  if (playerHasCharacter && finalCharacterData) {
-    console.log('🎭 [PlayerCard] 캐릭터 렌더링 준비:', {
-      playerId: player.guestUserId || player.id,
-      nickname: player.nickname,
-      finalPlayerHasCharacter,
-      hasCharacterData: !!finalCharacterData,
-      selectedOptionsCount: Object.keys(finalCharacterData?.selectedOptions || {}).length,
-      selectedColorsCount: Object.keys(finalCharacterData?.selectedColors || {}).length,
-      timestamp: new Date().toLocaleTimeString()
-    });
-  } else if (player.characterInfo?.isCustomized) {
-    console.warn('⚠️ [PlayerCard] 캐릭터 설정되었지만 렌더링 안됨:', {
-      playerId: player.guestUserId || player.id,
-      nickname: player.nickname,
-      hasCharacterProp: hasCharacter,
-      characterProp: !!character,
-      playerCharacterInfo: !!player.characterInfo,
-      isCustomized: player.characterInfo?.isCustomized,
-      finalPlayerHasCharacter,
-      finalCharacterData: !!finalCharacterData
-    });
-  }
-  
   // ✨ 단순화된 캐릭터 존재 여부: preparation status 우선, 그 다음 isCustomized 
   const finalPlayerHasCharacter = preparationStatus?.characterSetup ?? playerHasCharacter;
+  
+  // 🚫 디버깅 로그 완전 제거 (무한 렌더링 방지)
 
   // ✨ 단순화 완료: 복잡한 디버깅 로그 제거됨
   
@@ -120,14 +98,6 @@ export const PlayerCard = ({
   const renderCharacterPreview = () => {
     // 🛡️ 단계별 안전 검증
     if (!finalCharacterData || !finalPlayerHasCharacter) {
-      if (import.meta.env.DEV && Math.random() < 0.01) {
-        console.warn('⚠️ [PlayerCard] 캐릭터 데이터 없음:', {
-          playerId,
-          nickname: player.nickname,
-          hasCharacterData: !!finalCharacterData,
-          hasCharacter: finalPlayerHasCharacter
-        });
-      }
       return null;
     }
     
@@ -140,9 +110,6 @@ export const PlayerCard = ({
     try {
       return renderCharacterLayers(characterForRender);
     } catch (error) {
-      if (import.meta.env.DEV) {
-        console.error('❌ [PlayerCard] 캐릭터 렌더링 오류:', error);
-      }
       return null;
     }
   };

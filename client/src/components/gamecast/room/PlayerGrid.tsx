@@ -109,24 +109,24 @@ export const PlayerGrid: React.FC<PlayerGridProps> = ({
   useEffect(() => {
     const participantsWithCharacter = participants.filter(p => p.characterInfo?.isCustomized);
     
-    if (participantsWithCharacter.length > 0) {
-      console.log('🎨 [PlayerGrid] 캐릭터 데이터 변경 감지:', {
-        participantsWithCharacters: participantsWithCharacter.length,
-        totalParticipants: participants.length,
-        characterUpdates: participantsWithCharacter.map(p => ({
-          playerId: p.guestUserId,
-          nickname: p.nickname,
-          isCustomized: p.characterInfo?.isCustomized,
-          hasOptions: !!(p.characterInfo?.selectedOptions && Object.keys(p.characterInfo.selectedOptions).length > 0),
-          hasColors: !!(p.characterInfo?.selectedColors && Object.keys(p.characterInfo.selectedColors).length > 0)
-        })),
-        timestamp: new Date().toLocaleTimeString()
-      });
+    // 🚫 디버깅 로그 제거 (무한 렌더링 방지)
+    if (import.meta.env.DEV && participantsWithCharacter.length > 0 && Math.random() < 0.01) {
+      console.log('🎨 [PlayerGrid] 캐릭터 데이터 변경:', participantsWithCharacter.length);
     }
   }, [
     participants.map(p => p.characterInfo?.isCustomized ? '1' : '0').join(''),
     participants.map(p => p.guestUserId).join(','),
-    participants.length
+    participants.length,
+    // 🚀 실제 캐릭터 데이터 변경도 감지하도록 추가 (JSON 대신 안전한 문자열 해시)
+    participants.map(p => {
+      const options = p.characterInfo?.selectedOptions || {};
+      const colors = p.characterInfo?.selectedColors || {};
+      return `${Object.keys(options).sort().join(',')}-${Object.values(options).sort().join(',')}`;
+    }).join('|'),
+    participants.map(p => {
+      const colors = p.characterInfo?.selectedColors || {};
+      return `${Object.keys(colors).sort().join(',')}-${Object.values(colors).sort().join(',')}`;
+    }).join('|')
   ]);
   
   
@@ -206,19 +206,7 @@ export const PlayerGrid: React.FC<PlayerGridProps> = ({
             nickname: getDisplayNickname(player, realtimeParticipants || [], currentRoom)
           } : null;
           
-          // 🔍 PlayerCard에 전달할 데이터 디버깅 (캐릭터 있을 때만 출력)
-          if (hasCharacter && Math.random() < 0.2) {
-            console.log('🎭 [PlayerGrid] PlayerCard에 캐릭터 데이터 전달:', {
-              playerId: player.guestUserId || player.id,
-              nickname: player.nickname,
-              hasCharacter,
-              characterData,
-              playerCharacterInfo: player.characterInfo,
-              isCustomized: player.characterInfo?.isCustomized,
-              preparationStatus: playerPreparationStatus,
-              timestamp: new Date().toLocaleTimeString()
-            });
-          }
+          // 🚫 디버깅 로그 제거 (무한 렌더링 방지)
           
           // 🎯 해당 플레이어의 preparation status 조회
           const playerPreparationStatus = Array.isArray(playersReadyStatus) 
