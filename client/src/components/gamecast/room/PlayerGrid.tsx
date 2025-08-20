@@ -215,9 +215,23 @@ export const PlayerGrid: React.FC<PlayerGridProps> = ({
           
                   // Preparation status 매칭 로그 제거 (무한 로그 방지)
           
+          // 🔍 PlayerCard 렌더링 디버깅 (일시적)
+          const cardKey = `player-${player.guestUserId || player.id}-${player.characterInfo?.isCustomized ? '1' : '0'}-${Object.keys(player.characterInfo?.selectedOptions || {}).length}-${Object.keys(player.characterInfo?.selectedColors || {}).length}-${index}`;
+          
+          if (hasCharacter && Math.random() < 0.3) {
+            console.log('🎭 [PlayerGrid] PlayerCard 캐릭터와 함께 렌더링:', {
+              playerId: player.guestUserId || player.id,
+              nickname: player.nickname,
+              hasCharacter,
+              isCustomized: player.characterInfo?.isCustomized,
+              characterData: characterData,
+              key: cardKey
+            });
+          }
+
           return (
             <PlayerCard
-              key={player.guestUserId || player.id || `player-${index}`}
+              key={cardKey}
               player={player}
               isHost={isPlayerHost}
               stream={playerStream}

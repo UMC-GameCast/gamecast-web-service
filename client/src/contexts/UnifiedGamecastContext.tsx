@@ -1350,9 +1350,14 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
         return;
       }
       
-      // 🚫 실시간 업데이트 디버깅 (확률적 로깅으로 스팸 방지)
-      if (import.meta.env.DEV && Math.random() < 0.05) {
-        console.log('🎨 [Socket] 캐릭터 상태 업데이트 수신:', data.guestUserId, characterInfo.isCustomized);
+      // 🚫 실시간 업데이트 디버깅 (일시적으로 로깅 증가)
+      if (import.meta.env.DEV && Math.random() < 0.8) {
+        console.log('🎨 [Socket] 캐릭터 상태 업데이트 수신:', {
+          guestUserId: data.guestUserId,
+          isCustomized: characterInfo.isCustomized,
+          currentUser: stateRef.current.currentPlayer?.guestUserId,
+          isOwnUpdate: data.guestUserId === stateRef.current.currentPlayer?.guestUserId
+        });
       }
 
       // 🔍 서버 원본 데이터 분석 (개발 모드에서만)
@@ -1389,14 +1394,13 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
           : p;
       });
 
-      // 🚫 서버 버그 우회: isCustomized가 false인 경우 업데이트 무시 (백업 데이터 사용 안함)
-      if (!characterInfo.isCustomized) {
-        console.log('🚫 [Socket] 서버에서 isCustomized: false로 전송, 업데이트 무시:', {
-          guestUserId: data.guestUserId,
-          reason: '새 캐릭터 설정 보호를 위해 false 데이터 무시'
-        });
-        return;
-      }
+      // 🔧 서버 데이터를 있는 그대로 반영 (isCustomized: false도 유효한 상태)
+      console.log('📝 [Socket] 서버 캐릭터 상태 반영:', {
+        guestUserId: data.guestUserId,
+        isCustomized: characterInfo.isCustomized,
+        hasOptions: Object.keys(characterInfo.selectedOptions || {}).length > 0,
+        hasColors: Object.keys(characterInfo.selectedColors || {}).length > 0
+      });
 
       // 실제로 변경된 경우에만 업데이트 (무한 루프 방지)
       const hasActualChanges = updatedParticipants.some((updated, i) => {
@@ -1414,10 +1418,19 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
       });
 
       if (hasActualChanges) {
-        // 🚫 업데이트 적용 로깅 (확률적 로깅으로 스팸 방지)
-        if (import.meta.env.DEV && Math.random() < 0.03) {
-          console.log('✅ [Socket] participants 캐릭터 업데이트 적용:', data.guestUserId);
-        }
+        // 🚫 업데이트 적용 로깅 (디버깅을 위해 일시적으로 증가)
+        console.log('✅ [Socket] participants 캐릭터 업데이트 적용:', {
+          guestUserId: data.guestUserId,
+          isCustomized: characterInfo.isCustomized,
+          participantsCount: updatedParticipants.length,
+          targetPlayerFound: updatedParticipants.some(p => 
+            (p.guestUserId === data.guestUserId || p.id === data.guestUserId) &&
+            p.characterInfo?.isCustomized === characterInfo.isCustomized
+          ),
+          updatedPlayer: updatedParticipants.find(p => 
+            p.guestUserId === data.guestUserId || p.id === data.guestUserId
+          )?.characterInfo
+        });
 
         // 단일 dispatch로 업데이트 (이중 dispatch 제거하여 무한 루프 방지)
         dispatch({ type: 'SET_PARTICIPANTS', payload: updatedParticipants });
@@ -1757,22 +1770,17 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
         return sanitized;
       };
 
-      // 🔥 서버가 기대하는 형식으로 데이터 전송 (새 서버 타입에 맞춤)
+      // 🔥 서버가 기대하는 CharacterInfo 형식으로 데이터 전송
       const characterStatusData = {
-        guestUserId: sanitizeUnicodeString(state.currentPlayer.guestUserId), // 필수: 업데이트할 플레이어 식별
-        roomCode: sanitizeUnicodeString(state.currentRoom.roomCode), // 필수: 방 식별
-        nickname: sanitizeUnicodeString(characterData.nickname || state.currentPlayer.nickname || ''),
-        characterSetup: { // 새 서버 형식에 맞춰 CharacterSetup 구조 사용
-          selectedOptions: sanitizeObject(characterData.selectedOptions || {}),
-          selectedColors: sanitizeObject(characterData.selectedColors || {}),
-        },
+        selectedOptions: sanitizeObject(characterData.selectedOptions || {}),
+        selectedColors: sanitizeObject(characterData.selectedColors || {}),
         isCustomized: !!(characterData.selectedOptions && characterData.selectedColors &&
           Object.keys(characterData.selectedOptions).length > 0 &&
           Object.keys(characterData.selectedColors).length > 0)
       };
 
       console.log('🎨 [updateCharacter] Socket 이벤트 전송:', {
-        guestUserId: characterStatusData.guestUserId,
+        guestUserId: state.currentPlayer.guestUserId,
         isCustomized: characterStatusData.isCustomized,
         socketConnected: !!state.realtime.socket?.connected,
         socketId: state.realtime.socket?.id
@@ -1784,9 +1792,7 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
         processedData: characterStatusData,
         selectedOptionsKeys: Object.keys(characterData.selectedOptions || {}),
         selectedColorsKeys: Object.keys(characterData.selectedColors || {}),
-        computedIsCustomized: !!(characterData.selectedOptions && characterData.selectedColors &&
-          Object.keys(characterData.selectedOptions).length > 0 &&
-          Object.keys(characterData.selectedColors).length > 0)
+        computedIsCustomized: characterStatusData.isCustomized
       });
       
       // 🔍 실제 전송되는 데이터 전체 로깅 (JSON 안전성 검사 포함)
@@ -1799,22 +1805,28 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
       }
       
       // 🎯 단일 이벤트로만 전송 (다중 전송으로 인한 혼란 방지)
+      console.log('📤 [Socket] update-character-status 이벤트 전송 시작:', {
+        socketConnected: !!state.realtime.socket?.connected,
+        socketId: state.realtime.socket?.id,
+        eventData: characterStatusData
+      });
+      
       state.realtime.socket.emit('update-character-status', characterStatusData);
       console.log('📤 [Socket] update-character-status 이벤트 전송 완료');
 
       // 🚀 즉시 자신의 currentPlayer 상태도 업데이트 (실시간 반영 위해)
-      if (state.currentPlayer && state.currentPlayer.guestUserId === characterStatusData.guestUserId) {
+      if (state.currentPlayer) {
         const updatedCurrentPlayer = {
           ...state.currentPlayer,
           characterInfo: {
             isCustomized: characterStatusData.isCustomized,
-            selectedOptions: characterStatusData.characterSetup.selectedOptions,
-            selectedColors: characterStatusData.characterSetup.selectedColors
+            selectedOptions: characterStatusData.selectedOptions,
+            selectedColors: characterStatusData.selectedColors
           }
         };
         
         console.log('⚡ [Socket] currentPlayer 즉시 업데이트:', {
-          guestUserId: characterStatusData.guestUserId,
+          guestUserId: state.currentPlayer.guestUserId,
           isCustomized: characterStatusData.isCustomized
         });
         
@@ -1823,13 +1835,13 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
         // 🚀 participants 배열에서도 자신의 정보 즉시 업데이트
         const currentParticipants = state.participants || [];
         const updatedParticipants = currentParticipants.map(participant => {
-          if (participant.guestUserId === characterStatusData.guestUserId || participant.id === characterStatusData.guestUserId) {
+          if (participant.guestUserId === state.currentPlayer.guestUserId || participant.id === state.currentPlayer.guestUserId) {
             return {
               ...participant,
               characterInfo: {
                 isCustomized: characterStatusData.isCustomized,
-                selectedOptions: characterStatusData.characterSetup.selectedOptions,
-                selectedColors: characterStatusData.characterSetup.selectedColors
+                selectedOptions: characterStatusData.selectedOptions,
+                selectedColors: characterStatusData.selectedColors
               }
             };
           }

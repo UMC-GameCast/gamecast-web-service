@@ -32,7 +32,8 @@
       "Bash(git push:*)",
       "WebFetch(domain:localhost)",
       "Bash(dir)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "additionalDirectories": [
