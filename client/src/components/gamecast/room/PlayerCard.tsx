@@ -402,7 +402,7 @@ export const PlayerCard = ({
               <div 
                 className="w-full h-full"
                 style={{
-                  transform: 'scale(0.4) translate(-0%, -20%)', // 작은 카드에 맞게 스케일 조정
+                  transform: 'scale(1) translate(0%, 0%)', // 139px 컨테이너에 맞게 풀 사이즈로 조정
                   transformOrigin: 'center center'
                 }}
               >

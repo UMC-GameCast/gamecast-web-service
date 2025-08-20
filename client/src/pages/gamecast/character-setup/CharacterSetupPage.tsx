@@ -258,6 +258,7 @@ export const CharacterSetupPage = ({ onBack, onCharacterComplete }: CharacterSet
           <CharacterCustomizer 
             onCharacterChange={handleCharacterChange}
             onComplete={handleConfirmSelection}
+            initialCharacterData={characterData || undefined} // 로드된 캐릭터 데이터 전달
           />
         </div>
       </main>

@@ -8,6 +8,7 @@ import type { CharacterData } from "../../../types/room";
 interface CharacterCustomizerProps {
   onCharacterChange?: (character: CharacterData) => void;
   onComplete?: () => void;
+  initialCharacterData?: CharacterData; // 초기 캐릭터 데이터
 }
 
 
@@ -19,17 +20,19 @@ const customizationCategories = [
   { id: 'accessory', name: '장식' }
 ];
 
-export const CharacterCustomizer: React.FC<CharacterCustomizerProps> = ({ onCharacterChange, onComplete }) => {
+export const CharacterCustomizer: React.FC<CharacterCustomizerProps> = ({ onCharacterChange, onComplete, initialCharacterData }) => {
   const { currentPlayer } = useRoom();
   const [selectedCategory, setSelectedCategory] = useState('face'); // face부터 시작
-  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({
-    face: 'face1' // 얼굴은 필수로 기본 선택
-  });
-  const [selectedColors, setSelectedColors] = useState<Record<string, string>>({
-    face: '21' // 몸통 색상도 필수로 기본 선택
-  });
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>(
+    initialCharacterData?.selectedOptions || { face: 'face1' } // 초기 데이터가 있으면 사용, 없으면 기본값
+  );
+  const [selectedColors, setSelectedColors] = useState<Record<string, string>>(
+    initialCharacterData?.selectedColors || { face: '21' } // 초기 데이터가 있으면 사용, 없으면 기본값
+  );
   const [sliderStyle, setSliderStyle] = useState({ width: 0, left: 0 });
-  const [nickname, setNickname] = useState(currentPlayer?.name || '닉네임'); // 현재 플레이어 닉네임 사용
+  const [nickname, setNickname] = useState(
+    initialCharacterData?.nickname || currentPlayer?.name || '닉네임' // 초기 데이터 우선, 그 다음 현재 플레이어 닉네임
+  );
   const [isEditingNickname, setIsEditingNickname] = useState(false);
   const [hasError, setHasError] = useState(false);
 
@@ -101,12 +104,21 @@ export const CharacterCustomizer: React.FC<CharacterCustomizerProps> = ({ onChar
     return () => window.removeEventListener('resize', handleResize);
   }, [updateSliderPosition]);
 
-  // currentPlayer 변경 시 닉네임 업데이트
+  // initialCharacterData 변경 시 state 업데이트
   useEffect(() => {
-    if (currentPlayer?.name) {
+    if (initialCharacterData) {
+      setSelectedOptions(initialCharacterData.selectedOptions || { face: 'face1' });
+      setSelectedColors(initialCharacterData.selectedColors || { face: '21' });
+      setNickname(initialCharacterData.nickname || currentPlayer?.name || '닉네임');
+    }
+  }, [initialCharacterData, currentPlayer?.name]);
+
+  // currentPlayer 변경 시 닉네임 업데이트 (초기 데이터가 없을 때만)
+  useEffect(() => {
+    if (!initialCharacterData && currentPlayer?.name) {
       setNickname(currentPlayer.name);
     }
-  }, [currentPlayer]);
+  }, [currentPlayer, initialCharacterData]);
 
   // 캐릭터 데이터 변경 시 부모 컴포넌트에 전달
   useEffect(() => {
