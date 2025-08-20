@@ -625,28 +625,79 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
     dispatch({ type: 'UPDATE_PARTICIPANT', payload: { guestUserId, updates } });
   };
 
-  // 🔄 서버 우선 준비 상태 업데이트 (낙관적 업데이트 제거)
-  const updatePreparation = (updates: Partial<UnifiedGamecastState['preparation']>) => {
-    // 로컬 상태는 업데이트하지 않고 서버에만 전송
-    // 서버 응답을 통해 상태가 변경됨 (Single Source of Truth)
+  // 🔄 준비 상태 업데이트 (이중 저장 방식: REST API + Socket.IO)
+  const updatePreparation = async (updates: Partial<UnifiedGamecastState['preparation']>) => {
+    if (!state.currentRoom || !state.currentPlayer) {
+      console.error('❌ [UnifiedContext] updatePreparation: 필수 데이터 없음');
+      return;
+    }
+
+    // 🚀 즉시 로컬 상태 업데이트 (낙관적 업데이트)
+    const newState = { ...state.preparation, ...updates };
+    dispatch({ type: 'SET_PREPARATION', payload: newState });
     
-    if (state.realtime.socket && state.currentPlayer) {
-      logSocketState('준비 상태 업데이트 요청', {
-        updates,
-        currentState: state.preparation
-      });
+    console.log('📝 [UnifiedContext] 준비 상태 로컬 업데이트:', {
+      updates,
+      previousState: state.preparation,
+      newState
+    });
+
+    try {
+      // 🔄 이중 저장 방식 적용
+      const { saveDualPreparation } = await import('../utils/preparationApi');
       
-      state.realtime.socket.emit('update-preparation', {
-        roomCode: state.currentRoom?.roomCode,
+      const preparationData = {
         guestUserId: state.currentPlayer.guestUserId,
-        preparationStatus: { ...state.preparation, ...updates },
-        timestamp: Date.now() // 클라이언트 타임스탬프 추가
-      });
-    } else {
-      logSocketState('준비 상태 업데이트 실패', { 
-        hasSocket: !!state.realtime.socket,
-        hasPlayer: !!state.currentPlayer
-      });
+        characterSetup: updates.characterSetup,
+        screenSetup: updates.screenSetup,
+        isReady: updates.isReady
+      };
+
+      // Socket.IO 업데이트 함수 정의
+      const socketUpdateFunction = (socketUpdates: any) => {
+        if (state.realtime.socket) {
+          logSocketState('준비 상태 Socket 업데이트', {
+            socketUpdates,
+            roomCode: state.currentRoom?.roomCode
+          });
+          
+          state.realtime.socket.emit('update-preparation', {
+            roomCode: state.currentRoom?.roomCode,
+            guestUserId: state.currentPlayer?.guestUserId,
+            preparationStatus: { ...state.preparation, ...socketUpdates },
+            timestamp: Date.now()
+          });
+        }
+      };
+
+      // 이중 저장 실행
+      const result = await saveDualPreparation(
+        state.currentRoom.roomCode,
+        preparationData,
+        socketUpdateFunction
+      );
+
+      console.log('🎯 [UnifiedContext] 이중 저장 결과:', result);
+      
+      // 실패 시 사용자에게 알림 (부분 실패는 조용히 처리)
+      if (result.overall === 'failed') {
+        console.error('❌ [UnifiedContext] 준비 상태 업데이트 실패:', result.message);
+      }
+
+    } catch (error) {
+      console.error('💥 [UnifiedContext] 준비 상태 업데이트 예외:', error);
+      
+      // 예외 발생 시 최소한 Socket.IO로라도 전송 시도
+      if (state.realtime.socket && state.currentPlayer) {
+        logSocketState('준비 상태 업데이트 예외 후 Socket 폴백', { error });
+        
+        state.realtime.socket.emit('update-preparation', {
+          roomCode: state.currentRoom.roomCode,
+          guestUserId: state.currentPlayer.guestUserId,
+          preparationStatus: newState,
+          timestamp: Date.now()
+        });
+      }
     }
   };
 

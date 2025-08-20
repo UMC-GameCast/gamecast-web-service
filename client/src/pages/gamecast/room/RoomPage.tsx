@@ -422,8 +422,8 @@ export const RoomPage = () => {
                   characterSetupComplete={characterSetupComplete}
                   screenSetupComplete={screenSetupComplete}
                   setCharacterSetup={(completed) => updatePreparation({ characterSetup: completed })}
-                  setScreenSetup={(completed) => {
-                    updatePreparation({ screenSetup: completed });
+                  setScreenSetup={async (completed) => {
+                    await updatePreparation({ screenSetup: completed });
                   }}
                   // onCharacterSetupClick prop 제거 (이제 ButtonContainer에서 직접 navigate 사용)
                   onReadyToggle={(ready) => {

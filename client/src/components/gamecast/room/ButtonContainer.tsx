@@ -118,11 +118,26 @@ export const ButtonContainer = ({
       if (result && result.success) {
         console.log('✅ [ButtonContainer] 화면 선택 성공! setScreenSetup(true) 호출');
         if (setScreenSetup) {
-          setScreenSetup(true); // 화면 설정 완료 상태 업데이트
-          console.log('🖥️ [ButtonContainer] 화면 설정 상태 변경: true');
+          // 비동기 상태 업데이트를 기다린 후 onStateUpdate 호출
+          try {
+            await setScreenSetup(true); // 화면 설정 완료 상태 업데이트 (비동기 처리)
+            console.log('🖥️ [ButtonContainer] 화면 설정 상태 변경 완료: true');
+            
+            // 약간의 지연 후 onStateUpdate 호출 (상태 업데이트 완료 보장)
+            setTimeout(() => {
+              console.log('🔄 [ButtonContainer] onStateUpdate 호출 (지연)');
+              onStateUpdate?.();
+            }, 100);
+            
+          } catch (error) {
+            console.error('❌ [ButtonContainer] setScreenSetup 실패:', error);
+            console.log('🔄 [ButtonContainer] 실패 시에도 onStateUpdate 호출');
+            onStateUpdate?.(); // 실패해도 UI 업데이트 시도
+          }
+        } else {
+          console.log('🔄 [ButtonContainer] setScreenSetup 없음, onStateUpdate 호출');
+          onStateUpdate?.();
         }
-        console.log('🔄 [ButtonContainer] onStateUpdate 호출');
-        onStateUpdate?.();
       } else {
         console.error('❌ [ButtonContainer] 화면 선택 실패:', result?.error);
         alert(result?.error || '화면 선택에 실패했습니다.');
