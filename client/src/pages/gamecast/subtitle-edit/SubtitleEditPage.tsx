@@ -1,11 +1,11 @@
-import React, { useRef, useState } from 'react'
+import React, { useRef, useState, useEffect } from 'react'
 import { useSubtitleEditor } from './hooks/useSubtitleEditor'
 import SubtitleHeader from './components/SubtitleHeader'
 import RenderModal from './components/RenderModal'
 import VideoUploader from './components/VideoUploader'
 import MultiSpeakerAudioUploader from './components/MultiSpeakerAudioUploader'
 import { Navigation } from '../../../components/gamecast/common/Navigation';
-import { useUnifiedRoom } from '../../../contexts/UnifiedGamecastContext';
+import { useUnifiedGamecast } from '../../../contexts/UnifiedGamecastContext';
 import { renderCharacterLayers } from '../../../utils/characterRenderer';
 
 import { PageTransition } from '../../../components/gamecast/common/PageTransition';
@@ -16,7 +16,8 @@ const SubtitleEditPage: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
   const [pendingSmallVideoIndex, setPendingSmallVideoIndex] = useState<number | null>(null)
-  const { participants } = useUnifiedRoom()
+  const { state, actions } = useUnifiedGamecast()
+  const { participants } = state
   const {
     // 상태
     subtitleSegments,
@@ -64,6 +65,12 @@ const SubtitleEditPage: React.FC = () => {
     handleFFmpegRender,
     handleClientSideRender
   } = useSubtitleEditor(timelineRef)
+
+  // 페이지 로드 시 자동으로 데모 모드 활성화
+  useEffect(() => {
+    console.log('🎭 [SubtitleEdit] 데모 모드 자동 활성화');
+    actions.enableDemoMode();
+  }, [actions]);
 
   // 디버깅용 로그
   console.log('videoUrl:', videoUrl);
@@ -196,10 +203,22 @@ const SubtitleEditPage: React.FC = () => {
             <div className="flex flex-col" style={{ width: 80 }}>
               {/* 타임라인 헤더 높이만큼 여백 추가 (헤더: 32.578px + spacer: 12px) */}
               <div style={{ height: '44.578px' }} />
-{Array.from({ length: 5 }, (_, idx) => {
-                const participant = participants?.[idx];
+{participants?.map((participant, idx) => {
+                // 캐릭터 hair 색상을 border 색상으로 사용
                 const hairColor = participant?.characterInfo?.selectedColors?.hair;
-                const borderColor = hairColor ? `#${hairColor}` : `hsl(${idx * 72}, 60%, 60%)`;
+                let borderColor = `hsl(${idx * 72}, 60%, 60%)`; // 기본 색상
+                
+                // hair 색상이 있으면 해당 색상 사용
+                if (hairColor) {
+                  if (hairColor === 'black') borderColor = '#2C2C2C';
+                  else if (hairColor === 'yellow') borderColor = '#F7D058';
+                  else if (hairColor === 'red') borderColor = '#E74C3C';
+                  else if (hairColor === 'blue') borderColor = '#3498DB';
+                  else if (hairColor === 'green') borderColor = '#27AE60';
+                  else if (hairColor === 'white') borderColor = '#ECF0F1';
+                  else if (hairColor.startsWith('#')) borderColor = hairColor;
+                  else if (!isNaN(Number(hairColor))) borderColor = `#${hairColor}`;
+                }
                 
                 return (
                   <div key={participant?.guestUserId || idx} className="h-[50px] flex items-center justify-center">
@@ -221,21 +240,37 @@ const SubtitleEditPage: React.FC = () => {
                         position: 'relative',
                         overflow: 'hidden'
                       }}>
-                        {participant?.characterInfo?.isCustomized && participant.characterInfo.selectedOptions && participant.characterInfo.selectedColors ? (
+                        {participant?.characterInfo?.isCustomized && 
+                         participant.characterInfo?.characterData?.selectedOptions && 
+                         participant.characterInfo?.characterData?.selectedColors ? (
                           <div style={{ 
                             width: '100%', 
                             height: '100%', 
-                            position: 'relative',
-                            transform: 'scale(0.8)'
+                            position: 'absolute',
+                            top: '0',
+                            left: '0',
+                            transform: 'scale(1.2)',
+                            transformOrigin: 'center top',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            justifyContent: 'center',
+                            overflow: 'hidden'
                           }}>
                             {renderCharacterLayers({
-                              selectedOptions: participant.characterInfo.selectedOptions,
-                              selectedColors: participant.characterInfo.selectedColors,
-                              nickname: participant.nickname
+                              selectedOptions: participant.characterInfo.characterData.selectedOptions,
+                              selectedColors: participant.characterInfo.characterData.selectedColors,
+                              nickname: participant.characterInfo.characterData.nickname
                             })}
                           </div>
                         ) : (
-                          participant?.nickname?.charAt(0) || (idx + 1)
+                          <span style={{
+                            fontSize: '10px',
+                            fontWeight: 'bold',
+                            color: '#333',
+                            zIndex: 1
+                          }}>
+                            {participant?.nickname?.charAt(0) || (idx + 1)}
+                          </span>
                         )}
                       </div>
                       {/* 유저 이름 */}
@@ -250,12 +285,12 @@ const SubtitleEditPage: React.FC = () => {
                         letterSpacing: '-0.19px',
                         alignSelf: 'stretch'
                       }}>
-                        {participant?.guestUserId || `유저${idx + 1}`}
+                        {participant?.nickname || `유저${idx + 1}`}
                       </div>
                     </div>
                   </div>
                 );
-              })}
+              }) || []}
             </div>
             {/* 타임라인 */}
             <div className="flex-1">

@@ -28,14 +28,18 @@ export const renderCharacterLayers = (characterData: CharacterData): React.React
   const selectedHair = selectedOptions['hair'];
   const selectedHairColor = selectedColors['hair'];
   if (selectedHair && selectedHairColor) {
+    const hairPath = `${basePath}/${selectedHair}/${selectedHairColor}.png`;
+    console.log('🎭 Hair path:', hairPath);
     layers.push(
       <img
         key="hair"
-        src={`${basePath}/${selectedHair}/${selectedHairColor}.png`}
+        src={hairPath}
         alt="머리"
         className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full h-full object-contain"
         style={{ zIndex: 2 }}
         loading="lazy"
+        onError={(e) => console.error('❌ Hair image failed to load:', hairPath)}
+        onLoad={() => console.log('✅ Hair image loaded:', hairPath)}
       />
     );
   }

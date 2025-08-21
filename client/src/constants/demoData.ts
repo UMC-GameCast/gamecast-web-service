@@ -18,7 +18,7 @@ export const DEMO_PLAYERS: Player[] = [
       characterData: {
         selectedOptions: { 
           face: "face1", 
-          hair: "hair2",
+          hair: "hair1",
           top: "top1",
           bottom: "bottom2",
           accessory: "accessories1"
