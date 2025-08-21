@@ -2071,12 +2071,22 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
         // 즉시 첫 번째 카운트다운 실행 후 setInterval로 나머지 처리
         const runCountdown = () => {
           countdownTime--;
+          console.log(`⏰ [Context] 카운트다운 업데이트: ${countdownTime}초`);
           
           if (countdownTime > 0) {
             dispatch({
               type: 'SET_PREPARATION',
-              payload: { countdown: countdownTime }
+              payload: { countdown: countdownTime, lastUpdated: Date.now() }
             });
+            
+            // 강제 UI 업데이트를 위한 추가 디스패치
+            setTimeout(() => {
+              dispatch({
+                type: 'SET_UI_STATE',
+                payload: { forceUpdate: Date.now() }
+              });
+            }, 50);
+            
             setTimeout(runCountdown, 1000);
           } else {
             // 모든 사용자에게 녹화 시작 이벤트 직접 발생
@@ -2104,8 +2114,19 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
             // 카운트다운 상태 리셋
             dispatch({
               type: 'SET_PREPARATION',
-              payload: { countdown: null }
+              payload: { countdown: null, lastUpdated: Date.now() }
             });
+            
+            // 강제 UI 업데이트
+            dispatch({
+              type: 'SET_UI_STATE',
+              payload: { 
+                forceUpdate: Date.now(),
+                recordingStarted: true
+              }
+            });
+            
+            console.log('✅ [Context] 녹화 상태 업데이트 완료 - 강제 UI 새로고침');
             
             // GameRecorder 시작
             gameRecorderRef.current?.startSyncRecording().catch(error => {

@@ -165,20 +165,48 @@ export const ButtonContainer = ({
 
   // 서버 자동 녹화 카운트다운 상태 (Context에서 가져옴)
   const countdown = preparation.countdown;
+  
+  // 카운트다운 상태 변화 모니터링
+  React.useEffect(() => {
+    console.log(`🔍 [ButtonContainer] countdown 상태 변경: ${countdown}초`, {
+      countdown,
+      allPlayersReady,
+      isRecording: recording.isRecording,
+      timestamp: new Date().toLocaleTimeString()
+    });
+  }, [countdown, allPlayersReady, recording.isRecording]);
 
   // 카운트다운 상태는 Context에서 관리하므로 별도 이벤트 처리 불필요
   
   // 녹화 시간 계산 (실시간 업데이트)
   React.useEffect(() => {
+    console.log('🔍 [ButtonContainer] 녹화 시간 useEffect 실행:', {
+      isRecording: recording.isRecording,
+      startTime: recording.startTime,
+      hasStartTime: !!recording.startTime,
+      timestamp: new Date().toLocaleTimeString()
+    });
+    
     let interval: NodeJS.Timeout;
     if (recording.isRecording && recording.startTime) {
+      console.log('⏰ [ButtonContainer] 녹화 시간 계산 시작');
       interval = setInterval(() => {
-        setRecordingDuration(Date.now() - recording.startTime!);
+        const duration = Date.now() - recording.startTime!;
+        setRecordingDuration(duration);
+        if (Math.random() < 0.1) { // 10% 확률로만 로깅
+          console.log('⏱️ [ButtonContainer] 녹화 시간 업데이트:', formatTime(duration));
+        }
       }, 100);
     } else {
+      console.log('⏹️ [ButtonContainer] 녹화 시간 리셋');
       setRecordingDuration(0);
     }
-    return () => clearInterval(interval);
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+        console.log('🔄 [ButtonContainer] 녹화 시간 인터벌 정리');
+      }
+    };
   }, [recording.isRecording, recording.startTime]);
   
   // 시간 포맷팅 함수
