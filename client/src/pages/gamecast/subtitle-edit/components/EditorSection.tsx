@@ -9,6 +9,7 @@ interface EditorSectionProps {
   emotions: Emotion[]
   selectedSegment: string | null
   duration: number
+  currentTime: number
   timelineRef: React.RefObject<HTMLDivElement | null>
   onDragStart: (e: React.MouseEvent, segmentId: string) => void
   onResizeStart: (e: React.MouseEvent, segmentId: string, resizeType: 'start' | 'end') => void
@@ -23,6 +24,7 @@ const EditorSection: React.FC<EditorSectionProps> = ({
   emotions,
   selectedSegment,
   duration,
+  currentTime,
   timelineRef,
   onDragStart,
   onResizeStart,
@@ -42,6 +44,7 @@ const EditorSection: React.FC<EditorSectionProps> = ({
           selectedSegment={selectedSegment}
           emotions={emotions}
           videoUrl={videoUrl}
+          currentTime={currentTime}
           onDragStart={onDragStart}
           onResizeStart={onResizeStart}
           onSegmentClick={onSegmentClick}

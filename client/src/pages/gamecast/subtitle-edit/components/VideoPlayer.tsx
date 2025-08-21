@@ -333,7 +333,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   )
 
   return (
-    <div className="bg-gray-800 rounded-lg p-4">
+    <div>
       <div className="relative">
         {/* 동영상 플레이어 또는 플레이스홀더 - 테두리 적용 */}
         <div

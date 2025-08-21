@@ -14,9 +14,9 @@ const SmallVideoList: React.FC<SmallVideoListProps> = ({
   setPendingSmallVideoIndex,
 }) => {
   return (
-    <div className="w-64" style={{ height: '409px' }}>
+    <div className="w-full" style={{ height: '409px', maxWidth: '200px', paddingRight: '2px' }}>
       {/* 스크롤div (15개 동영상 전체 스크롤 영역) */}
-      <div className="custom-scrollbar overflow-y-auto" style={{ height: '409px', maxHeight: '409px' }}>
+      <div className="custom-scrollbar overflow-y-auto overflow-x-hidden" style={{ height: '409px', maxHeight: '409px', paddingRight: '4px' }}>
         {/* 그룹 전체를 감싸는 div (mt, ml 적용) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {[0, 1, 2].map((groupIdx) => (
@@ -27,7 +27,7 @@ const SmallVideoList: React.FC<SmallVideoListProps> = ({
                 style={{
                   borderBottom: '0.863px solid #FFF',
                   display: 'flex',
-                  width: '187px',
+                  width: '170px',
                   padding: '9px 4px',
                   alignItems: 'center',
                   gap: '8.631px',
@@ -49,7 +49,7 @@ const SmallVideoList: React.FC<SmallVideoListProps> = ({
                 const video = videos[videoIndex];
                 // 동영상 슬롯div
                 return (
-                  <div key={videoIndex} className="bg-gray-800 rounded-lg p-3 relative" style={{ width: '187px', height: '113.175px' }}>
+                  <div key={videoIndex} className="bg-gray-800 rounded-lg p-3 relative" style={{ width: '170px', height: '113.175px' }}>
                     {/* 삭제 버튼과 동영상 N 텍스트 제거 */}
                     <div className="aspect-video bg-gray-700 rounded relative overflow-hidden" style={{ width: '100%', height: '100%' }}>
                       {video && video.url ? (

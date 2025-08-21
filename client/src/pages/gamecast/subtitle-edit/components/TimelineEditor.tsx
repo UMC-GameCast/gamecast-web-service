@@ -31,6 +31,7 @@ interface TimelineEditorProps {
   selectedSegment: string | null
   emotions: Emotion[]
   videoUrl: string | null
+  currentTime: number
   onDragStart: (e: React.MouseEvent, segmentId: string) => void
   onResizeStart: (e: React.MouseEvent, segmentId: string, resizeType: 'start' | 'end') => void
   onSegmentClick: (segmentId: string) => void
@@ -45,6 +46,7 @@ const TimelineEditor: React.FC<TimelineEditorProps> = ({
   selectedSegment,
   emotions,
   videoUrl,
+  currentTime,
   onDragStart,
   onResizeStart,
   onSegmentClick,
@@ -171,9 +173,65 @@ const TimelineEditor: React.FC<TimelineEditorProps> = ({
     )
   }
 
+  // playhead 위치 계산 함수
+  const getPlayheadPosition = () => {
+    if (duration === 0) return 15 // 0초일 때 헤더 시작점(15px)에 위치
+    // 타임라인 헤더의 실제 콘텐츠 영역 내에서 위치 계산
+    // 헤더 너비: 1182.55px, 좌우 패딩: 26px + 15px = 41px
+    // 실제 타임라인 영역: 1182.55 - 41 = 1141.55px
+    const headerLeftPadding = 15 // 왼쪽 패딩만 (0s 시작점)
+    const timelineWidth = 1182.55 - 41 // 전체 타임라인 영역
+    const pixelPosition = (currentTime / duration) * timelineWidth
+    return headerLeftPadding + pixelPosition // 0s는 왼쪽 패딩 시작점에 위치
+  }
+
   return (
-    <div className="col-span-12 bg-gray-800 rounded-lg p-4">
+    <div className="col-span-12">
       <div className="relative overflow-x-auto" ref={timelineRef}>
+        {/* Playhead - 재생 위치 표시 커서 */}
+        <div
+          className="absolute"
+          style={{
+            left: `${getPlayheadPosition()}px`,
+            top: '0px',
+            transform: 'translateX(-50%)',
+            zIndex: 1000, // 모든 요소 위에 표시
+            pointerEvents: 'none',
+            width: '2px',
+            height: '100%',
+          }}
+        >
+          {/* 상단 삼각형 인디케이터 */}
+          <div
+            className="absolute"
+            style={{
+              top: '-2px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: '0',
+              height: '0',
+              borderLeft: '6px solid transparent',
+              borderRight: '6px solid transparent',
+              borderTop: '10px solid #ffffff',
+              zIndex: 1001,
+            }}
+          />
+          {/* 세로 라인 */}
+          <div
+            className="absolute"
+            style={{
+              top: '8px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: '2px',
+              height: 'calc(100% - 8px)',
+              backgroundColor: '#ffffff',
+              zIndex: 1001,
+              boxShadow: '0 0 4px rgba(255, 255, 255, 0.5)', // 가시성을 위한 그림자
+            }}
+          />
+        </div>
+
         {/* 타임라인 헤더: sticky */}
         <div className="sticky top-0 z-20" style={{
           borderRadius: '5.487px',
@@ -230,10 +288,7 @@ const TimelineEditor: React.FC<TimelineEditorProps> = ({
               );
             })}
             {/* major bar(주요 마커) - 시간 라벨이 있는 위치에는 세로선도 없음 */}
-            {timeMarkers.map((marker) => (
-              // 시간 라벨이 있는 위치에는 major bar도 그리지 않음
-              null
-            ))}
+            {/* major bar(주요 마커) - 시간 라벨이 있는 위치에는 세로선도 없음 */}
             {/* 각 구간(마커~다음마커)마다 9개 minor bar, 마커 위치는 비움 */}
             {timeMarkers.map((marker, idx) => {
               if (idx === timeMarkers.length - 1) return null; // 마지막 마커는 다음 마커가 없음
@@ -268,52 +323,37 @@ const TimelineEditor: React.FC<TimelineEditorProps> = ({
         {/* 헤더 spacer */}
         <div style={{ height: '12px' }} />
         {/* 트랙들 */}
-        <div className="space-y-2">
+        <div className="space-y-0">
           {[...Array(5)].map((_, idx) => {
-            const speaker = speakers[idx] || { id: `empty-${idx}`, name: '', color: '', avatar: '' };
+            const speaker = speakers[idx] || { id: `empty-${idx}`, name: `트랙 ${idx + 1}`, color: 'bg-gray-600', avatar: `${idx + 1}` };
             const isFirst = idx === 0;
             const isLast = idx === 4;
-            let trackStyle: React.CSSProperties = {};
+            
+            // 모든 트랙에 동일한 기본 스타일 적용
+            let trackStyle: React.CSSProperties = {
+              background: 'rgba(65,78,145,0.2)',
+              height: '50px',
+              width: '1183px',
+              position: 'relative',
+              borderBottom: isLast ? 'none' : '1px dashed rgba(255,255,255,0.5)',
+            };
+            
+            // 첫 번째와 마지막 트랙에만 border-radius 적용
             if (isFirst) {
-              trackStyle = {
-                borderRadius: '6px 6px 0 0',
-                borderBottom: '1px dashed rgba(255,255,255,0.5)',
-                background: 'rgba(65,78,145,0.2)',
-                height: '50px',
-                flex: '1 0 0',
-              };
+              trackStyle.borderRadius = '6px 6px 0 0';
             } else if (isLast) {
-              trackStyle = {
-                borderRadius: '0 0 6px 6px',
-                background: 'rgba(65,78,145,0.2)',
-                width: '1183px',
-                height: '50px',
-                flexShrink: 0,
-              };
-            } else {
-              trackStyle = {
-                display: 'flex',
-                width: '1246px',
-                alignItems: 'center',
-                gap: '32px',
-              };
+              trackStyle.borderRadius = '0 0 6px 6px';
             }
+            
             return (
-              <div key={speaker.id} className="flex items-center">
+              <div key={speaker.id}>
                 <div
-                  className="flex-1 relative flex items-center"
+                  className="w-full relative"
                   style={trackStyle}
                 >
-                  {/* 시간 마커들 */}
-                  {timeMarkers.map((marker) => (
-                    <div
-                      key={marker.time}
-                      className={`absolute top-0 bottom-0 ${marker.isMajor ? 'w-px bg-gray-500' : 'w-px bg-gray-600'}`}
-                      style={{ left: `${(marker.time / duration) * 100}%` }}
-                    />
-                  ))}
+
                   {/* 자막 블록들 - always vertically centered */}
-                  <div className="w-full h-full flex items-center" style={{ position: 'relative' }}>
+                  <div className="absolute inset-0 flex items-center" style={{ zIndex: 10 }}>
                     {subtitleSegments
                       .filter(segment => segment.speaker === speaker.id)
                       .map((segment) => {
@@ -328,7 +368,7 @@ const TimelineEditor: React.FC<TimelineEditorProps> = ({
                             emotion={emotion}
                             onDragStart={onDragStart}
                             onResizeStart={onResizeStart}
-                            onClick={onSegmentClick}
+                            onClick={() => onSegmentClick(segment.id)}
                             onTextChange={onTextChange}
                           />
                         )

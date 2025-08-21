@@ -2,12 +2,13 @@ import React from 'react';
 import EditorSection from '../components/EditorSection';
 
 interface SubtitleTimelinePanelProps {
-  videoUrl: string;
+  videoUrl: string | null;
   subtitleSegments: any[];
   speakers: any[];
   emotions: any[];
   selectedSegment: string | null;
   duration: number;
+  currentTime: number;
   timelineRef: React.RefObject<HTMLDivElement | null>;
   handleDragStart: (...args: any[]) => void;
   handleResizeStart: (...args: any[]) => void;
@@ -22,6 +23,7 @@ const SubtitleTimelinePanel: React.FC<SubtitleTimelinePanelProps> = ({
   emotions,
   selectedSegment,
   duration,
+  currentTime,
   timelineRef,
   handleDragStart,
   handleResizeStart,
@@ -37,6 +39,7 @@ const SubtitleTimelinePanel: React.FC<SubtitleTimelinePanelProps> = ({
         emotions={emotions}
         selectedSegment={selectedSegment}
         duration={duration}
+        currentTime={currentTime}
         timelineRef={timelineRef}
         onDragStart={handleDragStart}
         onResizeStart={handleResizeStart}
