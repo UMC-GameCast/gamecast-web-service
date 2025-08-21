@@ -90,7 +90,7 @@ export const ButtonContainer = ({
   const isPlayerReady = currentPlayerStatus?.isReady || false;
 
   // 🔍 준비 상태 변경 시 상세 디버깅 (안전한 의존성으로 수정)
-  useEffect(() => {
+  React.useEffect(() => {
     if (Math.random() < 0.1) { // 10% 확률로만 로깅하여 스팸 방지
       console.log('🎮 [ButtonContainer] isPlayerReady 상태 변경:', {
         isPlayerReady,
@@ -167,7 +167,7 @@ export const ButtonContainer = ({
   const [countdown, setCountdown] = useState<number | null>(null);
 
   // 서버에서 오는 카운트다운 이벤트 수신
-  useEffect(() => {
+  React.useEffect(() => {
     if (!actions.socket) return;
 
     const handleCountdownStarted = (data: any) => {
@@ -197,7 +197,7 @@ export const ButtonContainer = ({
   }, [actions.socket]);
   
   // 녹화 시간 계산 (실시간 업데이트)
-  useEffect(() => {
+  React.useEffect(() => {
     let interval: NodeJS.Timeout;
     if (recording.isRecording && recording.startTime) {
       interval = setInterval(() => {
