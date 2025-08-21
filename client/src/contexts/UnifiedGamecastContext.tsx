@@ -218,6 +218,8 @@ interface UnifiedGamecastState {
     totalCount: number;
     serverMessage: string | null;
     lastUpdated: number | null;
+    // 카운트다운 상태 추가
+    countdown: number | null;
   };
   
   // 실시간 연결 상태 (WebRTC 제거됨)
@@ -289,7 +291,8 @@ const initialState: UnifiedGamecastState = {
     readyCount: 0,
     totalCount: 0,
     serverMessage: null,
-    lastUpdated: null
+    lastUpdated: null,
+    countdown: null
   },
   realtime: {
     socket: null,
@@ -2038,11 +2041,19 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
     // 자동 녹화 카운트다운 시작 이벤트
     socket.on('recording-countdown-started', (data) => {
       console.log('⏰ [Context] 자동 녹화 카운트다운 시작:', data);
+      dispatch({
+        type: 'SET_PREPARATION',
+        payload: { countdown: data.countdown || 3 }
+      });
     });
 
     // 자동 녹화 카운트다운 이벤트
     socket.on('recording-countdown', (data) => {
       console.log(`⏰ [Context] 카운트다운: ${data.count}초`);
+      dispatch({
+        type: 'SET_PREPARATION',
+        payload: { countdown: data.count }
+      });
     });
 
     // 자동 녹화 시작 이벤트 (서버에서 recording-started 전송)
@@ -2063,6 +2074,12 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
       dispatch({ 
         type: 'SET_RECORDING_STATE', 
         payload: recordingPayload
+      });
+      
+      // 카운트다운 상태 리셋
+      dispatch({
+        type: 'SET_PREPARATION',
+        payload: { countdown: null }
       });
       
       // 추가: 강제 리렌더링을 위한 UI 상태 업데이트

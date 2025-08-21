@@ -163,38 +163,10 @@ export const ButtonContainer = ({
     });
   }
 
-  // 서버 자동 녹화 카운트다운 상태 (UI 표시용)
-  const [countdown, setCountdown] = useState<number | null>(null);
+  // 서버 자동 녹화 카운트다운 상태 (Context에서 가져옴)
+  const countdown = preparation.countdown;
 
-  // 서버에서 오는 카운트다운 이벤트 수신
-  React.useEffect(() => {
-    if (!actions.socket) return;
-
-    const handleCountdownStarted = (data: any) => {
-      console.log('⏰ [ButtonContainer] 서버 카운트다운 시작:', data);
-      setCountdown(data.countdown);
-    };
-
-    const handleCountdown = (data: any) => {
-      console.log(`⏰ [ButtonContainer] 서버 카운트다운: ${data.count}초`);
-      setCountdown(data.count);
-    };
-
-    const handleRecordingStarted = () => {
-      console.log('🎬 [ButtonContainer] 서버 녹화 시작');
-      setCountdown(null);
-    };
-
-    actions.socket.on('recording-countdown-started', handleCountdownStarted);
-    actions.socket.on('recording-countdown', handleCountdown);
-    actions.socket.on('recording-started', handleRecordingStarted);
-
-    return () => {
-      actions.socket?.off('recording-countdown-started', handleCountdownStarted);
-      actions.socket?.off('recording-countdown', handleCountdown);
-      actions.socket?.off('recording-started', handleRecordingStarted);
-    };
-  }, [actions.socket]);
+  // 카운트다운 상태는 Context에서 관리하므로 별도 이벤트 처리 불필요
   
   // 녹화 시간 계산 (실시간 업데이트)
   React.useEffect(() => {
