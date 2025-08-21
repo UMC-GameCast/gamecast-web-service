@@ -527,12 +527,12 @@ export const ButtonContainer = ({
           }}
         >
           <RoomButton 
+            key={`button-${countdown}-${recording.isRecording}-${allPlayersReady}`}
             onClick={handleReadyOrRecording}
             disabled={getReadyButtonDisabled()}
-            isReady={isPlayerReady}
+            isReady={isPlayerReady && !allPlayersReady && countdown === null && !recording.isRecording}
           >
             {getReadyButtonText()}
-
           </RoomButton>
         </div>
       </div>
