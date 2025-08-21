@@ -20,6 +20,7 @@ interface VideoSectionProps {
   onPlayPause: () => void
   onVideoUploaded: (url: string, file: File) => void
   onSubtitlesGenerated: (segments: SubtitleSegment[]) => void
+  selectedStyle?: number
 }
 
 const VideoSection: React.FC<VideoSectionProps> = ({
@@ -36,7 +37,8 @@ const VideoSection: React.FC<VideoSectionProps> = ({
   onDurationChange,
   onPlayPause,
   onVideoUploaded,
-  onSubtitlesGenerated
+  onSubtitlesGenerated,
+  selectedStyle = 1
 }) => {
   return (
     <>
@@ -66,6 +68,7 @@ const VideoSection: React.FC<VideoSectionProps> = ({
             onTimeUpdate={onTimeUpdate}
             onDurationChange={onDurationChange}
             onPlayPause={onPlayPause}
+            selectedStyle={selectedStyle}
           />
         </div>
       </div>

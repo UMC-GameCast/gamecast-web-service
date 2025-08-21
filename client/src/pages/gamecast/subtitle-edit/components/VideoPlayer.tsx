@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react'
 import type { SubtitleSegment, Speaker, Emotion } from '../types'
+import { useUnifiedRoom } from '../../../../contexts/UnifiedGamecastContext'
 
 interface VideoPlayerProps {
   videoUrl: string | null
@@ -12,6 +13,7 @@ interface VideoPlayerProps {
   onTimeUpdate: (time: number) => void
   onDurationChange: (duration: number) => void
   onPlayPause: () => void
+  selectedStyle?: number
 }
 
 const VideoPlayer: React.FC<VideoPlayerProps> = ({
@@ -24,8 +26,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   isPlaying,
   onTimeUpdate,
   onDurationChange,
-  onPlayPause
+  onPlayPause,
+  selectedStyle = 1
 }) => {
+  const { participants } = useUnifiedRoom()
   const videoRef = useRef<HTMLVideoElement>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
   const [currentSubtitle, setCurrentSubtitle] = useState<SubtitleSegment | null>(null)
@@ -219,6 +223,394 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   }
 
+  // 스타일별 자막 렌더링
+  const renderSubtitleByStyle = (subtitle: SubtitleSegment) => {
+    // 감정 강조 자막일 때는 특별한 레이아웃
+    if (subtitle.emphasis === 'emotion') {
+      return renderEmotionSubtitle(subtitle)
+    }
+    
+    if (selectedStyle === 1) {
+      return renderStyle1Subtitle(subtitle)
+    } else if (selectedStyle === 2) {
+      return renderStyle2Subtitle(subtitle)
+    } else if (selectedStyle === 3) {
+      return renderStyle3Subtitle(subtitle)
+    }
+    // 기본 스타일
+    return renderDefaultSubtitle(subtitle)
+  }
+
+  // 감정에 따른 face 매핑
+  const getEmotionFace = (emotionStyle: string, emphasis: string) => {
+    if (emphasis !== 'emotion') return 'normal'
+    
+    switch (emotionStyle) {
+      case 'happy': return 'happy'
+      case 'angry': return 'angry' 
+      case 'sad': return 'sad'
+      case 'surprised': return 'surprised'
+      default: return 'normal'
+    }
+  }
+
+  // 감정에 따른 자막 스타일 가져오기
+  const getEmotionTextStyle = (emotionStyle: string) => {
+    switch (emotionStyle) {
+      case 'happy': // 신남
+        return {
+          color: '#FFF836',
+          WebkitTextStrokeWidth: '2.5px',
+          WebkitTextStrokeColor: '#000',
+          fontFamily: '"BagelFatOne", sans-serif',
+          fontSize: '50px',
+          fontStyle: 'normal',
+          fontWeight: 400,
+          lineHeight: '150.921%'
+        }
+      case 'surprised': // 놀람
+        return {
+          color: '#92E7FF',
+          WebkitTextStrokeWidth: '0.8px',
+          WebkitTextStrokeColor: '#000',
+          fontFamily: '"TJJoyofsingingM", sans-serif',
+          fontSize: '50px',
+          fontStyle: 'normal',
+          fontWeight: 400,
+          lineHeight: '150.921%'
+        }
+      case 'angry': // 화남
+        return {
+          color: '#F00',
+          WebkitTextStrokeWidth: '1.7px',
+          WebkitTextStrokeColor: '#000',
+          fontFamily: '"HakgyoansimTuho", sans-serif',
+          fontSize: '50px',
+          fontStyle: 'normal',
+          fontWeight: 400,
+          lineHeight: '150.921%'
+        }
+      case 'sad': // 슬픔
+        return {
+          color: '#6BFAFF',
+          WebkitTextStrokeWidth: '0.5px',
+          WebkitTextStrokeColor: '#000',
+          fontFamily: '"SSShinb7", sans-serif',
+          fontSize: '50px',
+          fontStyle: 'normal',
+          fontWeight: 400,
+          lineHeight: '150.921%'
+        }
+      default:
+        return {
+          color: '#FFF836',
+          WebkitTextStrokeWidth: '3px',
+          WebkitTextStrokeColor: '#000',
+          fontFamily: '"BagelFatOne", sans-serif',
+          fontSize: '60px',
+          fontStyle: 'normal',
+          fontWeight: 400,
+          lineHeight: '150.921%'
+        }
+    }
+  }
+
+  // 감정 강조 자막: 오른쪽 아래 캐릭터 + 가운데 아래 자막
+  const renderEmotionSubtitle = (subtitle: SubtitleSegment) => {
+    const speaker = speakers.find(s => s.id === subtitle.speaker)
+    const participant = participants?.find(p => p.guestUserId === speaker?.name) || participants?.[0]
+    const hairColor = participant?.characterInfo?.selectedColors?.hair || 'E0A'
+    const borderColor = `#${hairColor}`
+    // 감정에 따른 face 값 결정
+    const face = getEmotionFace(subtitle.emotionStyle || 'happy', subtitle.emphasis || 'normal')
+    
+    return (
+      <>
+        {/* 오른쪽 아래 캐릭터 */}
+        <div className="absolute bottom-4 right-4 z-20" style={{
+          width: '300px',
+          height: '300px',
+          backgroundColor: '#808080',
+          borderRadius: '8px'
+        }}>
+          {/* 캐릭터가 여기에 들어갈 예정 - face 값 사용: {face} */}
+        </div>
+        
+        {/* 가운데 아래 자막 */}
+        <div className="absolute bottom-8 left-1/2 z-30" style={{ 
+          transform: 'translateX(-50%)',
+          transformOrigin: 'center bottom'
+        }}>
+          <div style={{
+            ...getEmotionTextStyle(subtitle.emotionStyle || 'happy'),
+            whiteSpace: 'nowrap',
+            textAlign: 'center'
+          }}>
+            {subtitle.text}
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  // 스타일 1: 캐릭터 원형 + 유저ID 네모 + 텍스트 (30% 작게)
+  const renderStyle1Subtitle = (subtitle: SubtitleSegment) => {
+    const speaker = speakers.find(s => s.id === subtitle.speaker)
+    const participant = participants?.find(p => p.guestUserId === speaker?.name) || participants?.[0]
+    const hairColor = participant?.characterInfo?.selectedColors?.hair || 'E0A'
+    const borderColor = `#${hairColor}`
+    // 실제 대화하는 유저의 ID를 speaker name에서 가져오기
+    const userId = speaker?.name || participant?.guestUserId || 'User1'
+    // 감정에 따른 face 값 결정
+    const face = getEmotionFace(subtitle.emotionStyle || 'happy', subtitle.emphasis || 'normal')
+    
+    return (
+      <div className="absolute bottom-16 left-1/2 z-10 flex items-start" style={{ 
+        gap: '25px', 
+        transform: 'translateX(-50%) scale(0.7)', 
+        transformOrigin: 'center bottom'
+      }}>
+        {/* 캐릭터 원형 */}
+        <div style={{
+          width: '78px',
+          height: '78px',
+          borderRadius: '50%',
+          backgroundColor: '#FFFFFF',
+          border: `3px solid ${borderColor}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          aspectRatio: '1/1'
+        }}>
+        </div>
+        
+        {/* 유저ID와 텍스트 */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '6px' }}>
+          {/* 유저ID 둥근 네모 */}
+          <div style={{
+            display: 'flex',
+            width: '56.562px',
+            height: '14.617px',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            flexShrink: 0,
+            borderRadius: '59.375px',
+            background: borderColor
+          }}>
+            <span style={{
+              color: '#FFF',
+              textAlign: 'center',
+              fontFamily: 'Inter',
+              fontSize: '8.897px',
+              fontStyle: 'normal',
+              fontWeight: 700,
+              lineHeight: '150%',
+              letterSpacing: '-0.169px'
+            }}>
+              {userId}
+            </span>
+          </div>
+          
+          {/* 자막 텍스트 */}
+          <div style={{
+            width: 'auto',
+            maxWidth: '720.395px',
+            color: '#FFF',
+            WebkitTextStrokeWidth: '2px',
+            WebkitTextStrokeColor: '#E0A',
+            fontFamily: '"Esamanru", sans-serif',
+            fontSize: '40px',
+            fontStyle: 'normal',
+            fontWeight: 900,
+            lineHeight: '1',
+            whiteSpace: 'nowrap'
+          }}>
+            {subtitle.text}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // 스타일 2: 캐릭터 원형(위) + 유저ID 네모(아래) + 자막 텍스트(오른쪽)
+  const renderStyle2Subtitle = (subtitle: SubtitleSegment) => {
+    const speaker = speakers.find(s => s.id === subtitle.speaker)
+    const participant = participants?.find(p => p.guestUserId === speaker?.name) || participants?.[0]
+    const hairColor = participant?.characterInfo?.selectedColors?.hair || 'E0A'
+    const borderColor = `#${hairColor}`
+    // 실제 대화하는 유저의 ID를 speaker name에서 가져오기
+    const userId = speaker?.name || participant?.guestUserId || 'User1'
+    // 감정에 따른 face 값 결정
+    const face = getEmotionFace(subtitle.emotionStyle || 'happy', subtitle.emphasis || 'normal')
+    
+    return (
+      <div className="absolute bottom-16 left-1/2 z-10 flex items-end" style={{ 
+        gap: '15px', 
+        transform: 'translateX(-50%) scale(0.7)', 
+        transformOrigin: 'center bottom'
+      }}>
+        {/* 왼쪽: 캐릭터 원형 + 유저ID 네모 (세로 배치) */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+          {/* 캐릭터 네모 */}
+          <div style={{
+            width: '83.686px',
+            height: '111.022px',
+            backgroundColor: '#808080',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+          </div>
+          
+          {/* 유저ID 둥근 네모 */}
+          <div style={{
+            display: 'flex',
+            width: '53.882px',
+            height: '13.925px',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            flexShrink: 0,
+            borderRadius: '59.375px',
+            background: borderColor
+          }}>
+            <span style={{
+              color: '#FFF',
+              textAlign: 'center',
+              fontFamily: 'Inter',
+              fontSize: '8.476px',
+              fontStyle: 'normal',
+              fontWeight: 700,
+              lineHeight: '150%',
+              letterSpacing: '-0.161px'
+            }}>
+              {userId}
+            </span>
+          </div>
+        </div>
+        
+        {/* 오른쪽: 자막 텍스트 */}
+        <div style={{
+          width: 'auto',
+          maxWidth: '720.395px',
+          color: '#FFF',
+          WebkitTextStrokeWidth: '2px',
+          WebkitTextStrokeColor: '#E0A',
+          fontFamily: '"Esamanru", sans-serif',
+          fontSize: '40px',
+          fontStyle: 'normal',
+          fontWeight: 900,
+          lineHeight: '1',
+          whiteSpace: 'nowrap'
+        }}>
+          {subtitle.text}
+        </div>
+      </div>
+    )
+  }
+
+  // 스타일 3: 캐릭터(왼쪽 위) + 둥근 네모 안에 "유저id: 자막"
+  const renderStyle3Subtitle = (subtitle: SubtitleSegment) => {
+    const speaker = speakers.find(s => s.id === subtitle.speaker)
+    const participant = participants?.find(p => p.guestUserId === speaker?.name) || participants?.[0]
+    const hairColor = participant?.characterInfo?.selectedColors?.hair || 'E0A'
+    const borderColor = `#${hairColor}`
+    // 실제 대화하는 유저의 ID를 speaker name에서 가져오기
+    const userId = speaker?.name || participant?.guestUserId || 'User1'
+    // 감정에 따른 face 값 결정
+    const face = getEmotionFace(subtitle.emotionStyle || 'happy', subtitle.emphasis || 'normal')
+    
+    return (
+      <div className="absolute bottom-16 left-1/2 z-10" style={{ 
+        transform: 'translateX(-50%) scale(0.7)', 
+        transformOrigin: 'center bottom'
+      }}>
+        <div style={{ position: 'relative', display: 'inline-block' }}>
+          {/* 캐릭터 회색 네모 - 왼쪽 위 (뒤쪽) */}
+          <div style={{
+            position: 'absolute',
+            top: '-40px',
+            left: '20px',
+            width: '110px',
+            height: '110px',
+            borderRadius: '25px',
+            backgroundColor: '#808080',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: -1
+          }}>
+          </div>
+          
+          {/* 둥근 네모 박스 */}
+          <div style={{
+            width: 'auto',
+            minWidth: '400px',
+            height: '70px',
+            backgroundColor: '#FFFFFF',
+            border: `3px solid ${borderColor}`,
+            borderRadius: '15px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '0 20px', // 좌우 동일한 패딩
+            marginLeft: '20px', // 캐릭터에서 20px 떨어지게
+            zIndex: 10,
+            position: 'relative'
+          }}>
+            {/* 텍스트: "유저id: 자막" */}
+            <span style={{
+              color: '#FFF',
+              WebkitTextStrokeWidth: '1px',
+              WebkitTextStrokeColor: '#E0A',
+              fontFamily: '"GodoM", "Black Han Sans", "Noto Sans KR", sans-serif',
+              fontSize: '40px',
+              fontStyle: 'italic',
+              fontWeight: 700,
+              lineHeight: '150%',
+              letterSpacing: '-1.33px',
+              whiteSpace: 'nowrap'
+            }}>
+              {userId}: {subtitle.text}
+            </span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // 기본 스타일 (기존)
+  const renderDefaultSubtitle = (subtitle: SubtitleSegment) => {
+    return (
+      <div className="absolute top-3/4 left-2/4 transform -translate-x-1/2 z-10 w-4/5">
+        <div className="flex items-center space-x-4">
+          {/* 화자 정보 */}
+          <div className="flex items-center space-x-2">
+            <div className={`w-8 h-8 rounded-full ${getSubtitleStyle(subtitle).speakerColor} flex items-center justify-center text-white text-lg font-bold`}>
+              {speakers.find(s => s.id === subtitle.speaker)?.avatar || '👤'}
+            </div>
+            <span 
+              className="text-white text-2xl font-bold"
+            >
+              {speakers.find(s => s.id === subtitle.speaker)?.name || 'Unknown'}
+            </span>
+          </div>
+          {/* 자막 텍스트 */}
+          <div 
+            className="text-5xl font-bold px-8 py-4 text-white"
+            style={{ 
+              color: 'white',
+              fontSize: '3rem',
+              fontWeight: 'bold',
+              textShadow: '2px 2px 0px #000, -2px -2px 0px #000, 2px -2px 0px #000, -2px 2px 0px #000, 0px 2px 0px #000, 0px -2px 0px #000, 2px 0px 0px #000, -2px 0px 0px #000'
+            }}
+          >
+            {subtitle.text}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // 픽셀을 시간으로 변환
   const pixelToTime = useCallback((pixelX: number): number => {
     if (!timelineRef.current || duration <= 0) return 0
@@ -366,35 +758,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 브라우저가 비디오를 지원하지 않습니다.
               </video>
               {/* 자막 오버레이 - 동영상 위에 겹치게 표시 */}
-              {displaySubtitle && (
-                <div className="absolute top-3/4 left-2/4 transform -translate-x-1/2 z-10 w-4/5">
-                  <div className="flex items-center space-x-4">
-                    {/* 화자 정보 */}
-                    <div className="flex items-center space-x-2">
-                      <div className={`w-8 h-8 rounded-full ${getSubtitleStyle(displaySubtitle).speakerColor} flex items-center justify-center text-white text-lg font-bold`}>
-                        {speakers.find(s => s.id === displaySubtitle.speaker)?.avatar || '👤'}
-                      </div>
-                      <span 
-                        className="text-white text-2xl font-bold"
-                      >
-                        {speakers.find(s => s.id === displaySubtitle.speaker)?.name || 'Unknown'}
-                      </span>
-                    </div>
-                    {/* 자막 텍스트 */}
-                    <div 
-                      className="text-5xl font-bold px-8 py-4 text-white"
-                      style={{ 
-                        color: 'white',
-                        fontSize: '3rem',
-                        fontWeight: 'bold',
-                        textShadow: '2px 2px 0px #000, -2px -2px 0px #000, 2px -2px 0px #000, -2px 2px 0px #000, 0px 2px 0px #000, 0px -2px 0px #000, 2px 0px 0px #000, -2px 0px 0px #000'
-                      }}
-                    >
-                      {displaySubtitle.text}
-                    </div>
-                  </div>
-                </div>
-              )}
+              {displaySubtitle && renderSubtitleByStyle(displaySubtitle)}
             </div>
           ) : (
             <div className="w-full aspect-video bg-black rounded-lg relative overflow-hidden" style={{ width: '100%', height: '100%' }}>

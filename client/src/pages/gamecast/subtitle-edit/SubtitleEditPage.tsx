@@ -5,6 +5,8 @@ import RenderModal from './components/RenderModal'
 import VideoUploader from './components/VideoUploader'
 import MultiSpeakerAudioUploader from './components/MultiSpeakerAudioUploader'
 import { Navigation } from '../../../components/gamecast/common/Navigation';
+import { useUnifiedRoom } from '../../../contexts/UnifiedGamecastContext';
+import { renderCharacterLayers } from '../../../utils/characterRenderer';
 
 import { PageTransition } from '../../../components/gamecast/common/PageTransition';
 import SubtitleEditMainPanel from './components/SubtitleEditMainPanel';
@@ -14,6 +16,7 @@ const SubtitleEditPage: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
   const [pendingSmallVideoIndex, setPendingSmallVideoIndex] = useState<number | null>(null)
+  const { participants } = useUnifiedRoom()
   const {
     // 상태
     subtitleSegments,
@@ -193,42 +196,66 @@ const SubtitleEditPage: React.FC = () => {
             <div className="flex flex-col" style={{ width: 80 }}>
               {/* 타임라인 헤더 높이만큼 여백 추가 (헤더: 32.578px + spacer: 12px) */}
               <div style={{ height: '44.578px' }} />
-              {[...Array(5)].map((_, idx) => (
-                <div key={idx} className="h-[50px] flex items-center justify-center">
-                  {/* 이미지div랑 이름div를 감싸는 div */}
-                  <div style={{ width: '31px', height: '45px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
-                    {/* 아바타 이미지 (동그라미) */}
-                    <div style={{
-                      width: '28px',
-                      height: '28px',
-                      borderRadius: '50%',
-                      backgroundColor: `hsl(${idx * 72}, 60%, 60%)`, // 각 유저마다 다른 색상
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '12px',
-                      fontWeight: 'bold',
-                      color: '#FFF'
-                    }}>
-                      {idx + 1}
-                    </div>
-                    {/* 유저 이름 */}
-                    <div style={{
-                      color: '#FFF',
-                      textAlign: 'center',
-                      fontFamily: '"Rozha One"',
-                      fontSize: '10px',
-                      fontStyle: 'normal',
-                      fontWeight: 400,
-                      lineHeight: '150%', /* 15px */
-                      letterSpacing: '-0.19px',
-                      alignSelf: 'stretch'
-                    }}>
-                      유저{idx + 1}
+{Array.from({ length: 5 }, (_, idx) => {
+                const participant = participants?.[idx];
+                const hairColor = participant?.characterInfo?.selectedColors?.hair;
+                const borderColor = hairColor ? `#${hairColor}` : `hsl(${idx * 72}, 60%, 60%)`;
+                
+                return (
+                  <div key={participant?.guestUserId || idx} className="h-[50px] flex items-center justify-center">
+                    {/* 이미지div랑 이름div를 감싸는 div */}
+                    <div style={{ width: '31px', height: '45px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                      {/* 아바타 이미지 (동그라미) */}
+                      <div style={{
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '50%',
+                        backgroundColor: '#FFFFFF',
+                        border: `2px solid ${borderColor}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        color: '#000',
+                        position: 'relative',
+                        overflow: 'hidden'
+                      }}>
+                        {participant?.characterInfo?.isCustomized && participant.characterInfo.selectedOptions && participant.characterInfo.selectedColors ? (
+                          <div style={{ 
+                            width: '100%', 
+                            height: '100%', 
+                            position: 'relative',
+                            transform: 'scale(0.8)'
+                          }}>
+                            {renderCharacterLayers({
+                              selectedOptions: participant.characterInfo.selectedOptions,
+                              selectedColors: participant.characterInfo.selectedColors,
+                              nickname: participant.nickname
+                            })}
+                          </div>
+                        ) : (
+                          participant?.nickname?.charAt(0) || (idx + 1)
+                        )}
+                      </div>
+                      {/* 유저 이름 */}
+                      <div style={{
+                        color: '#FFF',
+                        textAlign: 'center',
+                        fontFamily: '"Rozha One"',
+                        fontSize: '10px',
+                        fontStyle: 'normal',
+                        fontWeight: 400,
+                        lineHeight: '150%', /* 15px */
+                        letterSpacing: '-0.19px',
+                        alignSelf: 'stretch'
+                      }}>
+                        {participant?.guestUserId || `유저${idx + 1}`}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
             {/* 타임라인 */}
             <div className="flex-1">

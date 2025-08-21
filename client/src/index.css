@@ -12,6 +12,39 @@
   font-display: swap;
 }
 
+/* 감정별 자막 폰트들 */
+@font-face {
+  font-family: 'SSShinb7';
+  src: url('/src/assets/fonts/SSShinb7.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'TJJoyofsingingM';
+  src: url('/src/assets/fonts/TJJoyofsingingM_TTF.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'BagelFatOne';
+  src: url('/src/assets/fonts/BagelFatOne-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'HakgyoansimTuho';
+  src: url('/src/assets/fonts/HakgyoansimTuhoR.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 .ilsang-font {
   font-family: '87MM ILSANG', 'Jua', 'Noto Sans KR', 'Pretendard', sans-serif !important;
 }
