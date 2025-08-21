@@ -33,31 +33,39 @@ export const updatePreparationAPI = async (
   preparationData: PreparationUpdateData
 ): Promise<{ success: boolean; error?: string }> => {
   try {
-    // 서버가 기대하는 필드명으로 변환
-    const serverPayload: any = { roomCode, guestUserId: preparationData.guestUserId };
+    // 임시: 원래 구조로 테스트 (문제 진단용)
+    const requestPayload = {
+      roomCode,
+      ...preparationData
+    };
     
-    // 필드명 매핑: 클라이언트 -> 서버
+    // 추가: 서버 기대 필드명도 함께 전송 (둘 다 테스트)
     if (preparationData.characterSetup !== undefined) {
-      serverPayload.characterReady = preparationData.characterSetup;
+      requestPayload.characterReady = preparationData.characterSetup;
     }
     if (preparationData.screenSetup !== undefined) {
-      serverPayload.screenReady = preparationData.screenSetup;
+      requestPayload.screenReady = preparationData.screenSetup;
     }
     if (preparationData.isReady !== undefined) {
-      serverPayload.finalReady = preparationData.isReady;
+      requestPayload.finalReady = preparationData.isReady;
     }
     
-    const requestPayload = serverPayload;
-    
-    console.log('📤 [PreparationAPI] REST API 요청 (필드명 매핑):', {
+    console.log('📤 [PreparationAPI] REST API 요청 (이중 필드 테스트):', {
       url: `${API_BASE_URL}/api/rooms/preparation`,
       roomCode,
       originalClientData: preparationData,
-      mappedServerPayload: requestPayload,
-      fieldMapping: {
-        'characterSetup → characterReady': preparationData.characterSetup,
-        'screenSetup → screenReady': preparationData.screenSetup,
-        'isReady → finalReady': preparationData.isReady
+      finalPayload: requestPayload,
+      dualFieldsIncluded: {
+        client: {
+          characterSetup: requestPayload.characterSetup,
+          screenSetup: requestPayload.screenSetup,
+          isReady: requestPayload.isReady
+        },
+        server: {
+          characterReady: requestPayload.characterReady,
+          screenReady: requestPayload.screenReady,
+          finalReady: requestPayload.finalReady
+        }
       },
       requestPayloadStringified: JSON.stringify(requestPayload, null, 2)
     });

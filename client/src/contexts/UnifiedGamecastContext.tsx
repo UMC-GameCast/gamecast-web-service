@@ -2112,8 +2112,67 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
       });
     });
 
+    // 서버에서 보내는 recording-stopped 이벤트 처리 (우선)
+    socket.on('recording-stopped', async (data) => {
+      console.log('⏹️ [Context] 서버 녹화 종료 신호 수신:', data);
+      
+      try {
+        const currentState = stateRef.current;
+        const roomCode = currentState.currentRoom?.roomCode;
+        const userId = currentState.currentPlayer?.guestUserId;
+        const gameTitle = currentState.currentRoom?.roomName || 'GameCast Session';
+        
+        if (!roomCode || !userId) {
+          throw new Error('방 정보 또는 사용자 정보가 없습니다');
+        }
+        
+        // 업로드 진행 상태 표시
+        dispatch({ 
+          type: 'SET_RECORDING_STATE', 
+          payload: { 
+            isRecording: false,
+            uploading: true,
+            uploadProgress: 0
+          } 
+        });
+        
+        // GameRecorder로 동기화 녹화 종료 및 업로드
+        const uploadResult = await gameRecorderRef.current?.stopSyncRecording(roomCode, userId, gameTitle);
+        
+        if (uploadResult?.success) {
+          console.log('✅ [Context] 서버 동기화 녹화 종료 및 업로드 완료:', uploadResult);
+          
+          // 업로드 완료 상태 업데이트
+          dispatch({ 
+            type: 'SET_RECORDING_STATE', 
+            payload: { 
+              isRecording: false,
+              uploading: false,
+              uploadProgress: 100
+            } 
+          });
+          
+        } else {
+          throw new Error(uploadResult?.error || '업로드에 실패했습니다');
+        }
+        
+      } catch (error) {
+        console.error('❌ [Context] 서버 동기화 녹화 종료 및 업로드 실패:', error);
+        dispatch({ 
+          type: 'SET_RECORDING_STATE', 
+          payload: { 
+            isRecording: false,
+            uploading: false,
+            uploadProgress: 0
+          } 
+        });
+        dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : '녹화 종료에 실패했습니다' });
+      }
+    });
+
+    // Fallback: 기존 recording-stop 이벤트도 유지 (하위호환성)
     socket.on('recording-stop', async () => {
-      console.log('⏹️ 녹화 종료 신호 수신');
+      console.log('⏹️ 녹화 종료 신호 수신 (Fallback)');
       
       try {
         const currentState = stateRef.current;
@@ -2150,8 +2209,6 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
               uploadProgress: 100
             } 
           });
-          
-          // 성공 후 페이지 이동은 추후 구현 (Priority 5)
           
         } else {
           throw new Error(uploadResult?.error || '업로드에 실패했습니다');

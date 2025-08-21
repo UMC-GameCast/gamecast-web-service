@@ -52,14 +52,29 @@ const DevRecordingButton: React.FC = () => {
     
     try {
       if (state.recording.isRecording) {
-        // 녹화 중 - 종료
-        console.log('🛑 [DevButton] 개발용 녹화 종료 요청');
-        await actions.stopRecording();
-        console.log('✅ [DevButton] 녹화 종료 완료');
-        alert('녹화가 종료되었습니다! 파일이 업로드되었습니다.');
+        // 녹화 중 - 서버 동기화 종료
+        console.log('🛑 [DevButton] 서버 동기화 녹화 종료 요청');
+        
+        if (state.realtime.socket && state.currentRoom?.roomCode) {
+          // 서버의 동기화된 녹화 종료 시스템 사용
+          state.realtime.socket.emit('host-stop-recording', { 
+            roomCode: state.currentRoom.roomCode 
+          });
+          console.log('📡 [DevButton] host-stop-recording 이벤트 전송:', {
+            roomCode: state.currentRoom.roomCode,
+            timestamp: new Date().toLocaleTimeString()
+          });
+        } else {
+          // Fallback: 로컬 녹화 종료
+          console.log('⚠️ [DevButton] 소켓 없음 - 로컬 녹화 종료로 fallback');
+          await actions.stopRecording();
+        }
+        
+        console.log('✅ [DevButton] 녹화 종료 요청 완료');
+        
       } else {
-        // 녹화 중 아님 - 시작
-        console.log('🚨 [DevButton] 개발용 녹화 시작 요청');
+        // 녹화 중 아님 - 서버 동기화 시작
+        console.log('🚨 [DevButton] 서버 동기화 녹화 시작 요청');
         
         // 화면 설정 상태 확인
         const gameRecorderRef = actions.gameRecorder;
@@ -70,18 +85,31 @@ const DevRecordingButton: React.FC = () => {
           timestamp: new Date().toLocaleTimeString()
         });
         
-        await actions.startRecording();
-        console.log('✅ [DevButton] 녹화 시작 완료');
-        alert('녹화가 시작되었습니다!');
+        if (state.realtime.socket && state.currentRoom?.roomCode) {
+          // 서버의 동기화된 녹화 시작 시스템 사용
+          state.realtime.socket.emit('host-start-recording', { 
+            roomCode: state.currentRoom.roomCode 
+          });
+          console.log('📡 [DevButton] host-start-recording 이벤트 전송:', {
+            roomCode: state.currentRoom.roomCode,
+            timestamp: new Date().toLocaleTimeString()
+          });
+        } else {
+          // Fallback: 로컬 녹화 시작
+          console.log('⚠️ [DevButton] 소켓 없음 - 로컬 녹화 시작으로 fallback');
+          await actions.startRecording();
+        }
+        
+        console.log('✅ [DevButton] 녹화 시작 요청 완료');
       }
     } catch (error) {
       console.error('❌ [DevButton] 녹화 토글 실패:', error);
       alert(`녹화 ${state.recording.isRecording ? '종료' : '시작'} 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
     } finally {
-      // 3초 후 버튼 재활성화 (연속 클릭 방지)
+      // 1초 후 버튼 재활성화 (서버 응답 대기)
       setTimeout(() => {
         setIsProcessing(false);
-      }, 3000);
+      }, 1000);
     }
   };
 
@@ -254,7 +282,7 @@ const DevRecordingButton: React.FC = () => {
                 : 'bg-green-600 hover:bg-green-700 hover:shadow-xl active:scale-95'
             }
           `}
-          title={`개발용: 녹화 ${state.recording.isRecording ? '종료' : '시작'}`}
+          title={`개발용 서버 동기화: 녹화 ${state.recording.isRecording ? '종료' : '시작'} (모든 플레이어)`}
         >
           {isProcessing || state.recording.uploading ? (
             <div className="flex items-center space-x-1">
@@ -264,7 +292,7 @@ const DevRecordingButton: React.FC = () => {
           ) : (
             <div className="flex items-center space-x-1">
               <span>{state.recording.isRecording ? '🛑' : '🎬'}</span>
-              <span>{state.recording.isRecording ? '종료' : '녹화'}</span>
+              <span>{state.recording.isRecording ? '서버종료' : '서버녹화'}</span>
             </div>
           )}
         </button>
