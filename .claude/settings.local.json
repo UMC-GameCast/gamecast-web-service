@@ -33,7 +33,10 @@
       "WebFetch(domain:localhost)",
       "Bash(dir)",
       "Bash(cat:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(rg:*)",
+      "Bash(echo $NODE_ENV)",
+      "Bash(grep:*)"
     ],
     "deny": [],
     "additionalDirectories": [

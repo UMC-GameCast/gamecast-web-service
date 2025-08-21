@@ -14,5 +14,9 @@ export default defineConfig({
     allowedHosts: ['.ngrok-free.app', '.ngrok.io', '.ngrok.app'], // 🔑 ngrok 도메인 허용
     // 개발용으로는 모든 호스트 허용도 가능
     // allowedHosts: 'all'
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp'
+    }
   }
 })

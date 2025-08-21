@@ -33,10 +33,17 @@ export const updatePreparationAPI = async (
   preparationData: PreparationUpdateData
 ): Promise<{ success: boolean; error?: string }> => {
   try {
+    const requestPayload = {
+      roomCode,
+      ...preparationData
+    };
+    
     console.log('📤 [PreparationAPI] REST API 요청:', {
       url: `${API_BASE_URL}/api/rooms/preparation`,
       roomCode,
-      data: preparationData
+      originalData: preparationData,
+      requestPayload: requestPayload,
+      requestPayloadStringified: JSON.stringify(requestPayload, null, 2)
     });
 
     const response = await fetch(`${API_BASE_URL}/api/rooms/preparation`, {
@@ -44,10 +51,7 @@ export const updatePreparationAPI = async (
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        roomCode,
-        ...preparationData
-      }),
+      body: JSON.stringify(requestPayload),
     });
 
     if (!response.ok) {

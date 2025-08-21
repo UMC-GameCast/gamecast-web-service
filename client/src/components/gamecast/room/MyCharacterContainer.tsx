@@ -14,6 +14,7 @@ interface MyCharacterContainerProps {
   localStream?: MediaStream | null;
   isLocalMuted?: boolean;
   voiceChatConnected?: boolean;
+  isReady?: boolean; // 준비 상태
 }
 
 /**
@@ -24,7 +25,8 @@ export const MyCharacterContainer: React.FC<MyCharacterContainerProps> = ({
   currentPlayer,
   localStream = null,
   isLocalMuted = false,
-  voiceChatConnected = false
+  voiceChatConnected = false,
+  isReady = false
 }) => {
   // ✨ 단순화된 캐릭터 설정 상태 체크: isCustomized만 확인
   const hasCharacter = currentPlayer?.characterInfo?.isCustomized || false;
@@ -44,6 +46,7 @@ export const MyCharacterContainer: React.FC<MyCharacterContainerProps> = ({
     isCustomized: currentPlayer?.characterInfo?.isCustomized,
     selectedOptionsCount: Object.keys(currentPlayer?.characterInfo?.selectedOptions || {}).length,
     selectedColorsCount: Object.keys(currentPlayer?.characterInfo?.selectedColors || {}).length,
+    isReady: isReady,
     timestamp: new Date().toLocaleTimeString()
   });
 
@@ -126,8 +129,10 @@ export const MyCharacterContainer: React.FC<MyCharacterContainerProps> = ({
             style={{
               width: '450px', 
               height: '71.03px', 
-              borderRadius: '9999px',
-              background: 'radial-gradient(ellipse 55.37% 55.37% at 50.00% 50.00%, rgba(32, 35, 245, 0.81) 0%, rgba(134, 219, 255, 0.10) 56%, rgba(0, 4, 57, 0) 100%)'
+              borderRadius: '450px',
+              background: isReady 
+                ? 'radial-gradient(55.37% 55.37% at 50% 50%, rgba(32, 245, 57, 0.81) 0%, rgba(134, 219, 255, 0.10) 55.77%, rgba(0, 4, 57, 0.00) 100%)'
+                : 'radial-gradient(ellipse 55.37% 55.37% at 50.00% 50.00%, rgba(32, 35, 245, 0.81) 0%, rgba(134, 219, 255, 0.10) 56%, rgba(0, 4, 57, 0) 100%)'
             }}
           />
         </div>

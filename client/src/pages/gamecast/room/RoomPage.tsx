@@ -11,6 +11,8 @@ import SettingIcon from "../../../assets/gamecast/Room/setting.svg?react";
 import { PlayerGrid } from "../../../components/gamecast/room/PlayerGrid.tsx";
 import { MicrophonePermissionGuide } from "../../../components/gamecast/common/MicrophonePermissionGuide";
 import { MicrophoneStatusIndicator } from "../../../components/gamecast/common/MicrophoneStatusIndicator";
+import DevRecordingButton from "../../../components/common/DevRecordingButton";
+import { logMediaFormatSupport } from "../../../utils/MediaFormatChecker";
 
 // 올바른 닉네임을 표시하기 위한 유틸리티 함수 (participants 목록 기반)
 const getDisplayNickname = (player: any, allParticipants?: any[]): string => {
@@ -60,9 +62,7 @@ const getDisplayNickname = (player: any, allParticipants?: any[]): string => {
   return player.nickname || "Nickname2";
 };
 import { 
-  useUnifiedGamecast,
-  useUnifiedPreparation,
-  useUnifiedRecording
+  useUnifiedGamecast
 } from "../../../contexts/UnifiedGamecastContext";
 import { useNavigate, useLocation } from "react-router-dom";
 
@@ -108,7 +108,25 @@ export const RoomPage = () => {
   const location = useLocation();
   
   // 🎯 통합 Context 사용 (단일 소스)
-  const { state, actions } = useUnifiedGamecast();
+  const context = useUnifiedGamecast();
+  
+  // 🎬 미디어 포맷 지원 확인 (한 번만 실행)
+  React.useEffect(() => {
+    logMediaFormatSupport();
+  }, []);
+  
+  // Context null 체크
+  if (!context) {
+    console.error('❌ [RoomPage] UnifiedGamecastContext가 null입니다');
+    return (
+      <div className="h-full flex flex-col items-center justify-center bg-[linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,6,72,1)_100%)]">
+        <p className="text-white text-lg mb-4">Context 오류</p>
+        <p className="text-red-400 mb-4">UnifiedGamecastContext를 찾을 수 없습니다</p>
+      </div>
+    );
+  }
+  
+  const { state, actions } = context;
   const { 
     currentRoom, 
     currentPlayer, 
@@ -116,6 +134,8 @@ export const RoomPage = () => {
     loading, 
     error
   } = state;
+  
+  // Context 상태 로그 제거 (준비 상태와 무관)
 
   // 액션들
   const { 
@@ -131,25 +151,31 @@ export const RoomPage = () => {
   const isLocalMuted = false;
   const toggleLocalAudio = () => false;
 
-  const {
-    characterSetupComplete,
-    screenSetupComplete,
-    isReady,
-    updatePreparation
-  } = useUnifiedPreparation();
+  // Context에서 준비 상태 가져오기 (안전한 접근)
+  const { preparation, recording } = state;
+  const characterSetupComplete = preparation?.characterSetup || false;
+  const screenSetupComplete = preparation?.screenSetup || false;
+  const isReady = preparation?.isReady || false;
+  const updatePreparation = actions.updatePreparation;
+  
+  // 녹화 상태 가져오기 (안전한 접근)
+  const isRecording = recording?.isRecording || false;
+  const recordingTime = recording?.recordingTime || 0;
+  const startRecording = actions.startRecording;
+  const stopRecording = actions.stopRecording;
   
   // 마이크 가이드 상태만 필요
   const [showMicGuide, setShowMicGuide] = useState(false);
 
-  const {
-    isRecording,
-    recordingTime,
-    startRecording,
-    stopRecording
-  } = useUnifiedRecording();
-
-  // 캐릭터 설정 상태 확인
+  // 캐릭터 설정 상태 확인 (안전한 접근)
   const hasCharacterSetup = currentPlayer?.characterInfo?.isCustomized || false;
+  
+  // 준비 버튼 활성화 상태 (캐릭터 설정과 화면 설정이 모두 완료되어야 함)
+  const isReadyEnabled = characterSetupComplete && screenSetupComplete;
+  
+  // 실제 참여자 목록은 아래 useMemo에서 정의됨
+  
+  // 주요 상태 체크 로그 제거 (준비 상태 체크는 별도)
 
 
   // 🔗 Socket 상태 모니터링 (Context에서 관리, RoomPage는 상태만 확인)
@@ -208,19 +234,8 @@ export const RoomPage = () => {
   // 🔧 React 배칭 문제 해결: Context 값 직접 구독
   const [forceUpdate, setForceUpdate] = useState(0);
   
-  // 🎯 실제 사용할 participants - state.participants를 우선으로 사용
-  const actualParticipants = useMemo(() => {
-    // state.participants가 있고 길이가 다르면 state 사용
-    if (state.participants && state.participants.length !== participants?.length) {
-      console.log('🔄 [actualParticipants] state.participants 우선 사용:', {
-        stateCount: state.participants.length,
-        propsCount: participants?.length || 0
-      });
-      return state.participants;
-    }
-    // 그 외의 경우 기존 participants 사용
-    return state.participants || participants;
-  }, [state.participants, participants, state.participants?.length, participants?.length]);
+  // 🎯 단순화: Context의 state.participants 직접 사용
+  const actualParticipants = state.participants;
 
   // 🔧 Context 참여자 변경 감지 시 강제 리렌더링
   useEffect(() => {
@@ -257,9 +272,6 @@ export const RoomPage = () => {
   }, [state]);
 
   // WebRTC 초기화 제거됨 - 나중에 구현 예정
-
-  // 준비하기 버튼 활성화 조건
-  const isReadyEnabled = characterSetupComplete && screenSetupComplete;
 
   // 로딩 상태는 무시하고 바로 진행
 
@@ -360,6 +372,13 @@ export const RoomPage = () => {
                     localStream={localStream}
                     isLocalMuted={isLocalMuted}
                     voiceChatConnected={voiceChatConnected}
+                    isReady={(() => {
+                      const currentPlayerGuestId = currentPlayer.guestUserId || currentPlayer.id;
+                      const currentPlayerData = actualParticipants?.find(p => 
+                        p.guestUserId === currentPlayerGuestId || p.id === currentPlayerGuestId
+                      );
+                      return currentPlayerData?.preparationStatus?.isReady || false;
+                    })()}
                   />
                 ) : (
                   <div className="flex flex-col items-center justify-center h-[300px] bg-gray-800/50 rounded-lg animate-pulse">
@@ -476,6 +495,9 @@ export const RoomPage = () => {
           </div>
         </div>
       )}
+
+      {/* 개발용 강제 녹화 시작 버튼 (스티키) */}
+      <DevRecordingButton />
 
     </React.Fragment>
   );

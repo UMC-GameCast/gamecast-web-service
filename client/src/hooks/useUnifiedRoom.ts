@@ -68,12 +68,7 @@ export const useUnifiedRoom = () => {
     setParticipants(prev => prev.map(participant => {
       if (participant.guestUserId === guestUserId) {
         const updated = { ...participant, ...updates };
-        console.log('🔄 [UnifiedRoom] 참여자 업데이트:', {
-          guestUserId,
-          nickname: participant.nickname,
-          updates,
-          result: updated
-        });
+        // 참여자 업데이트 로그 제거 (준비 상태와 무관)
         return updated;
       }
       return participant;
@@ -188,9 +183,26 @@ export const useUnifiedRoom = () => {
         updateParticipantStream(guestUserId, null);
       };
 
-      manager.onRealtimeParticipantsUpdate = (participants: any[]) => {
-        console.log('👥 [UnifiedRoom] 실시간 참여자 업데이트:', participants.length);
-        refreshRoomState(); // 서버 상태 동기화
+      manager.onRealtimeParticipantsUpdate = (updatedParticipants: any[]) => {
+        console.log('👥 [UnifiedRoom] 실시간 참여자 업데이트:', updatedParticipants.length);
+        
+        // 🚀 실시간 로컬 상태 업데이트 (서버 요청 없이)
+        if (updatedParticipants && updatedParticipants.length > 0) {
+          const transformedParticipants = updatedParticipants.map(transformServerPlayerData);
+          setParticipants(transformedParticipants);
+          
+          console.log('🔄 [UnifiedRoom] participants 로컬 상태 즉시 업데이트:', {
+            count: transformedParticipants.length,
+            participantsPreparationStatus: transformedParticipants.map(p => ({
+              guestUserId: p.guestUserId,
+              nickname: p.nickname,
+              preparationStatus: p.preparationStatus
+            }))
+          });
+        } else {
+          // fallback: 서버에서 다시 가져오기
+          refreshRoomState();
+        }
       };
 
       // 로컬 스트림 시작

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import buttonDefault from "../../../assets/gamecast/common/button/button1_default.png";
 import buttonClick from "../../../assets/gamecast/common/button/button1_click.png";
+import buttonReady from "../../../assets/gamecast/common/button/button2_ready.png";
 
 interface RoomButtonProps {
   children: React.ReactNode;
@@ -8,12 +9,13 @@ interface RoomButtonProps {
   className?: string;
   disabled?: boolean;
   style?: React.CSSProperties;
+  isReady?: boolean; // 준비 상태
 }
 
 /**
  * 방에서 사용하는 기본 버튼 컴포넌트 (기본, 호버, 클릭 상태만 가짐)
  */
-export const RoomButton = ({ children, onClick, className = "", disabled = false, style }: RoomButtonProps) => {
+export const RoomButton = ({ children, onClick, className = "", disabled = false, style, isReady = false }: RoomButtonProps) => {
   const [isHovered, setIsHovered] = useState(false);
   const [isClicked, setIsClicked] = useState(false);
 
@@ -28,6 +30,7 @@ export const RoomButton = ({ children, onClick, className = "", disabled = false
   };
 
   const getBackgroundImage = () => {
+    if (isReady) return buttonReady;
     return isClicked ? buttonClick : buttonDefault;
   };
 

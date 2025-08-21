@@ -10,6 +10,7 @@ import {
   leaveRoom as leaveRoomUtil 
 } from '../utils/roomManager';
 import { GameRecorder } from '../utils/GameRecorder';
+import { audioManager } from '../utils/audioManager';
 
 // 🔧 강화된 Socket 연결 상태 관리
 interface SocketState {
@@ -97,18 +98,21 @@ const normalizeParticipants = (participants: Player[]): Player[] => {
   return [...normalizedHosts, ...normalizedParticipants];
 };
 
-// Socket 상태 변경 로깅
+// Socket 상태 변경 로깅 (준비 상태 관련만 유지)
 const logSocketState = (action: string, details?: Record<string, unknown>) => {
-  console.log(`🔌 [SocketState] ${action}:`, {
-    status: globalSocketState.status,
-    socketId: globalSocketState.socket?.id,
-    roomCode: globalSocketState.roomCode,
-    guestUserId: globalSocketState.guestUserId,
-    attempts: globalSocketState.connectionAttempts,
-    lastConnected: globalSocketState.lastConnectedAt ? new Date(globalSocketState.lastConnectedAt).toISOString() : null,
-    isIntentional: globalSocketState.isIntentionalDisconnect,
-    ...details
-  });
+  // 준비 상태와 관련된 로그만 출력
+  if (action.includes('준비') || action.includes('ready') || action.includes('preparation') || action.includes('녹화') || action.includes('recording')) {
+    console.log(`🔌 [SocketState] ${action}:`, {
+      status: globalSocketState.status,
+      socketId: globalSocketState.socket?.id,
+      roomCode: globalSocketState.roomCode,
+      guestUserId: globalSocketState.guestUserId,
+      attempts: globalSocketState.connectionAttempts,
+      lastConnected: globalSocketState.lastConnectedAt ? new Date(globalSocketState.lastConnectedAt).toISOString() : null,
+      isIntentional: globalSocketState.isIntentionalDisconnect,
+      ...details
+    });
+  }
 };
 
 // 🔍 데이터 검증 함수들
@@ -147,37 +151,46 @@ const validateTimestamp = (timestamp: unknown, maxAge: number = 300000): boolean
   return age <= maxAge; // 기본 5분 이내
 };
 
-// 🔍 데이터 검증 및 로깅
+// 🔍 데이터 검증 및 로깅 (준비 상태 관련만)
 const validateAndLog = (eventName: string, data: any, validator?: (data: any) => boolean): boolean => {
   try {
     const isValid = validator ? validator(data) : true;
     const hasTimestamp = data && typeof data.timestamp === 'number';
     const timestampValid = hasTimestamp ? validateTimestamp(data.timestamp) : true;
     
-    logSocketState(`${eventName} 데이터 검증`, {
-      isValid,
-      hasTimestamp,
-      timestampValid,
-      dataType: typeof data,
-      dataKeys: data && typeof data === 'object' ? Object.keys(data) : null
-    });
+    // 준비 상태 관련 이벤트만 로그 출력
+    if (eventName.includes('준비') || eventName.includes('ready') || eventName.includes('preparation') || eventName.includes('녹화') || eventName.includes('recording')) {
+      logSocketState(`${eventName} 데이터 검증`, {
+        isValid,
+        hasTimestamp,
+        timestampValid,
+        dataType: typeof data,
+        dataKeys: data && typeof data === 'object' ? Object.keys(data) : null
+      });
+    }
     
     if (!isValid) {
-      logSocketState(`${eventName} 데이터 검증 실패`, { data });
+      if (eventName.includes('준비') || eventName.includes('ready') || eventName.includes('preparation') || eventName.includes('녹화') || eventName.includes('recording')) {
+        logSocketState(`${eventName} 데이터 검증 실패`, { data });
+      }
       return false;
     }
     
     if (hasTimestamp && !timestampValid) {
-      logSocketState(`${eventName} 타임스탬프 검증 실패`, { 
-        timestamp: data.timestamp,
-        age: Math.abs(Date.now() - data.timestamp)
-      });
+      if (eventName.includes('준비') || eventName.includes('ready') || eventName.includes('preparation') || eventName.includes('녹화') || eventName.includes('recording')) {
+        logSocketState(`${eventName} 타임스탬프 검증 실패`, { 
+          timestamp: data.timestamp,
+          age: Math.abs(Date.now() - data.timestamp)
+        });
+      }
       return false;
     }
     
     return true;
   } catch (error) {
-    logSocketState(`${eventName} 검증 중 오류`, { error: error instanceof Error ? error.message : String(error) });
+    if (eventName.includes('준비') || eventName.includes('ready') || eventName.includes('preparation') || eventName.includes('녹화') || eventName.includes('recording')) {
+      logSocketState(`${eventName} 검증 중 오류`, { error: error instanceof Error ? error.message : String(error) });
+    }
     return false;
   }
 };
@@ -213,6 +226,8 @@ interface UnifiedGamecastState {
     startTime: number | null;
     uploading: boolean;
     uploadProgress: number;
+    audioStream: MediaStream | null;
+    microphonePermission: 'pending' | 'granted' | 'denied' | 'error';
   };
   
   // UI 상태
@@ -258,7 +273,9 @@ const initialState: UnifiedGamecastState = {
     recordingTime: 0,
     startTime: null,
     uploading: false,
-    uploadProgress: 0
+    uploadProgress: 0,
+    audioStream: null,
+    microphonePermission: 'pending'
   },
   ui: {
     showCharacterSetup: false,
@@ -298,20 +315,11 @@ const unifiedGamecastReducer = (state: UnifiedGamecastState, action: UnifiedGame
         isSameData = state.participants === normalizedParticipants;
       }
       
-      console.log('🔄 [Reducer] SET_PARTICIPANTS:', {
-        before: state.participants?.length || 0,
-        after: normalizedParticipants.length,
-        payload: action.payload?.map(p => ({ nickname: p.nickname, guestUserId: p.guestUserId })) || [],
-        normalized: normalizedParticipants.map(p => ({ nickname: p.nickname, guestUserId: p.guestUserId })),
-        stateChanged: !isSameData,
-        참조변경여부: state.participants !== normalizedParticipants,
-        중복업데이트방지: isSameData ? 'SKIPPED' : 'UPDATED',
-        timestamp: new Date().toLocaleTimeString()
-      });
+      // SET_PARTICIPANTS 로그 제거 (준비 상태와 무관)
       
       // 동일한 데이터면 업데이트 건너뛰기
       if (isSameData) {
-        console.log('⚠️ [Reducer] 동일한 participants 데이터, 업데이트 건너뜀');
+        // 동일 데이터 로그 제거 (준비 상태와 무관)
         return state;
       }
       
@@ -322,13 +330,17 @@ const unifiedGamecastReducer = (state: UnifiedGamecastState, action: UnifiedGame
       };
     
     case 'UPDATE_PARTICIPANT':
+      const updatedParticipants = state.participants.map(participant =>
+        participant.guestUserId === action.payload.guestUserId
+          ? { ...participant, ...action.payload.updates }
+          : participant
+      );
+      
+      // UPDATE_PARTICIPANT 로그 제거 (준비 상태와 무관)
+      
       return {
         ...state,
-        participants: state.participants.map(participant =>
-          participant.guestUserId === action.payload.guestUserId
-            ? { ...participant, ...action.payload.updates }
-            : participant
-        )
+        participants: updatedParticipants
       };
     
     case 'SET_PREPARATION':
@@ -362,11 +374,7 @@ const unifiedGamecastReducer = (state: UnifiedGamecastState, action: UnifiedGame
       };
     
     case 'SET_UI_STATE':
-      console.log('🎭 [Reducer] SET_UI_STATE 처리:', {
-        currentUI: state.ui,
-        payload: action.payload,
-        newUI: { ...state.ui, ...action.payload }
-      });
+      // SET_UI_STATE 로그 제거 (준비 상태와 무관)
       return {
         ...state,
         ui: { ...state.ui, ...action.payload }
@@ -409,6 +417,8 @@ const UnifiedGamecastContext = createContext<{
     // 녹화 관리
     startRecording: () => void;
     stopRecording: () => void;
+    uploadRecordingToServer: () => Promise<any>;
+    requestMicrophonePermission: () => Promise<MediaStream>;
     gameRecorder: GameRecorder | null;
     
     // UI 상태 관리
@@ -426,10 +436,18 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
   const stateRef = useRef(state);
   stateRef.current = state;
   
-  // 🎬 GameRecorder 인스턴스 생성 (컨텍스트 내에서 싱글톤)
+  // 🎬 GameRecorder 인스턴스 생성 (안정적인 싱글톤)
   const gameRecorderRef = useRef<GameRecorder | null>(null);
+  
+  // 인스턴스가 없을 때만 생성 (설정 유지를 위해)
   if (!gameRecorderRef.current) {
     gameRecorderRef.current = new GameRecorder();
+    console.log('🎬 [Context] 새로운 GameRecorder 인스턴스 생성:', {
+      hasStopRecordingOnly: typeof gameRecorderRef.current.stopRecordingOnly === 'function',
+      hasUploadRecordingToServer: typeof gameRecorderRef.current.uploadRecordingToServer === 'function',
+      isScreenSelected: gameRecorderRef.current.isScreenSelected?.(),
+      timestamp: new Date().toLocaleTimeString()
+    });
   }
   
   // 경로 변경 감지
@@ -437,7 +455,7 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
     const handleLocationChange = () => {
       const newPath = window.location.pathname;
       if (newPath !== pathname) {
-        console.log('🚗 [UnifiedContext] 경로 변경 감지:', pathname, '→', newPath);
+        // 경로 변경 로그 제거 (준비 상태와 무관)
         setPathname(newPath);
       }
     };
@@ -477,19 +495,38 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
         if (result.success && result.room) {
           dispatch({ type: 'SET_ROOM', payload: result.room });
           
-          // 🎯 participants 배열 업데이트 (캐릭터 정보 포함)
+          // 🎯 participants 배열 업데이트 (준비 상태 포함 정규화)
           if (result.room.participants && Array.isArray(result.room.participants)) {
-            console.log('🔄 [refreshRoomState] 서버에서 participants 업데이트:', {
-              participantCount: result.room.participants.length,
-              participantIds: result.room.participants.map(p => p.guestUserId),
-              hasCharacterInfo: result.room.participants.map(p => ({
-                id: p.guestUserId,
-                hasCharacterInfo: !!p.characterInfo,
-                isCustomized: p.characterInfo?.isCustomized
-              }))
+            // 모든 참여자의 준비 상태 정규화
+            const normalizedParticipants = result.room.participants.map(participant => ({
+              ...participant,
+              id: participant.guestUserId, // 🎯 guestUserId를 기본 id로 사용
+              preparationStatus: {
+                // 서버에서 오는 preparationStatus 우선 사용
+                characterSetup: participant.preparationStatus?.characterSetup !== undefined 
+                  ? participant.preparationStatus.characterSetup 
+                  : (participant.characterInfo?.isCustomized || false),
+                screenSetup: participant.preparationStatus?.screenSetup || false,
+                // 🎯 서버의 finalReady나 isReady 필드 모두 지원
+                isReady: participant.preparationStatus?.finalReady 
+                  || participant.preparationStatus?.isReady 
+                  || participant.finalReady 
+                  || false
+              }
+            }));
+            
+            console.log('🎯 [refreshRoomState] 참여자 준비 상태 정규화:', {
+              participantsCount: normalizedParticipants.length,
+              participantsPreparation: normalizedParticipants.map(p => ({
+                guestUserId: p.guestUserId,
+                nickname: p.nickname,
+                preparationStatus: p.preparationStatus,
+                originalFinalReady: result.room.participants?.find(orig => orig.guestUserId === p.guestUserId)?.finalReady
+              })),
+              timestamp: new Date().toLocaleTimeString()
             });
             
-            dispatch({ type: 'SET_PARTICIPANTS', payload: result.room.participants });
+            dispatch({ type: 'SET_PARTICIPANTS', payload: normalizedParticipants });
           }
           
           // 🎯 guestUserId를 주 식별자로 사용 (통합 정책)
@@ -500,21 +537,31 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
               ...serverPlayer,
               id: serverPlayer.guestUserId, // 🎯 guestUserId를 기본 id로 사용
               guestUserId: serverPlayer.guestUserId,
-              preparationStatus: serverPlayer.preparationStatus || {
-                characterSetup: serverPlayer.characterInfo?.isCustomized || false,
-                screenSetup: false,
-                isReady: false
+              preparationStatus: {
+                // 서버에서 오는 preparationStatus 우선 사용
+                characterSetup: serverPlayer.preparationStatus?.characterSetup !== undefined 
+                  ? serverPlayer.preparationStatus.characterSetup 
+                  : (serverPlayer.characterInfo?.isCustomized || false),
+                screenSetup: serverPlayer.preparationStatus?.screenSetup || false,
+                // 🎯 서버의 finalReady나 isReady 필드 모두 지원
+                isReady: serverPlayer.preparationStatus?.finalReady 
+                  || serverPlayer.preparationStatus?.isReady 
+                  || serverPlayer.finalReady 
+                  || false
               },
               isHost: serverPlayer.role === 'host',
               characterInfo: serverPlayer.characterInfo || null
             };
             
-            console.log('🔄 [refreshRoomState] currentPlayer 업데이트:', {
+            console.log('🔄 [refreshRoomState] 플레이어 정보 설정:', {
               guestUserId: playerInfo.guestUserId,
-              hasCharacterInfo: !!playerInfo.characterInfo,
-              isCustomized: playerInfo.characterInfo?.isCustomized,
-              characterSetup: playerInfo.preparationStatus?.characterSetup
+              preparationStatus: playerInfo.preparationStatus,
+              serverPreparationStatus: serverPlayer.preparationStatus,
+              serverFinalReady: serverPlayer.finalReady,
+              timestamp: new Date().toLocaleTimeString()
             });
+            
+            // currentPlayer 업데이트 로그 제거 (준비 상태와 무관)
             
             dispatch({ type: 'SET_PLAYER', payload: playerInfo });
             
@@ -536,20 +583,20 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
 
   // 방 데이터 완전 초기화 (메인/참여/생성 페이지 진입 시 사용)
   const clearRoomData = async () => {
-    console.log('🧹 [UnifiedContext] 방 데이터 완전 초기화 시작');
+    // 방 데이터 초기화 로그 제거
     
     try {
       // Socket 완전 정리 (clearRoomData는 페이지 이동용이므로 완전 초기화)
-      console.log('🔌 [UnifiedContext] Socket 완전 정리 시작');
+      // Socket 정리 로그 제거
       
       if (state.realtime.socket) {
-        console.log('🔌 [UnifiedContext] Context Socket 정리');
+        // Context Socket 정리 로그 제거
         state.realtime.socket.removeAllListeners();
         state.realtime.socket.disconnect();
       }
 
       if (globalSocket) {
-        console.log('🔌 [UnifiedContext] 전역 Socket 정리');
+        // 전역 Socket 정리 로그 제거
         globalSocket.removeAllListeners();
         globalSocket.disconnect();
         globalSocket = null;
@@ -564,7 +611,7 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
       // Context 상태 완전 초기화
       dispatch({ type: 'RESET_STATE' });
       
-      console.log('✅ [UnifiedContext] 방 데이터 완전 초기화 완료');
+      // 방 데이터 초기화 완료 로그 제거
     } catch (error) {
       console.error('❌ [UnifiedContext] 방 데이터 초기화 실패:', error);
     }
@@ -619,7 +666,11 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
         console.warn('⚠️ [UnifiedContext] 서버 방 나가기 실패, 로컬 정리는 완료:', result.error);
       }
       
-      // 4. Context 상태 초기화
+      // 4. 오디오 리소스 정리
+      console.log('🎤 [UnifiedContext] 오디오 리소스 정리');
+      audioManager.cleanup();
+      
+      // 5. Context 상태 초기화
       console.log('♻️ [UnifiedContext] Context 상태 초기화');
       dispatch({ type: 'RESET_STATE' });
       
@@ -630,6 +681,7 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
       
       // 에러 발생 시에도 로컬 정리는 수행
       console.log('🧹 [UnifiedContext] 에러 상황에서 로컬 정리 수행');
+      audioManager.cleanup();
       dispatch({ type: 'RESET_STATE' });
     }
   };
@@ -639,12 +691,36 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
     dispatch({ type: 'UPDATE_PARTICIPANT', payload: { guestUserId, updates } });
   };
 
-  // 🔄 준비 상태 업데이트 (이중 저장 방식: REST API + Socket.IO)
+  // 🔄 준비 상태 업데이트 (상황별 처리: 준비버튼 vs 설정)
   const updatePreparation = async (updates: Partial<UnifiedGamecastState['preparation']>) => {
     if (!state.currentRoom || !state.currentPlayer) {
       console.error('❌ [UnifiedContext] updatePreparation: 필수 데이터 없음');
       return;
     }
+
+    // 🔍 참여자 데이터 유효성 검사
+    const currentParticipant = state.participants.find(p => 
+      p.guestUserId === state.currentPlayer?.guestUserId || p.id === state.currentPlayer?.guestUserId
+    );
+    
+    console.log('🔍 [UnifiedContext] updatePreparation 데이터 검사:', {
+      participantsCount: state.participants.length,
+      currentPlayerGuestUserId: state.currentPlayer?.guestUserId,
+      foundCurrentParticipant: !!currentParticipant,
+      participantDetails: currentParticipant ? {
+        guestUserId: currentParticipant.guestUserId,
+        id: currentParticipant.id,
+        nickname: currentParticipant.nickname
+      } : null
+    });
+
+    // 참여자 데이터가 없으면 경고하고 진행
+    if (!currentParticipant) {
+      console.warn('⚠️ [UnifiedContext] updatePreparation: 현재 플레이어를 participants에서 찾을 수 없음');
+    }
+
+    // 🎯 준비 버튼 클릭인지 확인
+    const isReadyButtonClick = updates.isReady !== undefined;
 
     // 🚀 즉시 로컬 상태 업데이트 (낙관적 업데이트)
     const newState = { ...state.preparation, ...updates };
@@ -660,28 +736,72 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
       // 🔄 이중 저장 방식 적용
       const { saveDualPreparation } = await import('../utils/preparationApi');
       
-      const preparationData = {
-        guestUserId: state.currentPlayer.guestUserId,
-        characterSetup: updates.characterSetup,
-        screenSetup: updates.screenSetup,
-        isReady: updates.isReady
+      // ✅ 서버 형식에 맞게 데이터 구성 (CharacterSetup 객체 필요)
+      const preparationData: any = {
+        guestUserId: state.currentPlayer.guestUserId
       };
-
-      // Socket.IO 업데이트 함수 정의
-      const socketUpdateFunction = (socketUpdates: any) => {
-        if (state.realtime.socket) {
-          logSocketState('준비 상태 Socket 업데이트', {
-            socketUpdates,
-            roomCode: state.currentRoom?.roomCode
-          });
-          
-          state.realtime.socket.emit('update-preparation', {
-            roomCode: state.currentRoom?.roomCode,
-            guestUserId: state.currentPlayer?.guestUserId,
-            preparationStatus: { ...state.preparation, ...socketUpdates },
-            timestamp: Date.now()
-          });
+      
+      // 전달된 필드만 포함 (undefined 제거)
+      if (updates.characterSetup !== undefined) {
+        // characterSetup이 true일 때는 현재 플레이어의 캐릭터 정보를 전송
+        if (updates.characterSetup === true && state.currentPlayer.characterInfo?.isCustomized) {
+          preparationData.characterSetup = {
+            selectedOptions: state.currentPlayer.characterInfo.selectedOptions || {},
+            selectedColors: state.currentPlayer.characterInfo.selectedColors || {}
+          };
+        } else {
+          // characterSetup이 false이거나 캐릭터가 없을 때는 빈 객체
+          preparationData.characterSetup = {
+            selectedOptions: {},
+            selectedColors: {}
+          };
         }
+      }
+      if (updates.screenSetup !== undefined) {
+        preparationData.screenSetup = updates.screenSetup;
+      }
+      if (updates.isReady !== undefined) {
+        preparationData.isReady = updates.isReady;
+      }
+
+      // Socket.IO 업데이트 함수 정의 (상황별 처리)
+      const socketUpdateFunction = (socketUpdates: any) => {
+        if (!state.realtime.socket) return;
+
+        logSocketState('준비 상태 Socket 업데이트', {
+          socketUpdates,
+          roomCode: state.currentRoom?.roomCode,
+          isReadyButtonClick
+        });
+
+        // 🎯 준비 버튼 클릭 시: ready-to-start 이벤트만 사용
+        if (isReadyButtonClick) {
+          if (socketUpdates.isReady === true) {
+            console.log('🎯 [Context] 준비 완료 - ready-to-start 이벤트 전송 (participant-preparation-updated 무시)');
+            state.realtime.socket.emit('ready-to-start');
+          } else if (socketUpdates.isReady === false) {
+            console.log('🎯 [Context] 준비 취소 - ready-to-start 해제 (구현 필요)');
+            // TODO: 준비 취소 이벤트 (서버 확인 필요)
+          }
+          return; // preparation-status-update 이벤트는 보내지 않음
+        }
+
+        // 🎨 캐릭터/화면 설정 변경 시: preparation-status-update 사용
+        const preparationOnlyUpdates = { ...socketUpdates };
+        delete preparationOnlyUpdates.isReady; // isReady는 제외
+        
+        state.realtime.socket.emit('preparation-status-update', {
+          roomCode: state.currentRoom?.roomCode,
+          guestUserId: state.currentPlayer?.guestUserId,
+          preparationStatus: { ...state.preparation, ...preparationOnlyUpdates },
+          timestamp: Date.now()
+        });
+        
+        console.log('📡 [Context] preparation-status-update 이벤트 전송 (캐릭터/화면 설정):', {
+          roomCode: state.currentRoom?.roomCode,
+          guestUserId: state.currentPlayer?.guestUserId,
+          preparationStatus: { ...state.preparation, ...preparationOnlyUpdates }
+        });
       };
 
       // 이중 저장 실행
@@ -1171,25 +1291,53 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
       
       // 에러 상태 해제
       dispatch({ type: 'SET_ERROR', payload: null });
+      
+      // 🎤 마이크 권한 요청 (방 참여 성공 후 자동으로 실행)
+      setTimeout(async () => {
+        try {
+          console.log('🎤 [joined-room-success] 마이크 권한 자동 요청 시작');
+          await requestMicrophonePermission();
+          console.log('✅ [joined-room-success] 마이크 권한 획득 완료');
+        } catch (error) {
+          console.warn('⚠️ [joined-room-success] 마이크 권한 요청 실패 (사용자가 거부했을 수 있음):', error);
+          // 에러는 requestMicrophonePermission 내부에서 처리되므로 여기서는 로그만
+        }
+      }, 500); // 방 참여 후 0.5초 후 마이크 권한 요청
     });
     
     // 🔄 기존 이벤트명도 유지 (호환성)
     socket.on('join-room-success', (data: { message: string; participants: Player[]; roomState?: any }) => {
       console.log('🎉 [Socket] 방 참여 성공 (join-room-success):', data);
       
-      // 🚨 임시 비활성화: joined-room-success에서 participants 업데이트 방지
-      // (user-joined 이벤트와 충돌을 피하기 위해)
-      console.log('🔄 [joined-room-success] participants 업데이트 건너뜀 (user-joined에서 처리):', {
-        hasParticipants: !!(data.participants && Array.isArray(data.participants)),
-        participantsLength: data.participants?.length || 0
-      });
-      /*
+      // ✅ joined-room-success에서 participants 설정 (user-ready 이벤트 처리를 위해 필요)
       if (data.participants && Array.isArray(data.participants)) {
-        dispatch({ type: 'SET_PARTICIPANTS', payload: data.participants });
+        // 참여자 정보 정규화 (준비 상태 포함)
+        const normalizedParticipants = data.participants.map(participant => ({
+          ...participant,
+          id: participant.guestUserId,
+          preparationStatus: {
+            characterSetup: participant.preparationStatus?.characterSetup || false,
+            screenSetup: participant.preparationStatus?.screenSetup || false,
+            isReady: participant.preparationStatus?.finalReady 
+              || participant.preparationStatus?.isReady 
+              || participant.finalReady 
+              || false
+          }
+        }));
+
+        dispatch({ type: 'SET_PARTICIPANTS', payload: normalizedParticipants });
+        
+        console.log('✅ [joined-room-success] participants 설정 완료:', {
+          participantsLength: normalizedParticipants.length,
+          participantsPreparation: normalizedParticipants.map(p => ({
+            guestUserId: p.guestUserId,
+            nickname: p.nickname,
+            preparationStatus: p.preparationStatus
+          }))
+        });
       } else {
-        console.warn('⚠️ join-room-success에서 잘못된 participants 데이터:', data.participants);
+        console.warn('⚠️ joined-room-success에서 잘못된 participants 데이터:', data.participants);
       }
-      */
       
       // 방 상태 업데이트
       if (data.roomState) {
@@ -1559,6 +1707,8 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
 
     // ✅ 준비 상태 업데이트 이벤트 - 검증 강화
     socket.on('preparation-update', (data: { guestUserId: string; preparationStatus: any; timestamp?: number }) => {
+      console.log('🔔 [Socket] preparation-update 이벤트 수신:', data);
+      
       if (!validateAndLog('preparation-update', data, (d) => 
         d && 
         typeof d.guestUserId === 'string' && 
@@ -1582,23 +1732,266 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
       }
     });
 
-    socket.on('recording-start', async () => {
-      console.log('🎬 녹화 시작 신호 수신');
+    // 참가자 준비 상태 업데이트 수신 (다른 플레이어 준비 상태 변경 시)
+    socket.on('participant-preparation-updated', (data: { guestUserId: string; preparationStatus: any; socketId?: string }) => {
+      console.log('👥 [Socket] 참가자 준비 상태 업데이트 수신:', data);
+      console.log('🔍 [Socket] preparationStatus 상세:', {
+        hasIsReady: 'isReady' in data.preparationStatus,
+        isReadyValue: data.preparationStatus.isReady,
+        allKeys: Object.keys(data.preparationStatus),
+        fullData: data.preparationStatus
+      });
+      
+      if (data?.guestUserId && data?.preparationStatus) {
+        // 🎯 준비 버튼 관련 업데이트는 ready-to-start 이벤트로만 처리
+        // participant-preparation-updated는 캐릭터/화면 설정만 처리
+        const hasCharacterSetup = 'characterSetup' in data.preparationStatus;
+        const hasScreenSetup = 'screenSetup' in data.preparationStatus;
+        const hasIsReady = 'isReady' in data.preparationStatus;
+        
+        console.log('🔍 [Socket] participant-preparation-updated 필드 분석:', {
+          hasCharacterSetup,
+          hasScreenSetup,
+          hasIsReady,
+          guestUserId: data.guestUserId
+        });
+
+        // 🚫 준비 버튼만 업데이트하는 경우 무시 (ready-to-start로 처리)
+        if (hasIsReady && !hasCharacterSetup && !hasScreenSetup) {
+          console.log('⏭️ [Socket] 준비 버튼만 업데이트 - participant-preparation-updated 무시, ready-to-start로 처리');
+          return;
+        }
+
+        // 🎨 캐릭터/화면 설정 관련 업데이트만 처리
+        const currentParticipant = state.participants.find(p => p.guestUserId === data.guestUserId);
+        const filteredPreparationStatus = {
+          // 기존 상태 유지
+          ...currentParticipant?.preparationStatus,
+          // 캐릭터/화면 설정만 업데이트
+          ...(hasCharacterSetup && { characterSetup: data.preparationStatus.characterSetup }),
+          ...(hasScreenSetup && { screenSetup: data.preparationStatus.screenSetup })
+          // isReady는 ready-to-start에서만 처리하므로 제외
+        };
+
+        dispatch({
+          type: 'UPDATE_PARTICIPANT',
+          payload: {
+            guestUserId: data.guestUserId,
+            updates: {
+              preparationStatus: filteredPreparationStatus
+            }
+          }
+        });
+        
+        console.log('✅ [Socket] 참가자 캐릭터/화면 설정 업데이트 완료:', {
+          guestUserId: data.guestUserId,
+          originalPreparationStatus: data.preparationStatus,
+          filteredPreparationStatus: filteredPreparationStatus,
+          ignoredIsReady: hasIsReady ? '무시됨 (ready-to-start로 처리)' : '없음',
+          timestamp: new Date().toLocaleTimeString()
+        });
+      } else {
+        console.warn('⚠️ [Socket] 잘못된 participant-preparation-updated 데이터:', data);
+      }
+    });
+
+    // 🎯 ready-to-start 응답: 개별 사용자 준비 상태 업데이트
+    socket.on('user-ready', (data: { guestUserId: string; isReady?: boolean; finalReady?: boolean; socketId?: string }) => {
+      console.log('🎯 [Socket] user-ready 이벤트 수신:', data);
+      
+      // 서버에서 finalReady 또는 isReady 필드 사용 (동일한 의미)
+      const readyValue = data.finalReady !== undefined ? data.finalReady : data.isReady;
+      
+      // 🔍 데이터 무결성 체크
+      console.log('🔍 [Socket] user-ready 수신 시 Context 상태:', {
+        participantsCount: state.participants.length,
+        currentPlayerExists: !!state.currentPlayer,
+        currentPlayerGuestUserId: state.currentPlayer?.guestUserId,
+        currentRoomExists: !!state.currentRoom,
+        targetGuestUserId: data.guestUserId,
+        readyValue
+      });
+      
+      // 🚀 참여자 데이터가 없으면 이벤트를 지연 처리
+      if (state.participants.length === 0) {
+        console.log('⏳ [Socket] 참여자 데이터 없음 - user-ready 이벤트 지연 처리');
+        
+        // 방 정보 재요청
+        if (state.currentRoom) {
+          socket.emit('get-room-info', { roomCode: state.currentRoom.roomCode });
+        }
+        
+        // 이벤트를 큐에 저장하여 나중에 처리
+        const processUserReadyEvent = () => {
+          console.log('🔄 [Socket] user-ready 지연 처리:', data);
+          
+          // 현재 상태에서 다시 참여자 찾기 시도
+          const currentState = stateRef.current;
+          const currentParticipant = currentState.participants.find(p => 
+            p.guestUserId === data.guestUserId || p.id === data.guestUserId
+          );
+          
+          if (currentParticipant) {
+            const updatedPreparationStatus = {
+              ...currentParticipant.preparationStatus,
+              isReady: readyValue
+            };
+
+            dispatch({
+              type: 'UPDATE_PARTICIPANT',
+              payload: {
+                guestUserId: data.guestUserId,
+                updates: { preparationStatus: updatedPreparationStatus }
+              }
+            });
+            
+            console.log('✅ [Socket] user-ready 지연 처리 성공:', {
+              guestUserId: data.guestUserId,
+              isReady: readyValue
+            });
+          } else {
+            console.warn('⚠️ [Socket] user-ready 지연 처리 실패 - 여전히 참여자를 찾을 수 없음');
+          }
+        };
+        
+        // 500ms 후 처리
+        setTimeout(processUserReadyEvent, 500);
+        return;
+      }
+      
+      if (data?.guestUserId && readyValue !== undefined) {
+        // 디버깅: 현재 참여자 목록 확인
+        console.log('🔍 [Socket] user-ready 참여자 검색:', {
+          targetGuestUserId: data.guestUserId,
+          currentParticipants: state.participants.map(p => ({
+            guestUserId: p.guestUserId,
+            id: p.id,
+            nickname: p.nickname
+          })),
+          participantsCount: state.participants.length
+        });
+
+        // 참여자 찾기 (guestUserId 또는 id로 검색)
+        let currentParticipant = state.participants.find(p => p.guestUserId === data.guestUserId);
+        if (!currentParticipant) {
+          // guestUserId로 못찾으면 id로도 시도
+          currentParticipant = state.participants.find(p => p.id === data.guestUserId);
+        }
+
+        if (currentParticipant) {
+          const updatedPreparationStatus = {
+            ...currentParticipant.preparationStatus,
+            isReady: readyValue
+          };
+
+          dispatch({
+            type: 'UPDATE_PARTICIPANT',
+            payload: {
+              guestUserId: data.guestUserId,
+              updates: {
+                preparationStatus: updatedPreparationStatus
+              }
+            }
+          });
+
+          console.log('✅ [Socket] user-ready 처리 완료:', {
+            guestUserId: data.guestUserId,
+            isReady: readyValue,
+            finalReady: data.finalReady,
+            serverField: data.finalReady !== undefined ? 'finalReady' : 'isReady',
+            foundParticipant: {
+              guestUserId: currentParticipant.guestUserId,
+              id: currentParticipant.id,
+              nickname: currentParticipant.nickname
+            },
+            updatedPreparationStatus,
+            timestamp: new Date().toLocaleTimeString()
+          });
+
+          // 현재 플레이어의 준비 상태 업데이트인 경우 로컬 상태도 동기화
+          if (data.guestUserId === state.currentPlayer?.guestUserId) {
+            dispatch({ 
+              type: 'SET_PREPARATION', 
+              payload: { ...state.preparation, isReady: readyValue } 
+            });
+          }
+        } else {
+          console.warn('⚠️ [Socket] user-ready: 해당 참여자를 찾을 수 없음:', {
+            targetGuestUserId: data.guestUserId,
+            availableGuestUserIds: state.participants.map(p => p.guestUserId),
+            availableIds: state.participants.map(p => p.id),
+            participantsDetails: state.participants.map(p => ({
+              guestUserId: p.guestUserId,
+              id: p.id,
+              nickname: p.nickname,
+              role: p.role
+            })),
+            currentPlayerGuestUserId: state.currentPlayer?.guestUserId,
+            isTargetCurrentPlayer: data.guestUserId === state.currentPlayer?.guestUserId,
+            participantsEmpty: state.participants.length === 0
+          });
+          
+          // 🔧 참여자 데이터가 없으면 서버에서 강제로 방 정보 다시 가져오기
+          if (state.participants.length === 0 && state.currentRoom) {
+            console.log('🔄 [Socket] 참여자 데이터 없음 - 방 정보 재요청');
+            socket.emit('get-room-info', { roomCode: state.currentRoom.roomCode });
+          }
+          
+          // 🔧 참여자를 못찾아도 현재 플레이어라면 로컬 상태는 업데이트
+          if (data.guestUserId === state.currentPlayer?.guestUserId) {
+            console.log('🔧 [Socket] 참여자 못찾았지만 현재 플레이어 - 로컬 상태 업데이트');
+            dispatch({ 
+              type: 'SET_PREPARATION', 
+              payload: { ...state.preparation, isReady: readyValue } 
+            });
+          }
+          
+          // 🚨 participants가 비어있다면 방 상태 강제 새로고침
+          if (state.participants.length === 0) {
+            console.log('🚨 [Socket] participants 비어있음 - 방 상태 새로고침 요청');
+            setTimeout(() => {
+              refreshRoomState();
+            }, 100);
+          }
+        }
+      } else {
+        console.warn('⚠️ [Socket] 잘못된 user-ready 데이터:', data);
+      }
+    });
+
+    // 자동 녹화 카운트다운 시작 이벤트
+    socket.on('recording-countdown-started', (data) => {
+      console.log('⏰ [Context] 자동 녹화 카운트다운 시작:', data);
+    });
+
+    // 자동 녹화 카운트다운 이벤트
+    socket.on('recording-countdown', (data) => {
+      console.log(`⏰ [Context] 카운트다운: ${data.count}초`);
+    });
+
+    // 자동 녹화 시작 이벤트 (서버에서 recording-started 전송)
+    socket.on('recording-started', async (data) => {
+      console.log('🎬 [Context] 자동 녹화 시작 신호 수신:', data);
       
       try {
         // GameRecorder로 동기화 녹화 시작
+        console.log('🎮 [Context] GameRecorder 시작 시도...');
         await gameRecorderRef.current?.startSyncRecording();
+        console.log('🎮 [Context] GameRecorder 시작 완료');
         
         // Context 상태 업데이트
+        const recordingPayload = { 
+          isRecording: true, 
+          recordingTime: 0,
+          startTime: Date.now(),
+          uploading: false,
+          uploadProgress: 0
+        };
+        
+        console.log('🔄 [Context] 녹화 상태 업데이트:', recordingPayload);
         dispatch({ 
           type: 'SET_RECORDING_STATE', 
-          payload: { 
-            isRecording: true, 
-            recordingTime: 0,
-            startTime: Date.now(),
-            uploading: false,
-            uploadProgress: 0
-          } 
+          payload: recordingPayload
         });
         
         console.log('✅ [Context] 동기화 녹화 시작 완료');
@@ -2000,18 +2393,343 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
   };
 
   // 녹화 시작
-  const startRecording = () => {
-    if (state.realtime.socket && state.currentPlayer?.role === 'host') {
-      console.log('🎬 녹화 시작 신호 전송');
-      state.realtime.socket.emit('start-recording', { roomCode: state.currentRoom?.roomCode });
+  const startRecording = async () => {
+    console.log('🎬 [Context] 녹화 시작 요청');
+    
+    try {
+      // 녹화 상태 확인
+      if (state.recording.isRecording) {
+        console.warn('⚠️ [Context] 이미 녹화 중입니다');
+        return;
+      }
+
+      // GameRecorder 인스턴스 확인
+      if (!gameRecorderRef.current) {
+        throw new Error('GameRecorder 인스턴스가 없습니다');
+      }
+
+      // 화면 선택 상태 확인
+      const isScreenSelected = gameRecorderRef.current.isScreenSelected?.();
+      console.log('🖥️ [Context] 화면 선택 상태 확인:', {
+        isScreenSelected,
+        hasIsScreenSelectedMethod: typeof gameRecorderRef.current.isScreenSelected === 'function',
+        gameRecorderInstance: !!gameRecorderRef.current,
+        timestamp: new Date().toLocaleTimeString()
+      });
+      
+      if (!isScreenSelected) {
+        throw new Error('녹화할 화면이 선택되지 않았습니다. 먼저 화면 설정을 완료해주세요.');
+      }
+
+      // 마이크 권한 확인 및 요청
+      console.log('🎤 [Context] 마이크 권한 확인 중...');
+      try {
+        const audioStream = await requestMicrophonePermission();
+        if (audioStream) {
+          gameRecorderRef.current.setExternalAudioStream(audioStream);
+          console.log('✅ [Context] 마이크 스트림 설정 완료');
+        }
+      } catch (micError) {
+        console.warn('⚠️ [Context] 마이크 권한 실패, 화면만 녹화:', micError);
+        // 마이크 없이도 화면 녹화는 진행
+      }
+
+      // 녹화 시작 상태 업데이트
+      dispatch({
+        type: 'SET_RECORDING_STATE',
+        payload: {
+          isRecording: true,
+          startTime: Date.now(),
+          uploading: false,
+          uploadProgress: 0
+        }
+      });
+
+      console.log('🎬 [Context] GameRecorder 녹화 시작 중...');
+      
+      // GameRecorder로 실제 녹화 시작
+      await gameRecorderRef.current.startSyncRecording();
+      
+      console.log('✅ [Context] 녹화 시작 완료');
+
+      // 서버에 녹화 시작 알림 (선택적)
+      if (state.realtime.socket && state.realtime.socket.connected) {
+        state.realtime.socket.emit('recording-started', {
+          roomCode: state.currentRoom?.roomCode,
+          userId: state.currentPlayer?.guestUserId,
+          startTime: Date.now()
+        });
+      }
+
+    } catch (error) {
+      console.error('❌ [Context] 녹화 시작 실패:', error);
+      
+      // 녹화 상태 초기화
+      dispatch({
+        type: 'SET_RECORDING_STATE',
+        payload: {
+          isRecording: false,
+          startTime: null,
+          uploading: false,
+          uploadProgress: 0
+        }
+      });
+
+      // 에러 상태 설정
+      dispatch({
+        type: 'SET_ERROR',
+        payload: error instanceof Error ? error.message : '녹화 시작에 실패했습니다'
+      });
+      
+      throw error;
     }
   };
 
-  // 녹화 종료
-  const stopRecording = () => {
-    if (state.realtime.socket && state.currentPlayer?.role === 'host') {
-      console.log('⏹️ 녹화 종료 신호 전송');
-      state.realtime.socket.emit('stop-recording', { roomCode: state.currentRoom?.roomCode });
+  // 녹화 종료 (로컬 저장만, 서버 업로드 없음)
+  const stopRecording = async () => {
+    console.log('⏹️ [Context] 녹화 종료 요청 (로컬 저장)');
+    
+    try {
+      // 녹화 상태 확인
+      if (!state.recording.isRecording) {
+        console.warn('⚠️ [Context] 현재 녹화 중이 아닙니다');
+        return;
+      }
+
+      // GameRecorder 인스턴스 확인
+      if (!gameRecorderRef.current) {
+        throw new Error('GameRecorder 인스턴스가 없습니다');
+      }
+
+      console.log('⏹️ [Context] GameRecorder 녹화 종료 중...');
+      
+      // GameRecorder로 녹화만 종료 (업로드 없음)
+      if (typeof gameRecorderRef.current.stopRecordingOnly === 'function') {
+        await gameRecorderRef.current.stopRecordingOnly();
+      } else {
+        // 임시 우회: 기존 메소드 사용하되 업로드 건너뛰기
+        console.log('⚠️ [Context] stopRecordingOnly 함수 없음, 대체 방법 사용');
+        
+        // 녹화 상태를 직접 조작
+        const currentState = gameRecorderRef.current.getRecordingState();
+        if (currentState.isRecording) {
+          // 내부 메소드를 직접 호출하여 녹화만 종료
+          await Promise.all([
+            (gameRecorderRef.current as any).stopScreenRecording?.(),
+            (gameRecorderRef.current as any).stopAudioRecording?.()
+          ]);
+          
+          console.log('✅ [Context] 녹화 종료 완료 (대체 방법)');
+        }
+      }
+      
+      console.log('✅ [Context] 녹화 종료 완료 (변환 가능)');
+
+      // 최종 상태 업데이트
+      dispatch({
+        type: 'SET_RECORDING_STATE',
+        payload: {
+          isRecording: false,
+          uploading: false,
+          uploadProgress: 0,
+          startTime: null
+        }
+      });
+
+      console.log('🎉 [Context] 녹화 데이터가 로컬에 저장되었습니다. 이제 변환하거나 업로드할 수 있습니다.');
+
+    } catch (error) {
+      console.error('❌ [Context] 녹화 종료 실패:', error);
+      
+      // 에러 상태 업데이트
+      dispatch({
+        type: 'SET_RECORDING_STATE',
+        payload: {
+          isRecording: false,
+          uploading: false,
+          uploadProgress: 0,
+          startTime: null
+        }
+      });
+
+      // 에러 상태 설정
+      dispatch({
+        type: 'SET_ERROR',
+        payload: error instanceof Error ? error.message : '녹화 종료에 실패했습니다'
+      });
+      
+      throw error;
+    }
+  };
+
+  // 녹화 데이터 서버 업로드 (별도 함수)
+  const uploadRecordingToServer = async () => {
+    console.log('📤 [Context] 서버 업로드 요청');
+    
+    try {
+      // GameRecorder 인스턴스 확인
+      if (!gameRecorderRef.current) {
+        throw new Error('GameRecorder 인스턴스가 없습니다');
+      }
+
+      // 업로드 시작 상태 업데이트
+      dispatch({
+        type: 'SET_RECORDING_STATE',
+        payload: {
+          uploading: true,
+          uploadProgress: 0
+        }
+      });
+
+      console.log('📤 [Context] 서버로 업로드 중...');
+      
+      // 서버로 업로드
+      const roomCode = state.currentRoom?.roomCode || 'unknown';
+      const userId = state.currentPlayer?.guestUserId || 'unknown';
+      const gameTitle = 'GameRecording';
+      
+      let uploadResult;
+      if (typeof gameRecorderRef.current.uploadRecordingToServer === 'function') {
+        uploadResult = await gameRecorderRef.current.uploadRecordingToServer(roomCode, userId, gameTitle);
+      } else {
+        // 대체 방법: 기존 stopSyncRecording 사용
+        console.log('⚠️ [Context] uploadRecordingToServer 함수 없음, 기존 방법 사용');
+        uploadResult = await gameRecorderRef.current.stopSyncRecording(roomCode, userId, gameTitle);
+      }
+      
+      console.log('✅ [Context] 서버 업로드 완료:', uploadResult);
+
+      // 업로드 완료 상태 업데이트
+      dispatch({
+        type: 'SET_RECORDING_STATE',
+        payload: {
+          uploading: false,
+          uploadProgress: 100
+        }
+      });
+
+      // 서버에 녹화 종료 알림 (선택적)
+      if (state.realtime.socket && state.realtime.socket.connected) {
+        state.realtime.socket.emit('recording-stopped', {
+          roomCode: state.currentRoom?.roomCode,
+          userId: state.currentPlayer?.guestUserId,
+          uploadResult
+        });
+      }
+
+      return uploadResult;
+
+    } catch (error) {
+      console.error('❌ [Context] 서버 업로드 실패:', error);
+      
+      // 에러 상태 업데이트
+      dispatch({
+        type: 'SET_RECORDING_STATE',
+        payload: {
+          uploading: false,
+          uploadProgress: 0
+        }
+      });
+
+      // 에러 상태 설정
+      dispatch({
+        type: 'SET_ERROR',
+        payload: error instanceof Error ? error.message : '서버 업로드에 실패했습니다'
+      });
+      
+      throw error;
+    }
+  };
+
+  // 🎤 마이크 권한 요청 및 스트림 획득
+  const requestMicrophonePermission = async () => {
+    try {
+      console.log('🎤 [Context] 마이크 권한 요청 시작');
+      
+      // 이미 권한이 있고 스트림이 있다면 스킵
+      if (state.recording.microphonePermission === 'granted' && state.recording.audioStream) {
+        console.log('✅ [Context] 마이크 권한 이미 획득됨, 스킵');
+        return state.recording.audioStream;
+      }
+      
+      // 권한 요청 상태로 업데이트
+      dispatch({ 
+        type: 'SET_RECORDING_STATE', 
+        payload: { microphonePermission: 'pending' } 
+      });
+      
+      // 최적화된 마이크 스트림 획득 (오디오 덕킹 방지)
+      const audioStream = await audioManager.getOptimizedMicrophoneStream();
+      
+      console.log('✅ [Context] 마이크 스트림 획득 성공:', {
+        streamId: audioStream.id,
+        tracks: audioStream.getAudioTracks().length,
+        settings: audioStream.getAudioTracks()[0]?.getSettings()
+      });
+
+      // 개발 환경에서 오디오 최적화 안내 표시
+      if (import.meta.env.DEV) {
+        audioManager.showAudioDuckingPreventionGuide();
+      }
+      
+      // Context 상태 업데이트
+      dispatch({ 
+        type: 'SET_RECORDING_STATE', 
+        payload: { 
+          audioStream: audioStream,
+          microphonePermission: 'granted' 
+        } 
+      });
+      
+      // GameRecorder에 스트림 전달 및 업로드 진행률 콜백 설정
+      if (gameRecorderRef.current) {
+        gameRecorderRef.current.setExternalAudioStream(audioStream);
+        
+        // 업로드 진행률 콜백 설정
+        gameRecorderRef.current.setUploadProgressCallback((progress: number) => {
+          console.log(`📊 [Context] 업로드 진행률: ${progress}%`);
+          dispatch({ 
+            type: 'SET_RECORDING_STATE', 
+            payload: { uploadProgress: progress } 
+          });
+        });
+        
+        console.log('🔗 [Context] GameRecorder에 오디오 스트림 및 업로드 콜백 설정 완료');
+      }
+      
+      return audioStream;
+      
+    } catch (error) {
+      console.error('❌ [Context] 마이크 권한 요청 실패:', error);
+      
+      const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류';
+      const permission = errorMessage.includes('Permission denied') || errorMessage.includes('NotAllowedError') 
+        ? 'denied' 
+        : 'error';
+      
+      // 권한 거부 또는 오류 상태로 업데이트
+      dispatch({ 
+        type: 'SET_RECORDING_STATE', 
+        payload: { 
+          audioStream: null,
+          microphonePermission: permission
+        } 
+      });
+      
+      // 사용자에게 오류 알림
+      if (permission === 'denied') {
+        dispatch({ 
+          type: 'SET_ERROR', 
+          payload: '마이크 권한이 필요합니다. 브라우저 설정에서 마이크 권한을 허용해주세요.' 
+        });
+      } else {
+        dispatch({ 
+          type: 'SET_ERROR', 
+          payload: `마이크 접근에 실패했습니다: ${errorMessage}` 
+        });
+      }
+      
+      throw error;
     }
   };
 
@@ -2199,6 +2917,8 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
     attemptAutoRecovery, // 🔄 자동 복구 시스템
     startRecording,
     stopRecording,
+    uploadRecordingToServer,
+    requestMicrophonePermission, // 🎤 마이크 권한 요청
     setUIState,
     setError,
     gameRecorder: gameRecorderRef.current // 🎬 GameRecorder 인스턴스 제공
