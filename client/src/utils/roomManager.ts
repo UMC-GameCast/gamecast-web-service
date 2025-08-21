@@ -296,12 +296,12 @@ export const createRoom = async (request: CreateRoomRequest): Promise<{ resultTy
       } else {
         console.error('❌ [createRoom] 방 정보 조회 실패:', roomResponse.error);
         
-        // 방 정보 조회 실패 시에도 기본 Room 객체는 생성
+        // 방 정보 조회 실패 시에도 기본 Room 객체는 생성 (용량 조정 포함)
         const basicRoomInfo: Room = {
           id: roomData.roomId,
           roomCode: roomData.roomCode,
           roomName: roomData.roomName,
-          maxCapacity: roomData.maxCapacity,
+          maxCapacity: roomData.maxCapacity - 1, // 서버 응답값 -1 조정
           currentCapacity: roomData.currentCapacity,
           roomState: roomData.roomState as Room['roomState'],
           hostGuestId: roomData.hostGuestId,
@@ -437,8 +437,21 @@ export const getRoomInfo = async (roomCode: string): Promise<{ success: boolean;
     console.log('📡 방 정보 조회 응답:', response);
 
     if (response.resultType === 'SUCCESS' && response.success) {
-      console.log('✅ 방 정보 조회 성공:', response.success);
-      return { success: true, room: response.success };
+      const roomData = response.success;
+      
+      // 서버 응답값에서 용량 정보 -1 조정
+      const adjustedRoom = {
+        ...roomData,
+        maxCapacity: roomData.maxCapacity - 1,
+        currentCapacity: roomData.currentCapacity
+      };
+      
+      console.log('✅ 방 정보 조회 성공 (용량 조정 완료):', {
+        original: `${roomData.currentCapacity}/${roomData.maxCapacity}`,
+        adjusted: `${adjustedRoom.currentCapacity}/${adjustedRoom.maxCapacity}`
+      });
+      
+      return { success: true, room: adjustedRoom };
     } else {
       console.error('❌ 방 정보 조회 실패:', response.error);
       return { 

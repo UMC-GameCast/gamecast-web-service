@@ -172,7 +172,7 @@ export const PlayerGrid: React.FC<PlayerGridProps> = ({
     return filtered;
   })();
   const totalSlots = 4;
-  const joinableSlots = (currentRoom?.maxCapacity || 5) - 1;
+  const joinableSlots = (currentRoom?.maxCapacity || 4) - 1; // 전체 인원에서 현재 플레이어 제외
 
   return (
     <div className="w-full h-[628px] justify-end items-start gap-[55.98px] inline-flex flex-wrap content-start">
