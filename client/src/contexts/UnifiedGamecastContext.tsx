@@ -2038,79 +2038,7 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
       }
     });
 
-    // 자동 녹화 카운트다운 시작 이벤트
-    socket.on('recording-countdown-started', (data) => {
-      console.log('⏰ [Context] 자동 녹화 카운트다운 시작:', data);
-      dispatch({
-        type: 'SET_PREPARATION',
-        payload: { countdown: data.countdown || 3 }
-      });
-    });
-
-    // 자동 녹화 카운트다운 이벤트
-    socket.on('recording-countdown', (data) => {
-      console.log(`⏰ [Context] 카운트다운: ${data.count}초`);
-      dispatch({
-        type: 'SET_PREPARATION',
-        payload: { countdown: data.count }
-      });
-    });
-
-    // 자동 녹화 시작 이벤트 (서버에서 recording-started 전송)
-    socket.on('recording-started', async (data) => {
-      console.log('🎬 [Context] 자동 녹화 시작 신호 수신:', data);
-      
-      // 즉시 UI 상태 업데이트 (사용자 피드백) - 강화된 동기화
-      const currentTime = Date.now();
-      const recordingPayload = { 
-        isRecording: true, 
-        recordingTime: 0,
-        startTime: currentTime,
-        uploading: false,
-        uploadProgress: 0
-      };
-      
-      console.log('⚡ [Context] 녹화 상태 즉시 업데이트 (강화):', recordingPayload);
-      dispatch({ 
-        type: 'SET_RECORDING_STATE', 
-        payload: recordingPayload
-      });
-      
-      // 카운트다운 상태 리셋
-      dispatch({
-        type: 'SET_PREPARATION',
-        payload: { countdown: null }
-      });
-      
-      // 추가: 강제 리렌더링을 위한 UI 상태 업데이트
-      console.log('🔄 [Context] UI 강제 동기화 업데이트');
-      dispatch({
-        type: 'SET_UI_STATE',
-        payload: { 
-          lastUpdated: currentTime,
-          recordingStarted: true 
-        }
-      });
-      
-      try {
-        // GameRecorder로 동기화 녹화 시작
-        console.log('🎮 [Context] GameRecorder 시작 시도...');
-        await gameRecorderRef.current?.startSyncRecording();
-        console.log('✅ [Context] GameRecorder 시작 성공 - UI 상태 확인:', {
-          isRecording: true,
-          startTime: currentTime,
-          shouldShowTimer: true
-        });
-      } catch (error) {
-        console.error('❌ [Context] 동기화 녹화 시작 실패:', error);
-        // 실패 시 상태 롤백
-        dispatch({ 
-          type: 'SET_RECORDING_STATE', 
-          payload: { isRecording: false, startTime: null } 
-        });
-        dispatch({ type: 'SET_ERROR', payload: '녹화 시작에 실패했습니다.' });
-      }
-    });
+    // 서버 녹화 이벤트는 클라이언트 자체 로직으로 대체 (서버 수정 없이 클라이언트에서 처리)
 
     // 모든 플레이어 준비 완료 이벤트 (서버 자동 감지)
     socket.on('all-users-ready', (data) => {
@@ -2129,20 +2057,65 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
         }
       });
       
-      // 자동 녹화 시작 로직
+      // 클라이언트에서 3초 카운트다운 후 자동 녹화 시작
       if (data.canStartRecording) {
-        console.log('🎬 [Context] 자동 녹화 시작 트리거');
-        setTimeout(() => {
-          // 호스트만 서버에 녹화 시작 신호 전송
-          if (stateRef.current.currentPlayer?.isHost || stateRef.current.currentPlayer?.role === 'host') {
-            console.log('🎬 [Context] 호스트가 자동 녹화 시작 요청');
-            if (globalSocket) {
-              globalSocket.emit('host-start-recording', { roomCode: stateRef.current.currentRoom?.roomCode });
-            }
-          } else {
-            console.log('ℹ️ [Context] 게스트는 녹화 시작 대기 중...');
+        console.log('🎬 [Context] 3초 카운트다운 시작');
+        
+        // 카운트다운 시작 알림
+        dispatch({
+          type: 'SET_PREPARATION',
+          payload: { countdown: 3 }
+        });
+        
+        // 3초 카운트다운
+        let countdownTime = 3;
+        const countdownInterval = setInterval(() => {
+          countdownTime--;
+          dispatch({
+            type: 'SET_PREPARATION',
+            payload: { countdown: countdownTime }
+          });
+          
+          if (countdownTime <= 0) {
+            clearInterval(countdownInterval);
+            
+            // 카운트다운 완료 후 녹화 시작
+            setTimeout(() => {
+              // 모든 사용자에게 녹화 시작 이벤트 직접 발생
+              const recordingStartData = {
+                startedBy: 'AUTO_SYSTEM',
+                autoStarted: true,
+                timestamp: new Date()
+              };
+              
+              console.log('🎬 [Context] 자동 녹화 시작 (클라이언트):', recordingStartData);
+              
+              // 녹화 상태 업데이트
+              const currentTime = Date.now();
+              dispatch({ 
+                type: 'SET_RECORDING_STATE', 
+                payload: { 
+                  isRecording: true, 
+                  recordingTime: 0,
+                  startTime: currentTime,
+                  uploading: false,
+                  uploadProgress: 0
+                }
+              });
+              
+              // 카운트다운 상태 리셋
+              dispatch({
+                type: 'SET_PREPARATION',
+                payload: { countdown: null }
+              });
+              
+              // GameRecorder 시작
+              gameRecorderRef.current?.startSyncRecording().catch(error => {
+                console.error('❌ [Context] 자동 녹화 시작 실패:', error);
+              });
+            }, 100);
           }
-        }, 1000); // 1초 후 자동 시작
+        }, 1000);
       }
     });
 

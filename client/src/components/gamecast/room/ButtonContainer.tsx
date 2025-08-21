@@ -370,12 +370,8 @@ export const ButtonContainer = ({
         return isHost ? "자동 녹화 곧 시작!" : "모든 플레이어 준비 완료! 곧 자동으로 녹화가 시작됩니다...";
       }
       
-      // Fallback 메시지
-      if (isHost) {
-        return "녹화 시작";
-      } else {
-        return "모든 플레이어 준비 완료! 호스트의 녹화 시작을 기다리는 중...";
-      }
+      // Fallback 메시지 - 수동 시작 제거, 모든 사용자에게 자동 시작 메시지
+      return "모든 플레이어 준비 완료! 곧 자동으로 녹화가 시작됩니다...";
     }
     
     // 4순위: 기본 준비 상태 텍스트
