@@ -211,27 +211,31 @@ export const SourceSelectionPage: React.FC = () => {
     const videoUrl = selectedVideos[screenId] || '';
     
     return (
-      <div 
-        className="w-fit h-fit relative group cursor-pointer"
-        style={{
-          transition: 'transform 0.3s ease',
-          transformOrigin: 'center center'
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.transform = 'scale(1.05)';
-          e.currentTarget.style.zIndex = '10';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.transform = 'scale(1)';
-          e.currentTarget.style.zIndex = '1';
-        }}
-      >
+      <div className="w-fit h-fit relative">
         {/* 영상화면과 버튼 컨테이너 */}
         <div style={{ position: 'relative', width: '407.865px', height: '280px' }}>
           {/* 영상화면 div */}
           <div 
-            style={{ position: 'absolute', top: '0', left: '0', width: '407.865px', height: '249.672px', flexShrink: 0 }}
+            style={{ 
+              position: 'absolute', 
+              top: '0', 
+              left: '0', 
+              width: '407.865px', 
+              height: '249.672px', 
+              flexShrink: 0,
+              transition: 'transform 0.3s ease',
+              transformOrigin: 'center center'
+            }}
+            className="cursor-pointer"
             onClick={() => handleScreenSelect(screenId)}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'scale(1.05)';
+              e.currentTarget.style.zIndex = '10';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'scale(1)';
+              e.currentTarget.style.zIndex = '2';
+            }}
           >
             {/* 영상 내용 - 맨 뒤 레이어 */}
             <div style={{ position: 'absolute', top: '0', left: '0', right: '0', bottom: '0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', zIndex: 1 }}>
