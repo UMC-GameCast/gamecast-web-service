@@ -209,7 +209,7 @@ export const RecordingButton: React.FC<RecordingButtonProps> = ({
     // 1순위: 업로드 중
     if (recording.uploading) {
       console.log('📤 [RecordingButton] 업로드 중 텍스트 반환');
-      return `업로드 중... ${recording.uploadProgress}%`;
+      return "업로드 중...";
     }
     
     // 2순위: 녹화 중 (강화된 조건)

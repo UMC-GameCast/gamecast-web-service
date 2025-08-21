@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useUnifiedGamecast } from '../../../contexts/UnifiedGamecastContext'
 import { Navigation } from '../../../components/gamecast/common/Navigation'
 import { Footer } from '../../../components/gamecast/common/Footer'
 import { PageTransition } from '../../../components/gamecast/common/PageTransition'
@@ -8,6 +9,8 @@ import { Button1 } from '../../../components/gamecast/common/Button1'
 
 export const SourceSelectionPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { state, actions } = useUnifiedGamecast();
   const [selectedVideos, setSelectedVideos] = useState<{[key: string]: string}>({});
   const [selectedScreens, setSelectedScreens] = useState<{[key: string]: boolean}>({});
   const [loading, setLoading] = useState<boolean>(true);
@@ -49,9 +52,40 @@ export const SourceSelectionPage: React.FC = () => {
     }
   };
 
+  // 방 정보 조회 및 동영상 로드
   useEffect(() => {
-    fetchHighlightVideos();
-  }, []);
+    const initializePageData = async () => {
+      try {
+        // URL에서 roomCode 파라미터 확인
+        const roomCode = searchParams.get('roomCode');
+        
+        if (roomCode) {
+          console.log('📋 [SourceSelection] 방 정보 조회 시작:', roomCode);
+          
+          // Context를 통해 방 정보 조회
+          await actions.loadRoomDataForEditing(roomCode);
+          
+          console.log('✅ [SourceSelection] 방 정보 조회 완료:', {
+            currentRoom: state.currentRoom,
+            participants: state.participants
+          });
+          
+          // 하이라이트 동영상 가져오기 (방 코드 기반으로)
+          await fetchHighlightVideos();
+        } else {
+          console.warn('⚠️ [SourceSelection] roomCode 파라미터가 없습니다');
+          // roomCode가 없는 경우 기본 동영상 로드
+          await fetchHighlightVideos();
+        }
+      } catch (error) {
+        console.error('❌ [SourceSelection] 초기화 실패:', error);
+        // 에러가 발생해도 기본 동영상은 로드
+        await fetchHighlightVideos();
+      }
+    };
+
+    initializePageData();
+  }, [searchParams, actions.loadRoomDataForEditing]);
 
   const handleVideoUpload = (event: React.ChangeEvent<HTMLInputElement>, screenId: string) => {
     const file = event.target.files?.[0];
@@ -76,7 +110,7 @@ export const SourceSelectionPage: React.FC = () => {
   };
 
   const handleComplete = () => {
-    navigate('/subtitle-edit');
+    navigate('/gamecast/subtitle-edit');
   };
 
   const containerVariants = {
@@ -159,6 +193,32 @@ export const SourceSelectionPage: React.FC = () => {
     <PageTransition className="min-h-screen w-full flex flex-col justify-between bg-[linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,6,72,1)_100%)] relative">
       {/* Navigation Header */}
       <Navigation />
+      
+      {/* 플레이어 정보 디버그 섹션 */}
+      {state.currentRoom && (
+        <div style={{ 
+          backgroundColor: 'rgba(0,0,0,0.3)', 
+          margin: '20px', 
+          padding: '15px', 
+          borderRadius: '8px',
+          color: 'white',
+          fontSize: '12px'
+        }}>
+          <h3>📋 방 정보 (편집용)</h3>
+          <p>방 코드: {state.currentRoom.roomCode}</p>
+          <p>참여자 수: {state.participants?.length || 0}명</p>
+          {state.participants?.map((participant, index) => (
+            <div key={participant.guestUserId} style={{ marginLeft: '10px', marginTop: '5px' }}>
+              <span>👤 {participant.nickname || participant.name} </span>
+              <span>({participant.isHost ? '호스트' : '게스트'}) </span>
+              <span>ID: {participant.guestUserId}</span>
+              {participant.characterInfo?.isCustomized && (
+                <span> 🎭 캐릭터 설정됨</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
       
       {/* Header Text - 70px below navigation */}
       <div className="pt-[28px] pb-[30px]">

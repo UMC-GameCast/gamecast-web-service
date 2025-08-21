@@ -284,7 +284,7 @@ export const ButtonContainer = ({
             <NoticeIcon className="w-[275px] h-[55px]" />
             {/* 텍스트 */}
             <div 
-              className="absolute inset-0 flex items-center justify-center text-[14px] font-medium transform translate-x-[23px] -translate-y-[46px]"
+              className="absolute inset-0 flex items-center justify-center text-[14px] font-medium transform translate-x-[2px] -translate-y-[7px]"
               style={{ color: '#ffffff', zIndex: 10 }}
             >
               {getTooltipMessage()}

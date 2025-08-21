@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { useNavigate } from 'react-router-dom';
 import type { Room, Player, CharacterData } from '../types/game';
 import { SOCKET_URL } from '../config/server.config';
 import { 
@@ -523,6 +524,7 @@ const UnifiedGamecastContext = createContext<{
 export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(unifiedGamecastReducer, initialState);
   const [pathname, setPathname] = useState(window.location.pathname);
+  const navigate = useNavigate();
   
   // 🔧 최신 state를 참조하기 위한 ref
   const stateRef = useRef(state);
@@ -2252,10 +2254,28 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
             } 
           });
           
-          // 사용자에게 녹화 완료 알림
+          // 업로드 완료 후 페이지 이동 처리
           setTimeout(() => {
-            alert('🎉 녹화가 완료되었습니다!\n\n파일이 성공적으로 업로드되었습니다.');
-          }, 500);
+            const isHost = stateRef.current.currentPlayer?.isHost;
+            const currentPlayer = stateRef.current.currentPlayer;
+            
+            console.log('🎉 [Context] 업로드 완료 - 페이지 이동 처리:', {
+              isHost,
+              userId: currentPlayer?.guestUserId,
+              nickname: currentPlayer?.nickname
+            });
+            
+            if (isHost) {
+              // 호스트는 source-selection 페이지로 이동 (roomCode 포함)
+              const roomCode = stateRef.current.currentRoom?.roomCode;
+              navigate(`/gamecast/source-selection?roomCode=${roomCode}`);
+              console.log('👑 [Context] 호스트 -> source-selection 페이지 이동:', roomCode);
+            } else {
+              // 게스트는 메인 페이지로 이동
+              navigate('/');
+              console.log('👤 [Context] 게스트 -> 메인 페이지 이동');
+            }
+          }, 1000);
           
         } else {
           throw new Error(uploadResult?.error || '업로드에 실패했습니다');
@@ -2315,10 +2335,28 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
             } 
           });
           
-          // 사용자에게 녹화 완료 알림
+          // 업로드 완료 후 페이지 이동 처리
           setTimeout(() => {
-            alert('🎉 녹화가 완료되었습니다!\n\n파일이 성공적으로 업로드되었습니다.');
-          }, 500);
+            const isHost = stateRef.current.currentPlayer?.isHost;
+            const currentPlayer = stateRef.current.currentPlayer;
+            
+            console.log('🎉 [Context] 업로드 완료 - 페이지 이동 처리:', {
+              isHost,
+              userId: currentPlayer?.guestUserId,
+              nickname: currentPlayer?.nickname
+            });
+            
+            if (isHost) {
+              // 호스트는 source-selection 페이지로 이동 (roomCode 포함)
+              const roomCode = stateRef.current.currentRoom?.roomCode;
+              navigate(`/gamecast/source-selection?roomCode=${roomCode}`);
+              console.log('👑 [Context] 호스트 -> source-selection 페이지 이동:', roomCode);
+            } else {
+              // 게스트는 메인 페이지로 이동
+              navigate('/');
+              console.log('👤 [Context] 게스트 -> 메인 페이지 이동');
+            }
+          }, 1000);
           
         } else {
           throw new Error(uploadResult?.error || '업로드에 실패했습니다');
@@ -3225,6 +3263,41 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
   }, [initializeSocket, globalSocketState.socket?.connected, globalSocketState.status, state.currentRoom, state.currentPlayer]);
 
   // 액션들
+  // 방 정보 조회 함수 (편집 페이지용)
+  const loadRoomDataForEditing = useCallback(async (roomCode: string) => {
+    try {
+      console.log('📋 [Context] 편집용 방 정보 조회 시작:', roomCode);
+      
+      // 서버에서 방 정보 조회
+      const roomData = await getRoomInfo(roomCode);
+      
+      if (roomData) {
+        console.log('✅ [Context] 편집용 방 정보 조회 성공:', roomData);
+        
+        // Context에 방 정보 저장 (편집용)
+        dispatch({
+          type: 'SET_ROOM_DATA',
+          payload: {
+            currentRoom: roomData,
+            participants: roomData.participants || [],
+            loading: false
+          }
+        });
+        
+        return roomData;
+      } else {
+        throw new Error('방 정보를 찾을 수 없습니다');
+      }
+    } catch (error) {
+      console.error('❌ [Context] 편집용 방 정보 조회 실패:', error);
+      dispatch({
+        type: 'SET_ERROR',
+        payload: error instanceof Error ? error.message : '방 정보 조회에 실패했습니다'
+      });
+      throw error;
+    }
+  }, []);
+
   const actions = {
     refreshRoomState,
     leaveRoom,
@@ -3243,6 +3316,7 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
     requestMicrophonePermission, // 🎤 마이크 권한 요청
     setUIState,
     setError,
+    loadRoomDataForEditing, // 📋 편집용 방 정보 조회
     gameRecorder: gameRecorderRef.current // 🎬 GameRecorder 인스턴스 제공
   };
 
