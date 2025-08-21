@@ -109,6 +109,7 @@ const SubtitleEditMainPanel: React.FC<SubtitleEditMainPanelProps> = ({
               onPlayPause={() => {}}
               onVideoUploaded={handleMainVideoUploaded}
               onSubtitlesGenerated={handleSubtitlesGenerated}
+              selectedStyle={selectedStyle}
             />
             {/* 타임바, 시간, 재생버튼 */}
           </div>

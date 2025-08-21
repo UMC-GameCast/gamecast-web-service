@@ -103,75 +103,7 @@ const TimelineEditor: React.FC<TimelineEditorProps> = ({
 
   const timeMarkers = generateTimeMarkers()
 
-  // 동영상이 없을 때 스켈레톤 UI 표시
-  if (!videoUrl) {
-    return (
-      <div className="col-span-10 bg-gray-800 rounded-lg p-4">
-        <div className="relative overflow-x-auto">
-          {/* 스켈레톤 헤더 */}
-          <div className="sticky top-0 bg-gray-800 z-20 mb-2">
-            <div className="flex">
-              <div className="w-32 flex-shrink-0"></div>
-              <div className="flex-1 relative">
-                <div className="h-8 bg-gray-700 rounded animate-pulse"></div>
-              </div>
-            </div>
-          </div>
 
-          {/* 스켈레톤 트랙들 */}
-          <div className="space-y-2">
-            {speakers.map((speaker, index) => (
-              <div key={speaker.id} className="flex items-center">
-                {/* 스피커 이름 */}
-                <div className="w-32 flex-shrink-0 flex items-center space-x-2 p-2">
-                  <div className={`w-6 h-6 rounded-full ${speaker.color} flex items-center justify-center text-white text-xs font-bold`}>
-                    {speaker.avatar}
-                  </div>
-                  <span className="text-sm font-medium">{speaker.name}</span>
-                </div>
-                
-                {/* 스켈레톤 트랙 영역 */}
-                <div className="flex-1 relative h-12 bg-gray-700 rounded border border-gray-600 overflow-hidden">
-                  {/* 스켈레톤 자막 블록들 */}
-                  <div className="flex h-full">
-                    <div 
-                      className="h-full bg-gray-600 animate-pulse"
-                      style={{ 
-                        width: '15%',
-                        animationDelay: `${index * 0.1}s`
-                      }}
-                    ></div>
-                    <div 
-                      className="h-full bg-gray-600 animate-pulse ml-2"
-                      style={{ 
-                        width: '20%',
-                        animationDelay: `${index * 0.2}s`
-                      }}
-                    ></div>
-                    <div 
-                      className="h-full bg-gray-600 animate-pulse ml-2"
-                      style={{ 
-                        width: '12%',
-                        animationDelay: `${index * 0.3}s`
-                      }}
-                    ></div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-          
-          {/* 스켈레톤 안내 메시지 */}
-          <div className="mt-6 text-center">
-            <div className="inline-flex items-center px-4 py-2 bg-blue-600/20 border border-blue-500/30 rounded-lg text-blue-300 text-sm">
-              <span className="mr-2">🎬</span>
-              동영상을 업로드하면 타임라인이 활성화됩니다
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   // playhead 위치 계산 함수
   const getPlayheadPosition = () => {

@@ -60,6 +60,7 @@ const SubtitleStylePanel: React.FC<SubtitleStylePanelProps> = ({
     return `${styleText} · ${emphasisText} · ${emotionText}`
   }
 
+
   return (
     <div
       style={{
@@ -114,14 +115,17 @@ const SubtitleStylePanel: React.FC<SubtitleStylePanelProps> = ({
         <div className="flex gap-2 justify-center" style={{ gap: '15px' }}>
           {styles.map((style) => {
             const isSelected = selectedStyle === style.id;
+            const isDisabled = selectedEmphasis === 'emotion'; // 감정 강조 자막일 때 비활성화
             return (
               <button
                 key={style.id}
-                onClick={() => onStyleChange(style.id)}
+                onClick={() => !isDisabled && onStyleChange(style.id)}
+                disabled={isDisabled}
                 style={{
                   borderRadius: isSelected ? '9.262px' : '9px',
-                  border: isSelected ? '1.292px solid #FFF' : '1.292px solid #6483FF',
-                  background: isSelected ? '#1D1F3B' : 'transparent',
+                  border: isSelected && !isDisabled ? '1.292px solid #FFF' : '1.292px solid #6483FF',
+                  background: isSelected && !isDisabled ? '#1D1F3B' : 'transparent',
+                  opacity: isDisabled ? 0.5 : 1, // 비활성화 시 투명도
                   display: 'flex',
                   width: '110px',
                   height: '46px',
@@ -138,7 +142,7 @@ const SubtitleStylePanel: React.FC<SubtitleStylePanelProps> = ({
                   fontWeight: 700,
                   lineHeight: '27px',
                   letterSpacing: '-0.342px',
-                  cursor: 'pointer',
+                  cursor: isDisabled ? 'not-allowed' : 'pointer',
                   transition: 'all 0.2s',
                 }}
               >
