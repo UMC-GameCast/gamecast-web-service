@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
+import { useNavigate } from 'react-router-dom'
 import { Navigation } from '../../../components/gamecast/common/Navigation'
 import { Footer } from '../../../components/gamecast/common/Footer'
 import { PageTransition } from '../../../components/gamecast/common/PageTransition'
 import { Button1 } from '../../../components/gamecast/common/Button1'
 
 export const SourceSelectionPage: React.FC = () => {
+  const navigate = useNavigate();
   const [selectedVideos, setSelectedVideos] = useState<{[key: string]: string}>({});
-  const [selectedScreen, setSelectedScreen] = useState<string | null>(null);
+  const [selectedScreens, setSelectedScreens] = useState<{[key: string]: boolean}>({});
   const [loading, setLoading] = useState<boolean>(true);
+  const [selectedProfiles, setSelectedProfiles] = useState<{[key: string]: boolean}>({});
 
   // API에서 하이라이트 동영상 가져오기
   const fetchHighlightVideos = async () => {
@@ -59,7 +62,21 @@ export const SourceSelectionPage: React.FC = () => {
   };
 
   const handleScreenSelect = (screenId: string) => {
-    setSelectedScreen(prevSelected => prevSelected === screenId ? null : screenId);
+    setSelectedScreens(prev => ({
+      ...prev,
+      [screenId]: !prev[screenId]
+    }));
+  };
+
+  const handleProfileSelect = (profileId: string) => {
+    setSelectedProfiles(prev => ({
+      ...prev,
+      [profileId]: !prev[profileId]
+    }));
+  };
+
+  const handleComplete = () => {
+    navigate('/subtitle-edit');
   };
 
   const containerVariants = {
@@ -74,18 +91,24 @@ export const SourceSelectionPage: React.FC = () => {
   };
 
   // 프로필 아이템 컴포넌트
-  const ProfileItem: React.FC<{ screenId: string; itemIndex: number }> = ({ screenId, itemIndex }) => (
-    <div 
-      style={{
-        width: '68.229px',
-        height: '73.885px',
-        flexShrink: 0,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        position: 'relative'
-      }}
-    >
+  const ProfileItem: React.FC<{ screenId: string; itemIndex: number }> = ({ screenId, itemIndex }) => {
+    const profileId = `${screenId}_profile_${itemIndex}`;
+    const isSelected = selectedProfiles[profileId];
+    
+    return (
+      <div 
+        style={{
+          width: '68.229px',
+          height: '73.885px',
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          position: 'relative',
+          cursor: 'pointer'
+        }}
+        onClick={() => handleProfileSelect(profileId)}
+      >
       {/* 배경 SVG - 모든 아이템에 표시 */}
       <svg 
         xmlns="http://www.w3.org/2000/svg" 
@@ -116,16 +139,21 @@ export const SourceSelectionPage: React.FC = () => {
           zIndex: 2
         }}
       >
-        <path d="M70.6436 13.9504L73.9404 15.8704L74.1006 15.9631V59.1946L73.9287 59.2854L70.6436 61.0159V71.2092H2.88574V60.9954L0.24707 59.2698L0.101562 59.1741V15.9836L0.235352 15.8879L2.88574 13.9709V2.98071H70.6436V13.9504ZM14.4521 6.19263L14.3584 6.28638L6.00488 14.6272L5.91016 14.7219V68.7649H60.3213L60.4141 68.676L68.5752 60.9114L68.6758 60.8157V6.19263H14.4521Z" fill={`url(#paint0_linear_1958_5626_${screenId}_${itemIndex})`}/>
+        <path d="M70.6436 13.9504L73.9404 15.8704L74.1006 15.9631V59.1946L73.9287 59.2854L70.6436 61.0159V71.2092H2.88574V60.9954L0.24707 59.2698L0.101562 59.1741V15.9836L0.235352 15.8879L2.88574 13.9709V2.98071H70.6436V13.9504ZM14.4521 6.19263L14.3584 6.28638L6.00488 14.6272L5.91016 14.7219V68.7649H60.3213L60.4141 68.676L68.5752 60.9114L68.6758 60.8157V6.19263H14.4521Z" fill={isSelected ? `url(#paint0_linear_1958_5626_${screenId}_${itemIndex}_selected)` : `url(#paint0_linear_1958_5626_${screenId}_${itemIndex})`}/>
         <defs>
           <linearGradient id={`paint0_linear_1958_5626_${screenId}_${itemIndex}`} x1="37.1008" y1="0.153044" x2="37.1008" y2="74.0375" gradientUnits="userSpaceOnUse">
             <stop stopColor="#6B65CF"/>
             <stop offset="1" stopColor="#B3AAFF"/>
           </linearGradient>
+          <linearGradient id={`paint0_linear_1958_5626_${screenId}_${itemIndex}_selected`} x1="37.1008" y1="0.153044" x2="37.1008" y2="74.0375" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#26F375"/>
+            <stop offset="1" stopColor="#BFFFD8"/>
+          </linearGradient>
         </defs>
       </svg>
     </div>
   );
+};
 
   return (
     <PageTransition className="min-h-screen w-full flex flex-col justify-between bg-[linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,6,72,1)_100%)] relative">
@@ -206,7 +234,7 @@ export const SourceSelectionPage: React.FC = () => {
 
                   {/* SVG 테두리 - 앞 레이어 */}
                   <svg xmlns="http://www.w3.org/2000/svg" width="414" height="255" viewBox="0 0 414 255" fill="none" style={{ position: 'absolute', top: '0', left: '0', width: '407.865px', height: '249.672px', zIndex: 2 }}>
-                    <path d="M108.125 252.672H34.3353L5.52704 224.874V191.517L19.6785 170.796V80.8329L3 70.7247V31.8083L34.8407 3H374.475L408.338 28.7758L409.854 68.7031L396.713 77.8004V170.29L410.865 187.474V223.863L381.551 252.672H307.256L283.502 220.831H130.363L108.125 252.672Z" stroke={selectedScreen === 'screen1' ? "url(#paint0_linear_1960_31730_1_selected)" : "url(#paint0_linear_1960_31730_1)"} strokeWidth="4.66"/>
+                    <path d="M108.125 252.672H34.3353L5.52704 224.874V191.517L19.6785 170.796V80.8329L3 70.7247V31.8083L34.8407 3H374.475L408.338 28.7758L409.854 68.7031L396.713 77.8004V170.29L410.865 187.474V223.863L381.551 252.672H307.256L283.502 220.831H130.363L108.125 252.672Z" stroke={selectedScreens['screen1'] ? "url(#paint0_linear_1960_31730_1_selected)" : "url(#paint0_linear_1960_31730_1)"} strokeWidth="4.66"/>
                     <defs>
                       <linearGradient id="paint0_linear_1960_31730_1" x1="206.932" y1="3" x2="206.932" y2="252.672" gradientUnits="userSpaceOnUse">
                         <stop stopColor="#3170FF"/>
@@ -223,11 +251,11 @@ export const SourceSelectionPage: React.FC = () => {
                   <div style={{ position: 'absolute', top: '22px', right: '40px', width: '30.988px', height: '30.988px', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3 }}>
                     {/* 원형 배경 */}
                     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none" style={{ position: 'absolute', width: '30.988px', height: '30.988px' }}>
-                      <circle cx="15.8064" cy="15.9978" r="14.1324" stroke={selectedScreen === 'screen1' ? "#2FEB49" : "white"} strokeWidth="2.723"/>
+                      <circle cx="15.8064" cy="15.9978" r="14.1324" stroke={selectedScreens['screen1'] ? "#2FEB49" : "white"} strokeWidth="2.723"/>
                     </svg>
                     {/* 체크마크 중앙 배치 */}
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="12" viewBox="0 0 16 12" fill="none" style={{ position: 'relative', zIndex: 10, width: '13.063px', height: '8.826px' }}>
-                      <path d="M1.27734 6.33706L5.40236 10.4105L14.3399 1.58472" stroke={selectedScreen === 'screen1' ? "#2FEB49" : "white"} strokeWidth="2.269" strokeLinecap="round"/>
+                      <path d="M1.27734 6.33706L5.40236 10.4105L14.3399 1.58472" stroke={selectedScreens['screen1'] ? "#2FEB49" : "white"} strokeWidth="2.269" strokeLinecap="round"/>
                     </svg>
                   </div>
                 </div>
@@ -235,7 +263,7 @@ export const SourceSelectionPage: React.FC = () => {
                 {/* 하단 버튼 오버레이 */}
                 <div style={{ position: 'absolute', bottom: '30px', left: '50%', transform: 'translateX(-50%)' }}>
                   <svg xmlns="http://www.w3.org/2000/svg" width="179" height="31" viewBox="0 0 180 31" fill="none" style={{ width: '178.943px', height: '30.29px', flexShrink: 0 }}>
-                    <path d="M159.491 0.40625H20.1578L0.585938 30.696H179.529L159.491 0.40625Z" fill={selectedScreen === 'screen1' ? "url(#paint0_linear_1958_9666_1_selected)" : "url(#paint0_linear_1958_9666_1)"}/>
+                    <path d="M159.491 0.40625H20.1578L0.585938 30.696H179.529L159.491 0.40625Z" fill={selectedScreens['screen1'] ? "url(#paint0_linear_1958_9666_1_selected)" : "url(#paint0_linear_1958_9666_1)"}/>
                     <defs>
                       <linearGradient id="paint0_linear_1958_9666_1" x1="90.0573" y1="0.40625" x2="90.0573" y2="30.696" gradientUnits="userSpaceOnUse">
                         <stop stopColor="#717DFF"/>
@@ -307,7 +335,7 @@ export const SourceSelectionPage: React.FC = () => {
 
                   {/* SVG 테두리 - 앞 레이어 */}
                   <svg xmlns="http://www.w3.org/2000/svg" width="414" height="255" viewBox="0 0 414 255" fill="none" style={{ position: 'absolute', top: '0', left: '0', width: '407.865px', height: '249.672px', zIndex: 2 }}>
-                    <path d="M108.125 252.672H34.3353L5.52704 224.874V191.517L19.6785 170.796V80.8329L3 70.7247V31.8083L34.8407 3H374.475L408.338 28.7758L409.854 68.7031L396.713 77.8004V170.29L410.865 187.474V223.863L381.551 252.672H307.256L283.502 220.831H130.363L108.125 252.672Z" stroke={selectedScreen === 'screen2' ? "url(#paint0_linear_1960_31730_2_selected)" : "url(#paint0_linear_1960_31730_2)"} strokeWidth="4.66"/>
+                    <path d="M108.125 252.672H34.3353L5.52704 224.874V191.517L19.6785 170.796V80.8329L3 70.7247V31.8083L34.8407 3H374.475L408.338 28.7758L409.854 68.7031L396.713 77.8004V170.29L410.865 187.474V223.863L381.551 252.672H307.256L283.502 220.831H130.363L108.125 252.672Z" stroke={selectedScreens['screen2'] ? "url(#paint0_linear_1960_31730_2_selected)" : "url(#paint0_linear_1960_31730_2)"} strokeWidth="4.66"/>
                     <defs>
                       <linearGradient id="paint0_linear_1960_31730_2" x1="206.932" y1="3" x2="206.932" y2="252.672" gradientUnits="userSpaceOnUse">
                         <stop stopColor="#3170FF"/>
@@ -324,11 +352,11 @@ export const SourceSelectionPage: React.FC = () => {
                   <div style={{ position: 'absolute', top: '22px', right: '40px', width: '30.988px', height: '30.988px', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3 }}>
                     {/* 원형 배경 */}
                     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none" style={{ position: 'absolute', width: '30.988px', height: '30.988px' }}>
-                      <circle cx="15.8064" cy="15.9978" r="14.1324" stroke={selectedScreen === 'screen2' ? "#2FEB49" : "white"} strokeWidth="2.723"/>
+                      <circle cx="15.8064" cy="15.9978" r="14.1324" stroke={selectedScreens['screen2'] ? "#2FEB49" : "white"} strokeWidth="2.723"/>
                     </svg>
                     {/* 체크마크 중앙 배치 */}
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="12" viewBox="0 0 16 12" fill="none" style={{ position: 'relative', zIndex: 10, width: '13.063px', height: '8.826px' }}>
-                      <path d="M1.27734 6.33706L5.40236 10.4105L14.3399 1.58472" stroke={selectedScreen === 'screen2' ? "#2FEB49" : "white"} strokeWidth="2.269" strokeLinecap="round"/>
+                      <path d="M1.27734 6.33706L5.40236 10.4105L14.3399 1.58472" stroke={selectedScreens['screen2'] ? "#2FEB49" : "white"} strokeWidth="2.269" strokeLinecap="round"/>
                     </svg>
                   </div>
                 </div>
@@ -336,7 +364,7 @@ export const SourceSelectionPage: React.FC = () => {
                 {/* 하단 버튼 오버레이 */}
                 <div style={{ position: 'absolute', bottom: '30px', left: '50%', transform: 'translateX(-50%)' }}>
                   <svg xmlns="http://www.w3.org/2000/svg" width="179" height="31" viewBox="0 0 180 31" fill="none" style={{ width: '178.943px', height: '30.29px', flexShrink: 0 }}>
-                    <path d="M159.491 0.40625H20.1578L0.585938 30.696H179.529L159.491 0.40625Z" fill={selectedScreen === 'screen2' ? "url(#paint0_linear_1958_9666_2_selected)" : "url(#paint0_linear_1958_9666_2)"}/>
+                    <path d="M159.491 0.40625H20.1578L0.585938 30.696H179.529L159.491 0.40625Z" fill={selectedScreens['screen2'] ? "url(#paint0_linear_1958_9666_2_selected)" : "url(#paint0_linear_1958_9666_2)"}/>
                     <defs>
                       <linearGradient id="paint0_linear_1958_9666_2" x1="90.0573" y1="0.40625" x2="90.0573" y2="30.696" gradientUnits="userSpaceOnUse">
                         <stop stopColor="#717DFF"/>
@@ -408,7 +436,7 @@ export const SourceSelectionPage: React.FC = () => {
 
                   {/* SVG 테두리 - 앞 레이어 */}
                   <svg xmlns="http://www.w3.org/2000/svg" width="414" height="255" viewBox="0 0 414 255" fill="none" style={{ position: 'absolute', top: '0', left: '0', width: '407.865px', height: '249.672px', zIndex: 2 }}>
-                    <path d="M108.125 252.672H34.3353L5.52704 224.874V191.517L19.6785 170.796V80.8329L3 70.7247V31.8083L34.8407 3H374.475L408.338 28.7758L409.854 68.7031L396.713 77.8004V170.29L410.865 187.474V223.863L381.551 252.672H307.256L283.502 220.831H130.363L108.125 252.672Z" stroke={selectedScreen === 'screen3' ? "url(#paint0_linear_1960_31730_3_selected)" : "url(#paint0_linear_1960_31730_3)"} strokeWidth="4.66"/>
+                    <path d="M108.125 252.672H34.3353L5.52704 224.874V191.517L19.6785 170.796V80.8329L3 70.7247V31.8083L34.8407 3H374.475L408.338 28.7758L409.854 68.7031L396.713 77.8004V170.29L410.865 187.474V223.863L381.551 252.672H307.256L283.502 220.831H130.363L108.125 252.672Z" stroke={selectedScreens['screen3'] ? "url(#paint0_linear_1960_31730_3_selected)" : "url(#paint0_linear_1960_31730_3)"} strokeWidth="4.66"/>
                     <defs>
                       <linearGradient id="paint0_linear_1960_31730_3" x1="206.932" y1="3" x2="206.932" y2="252.672" gradientUnits="userSpaceOnUse">
                         <stop stopColor="#3170FF"/>
@@ -425,11 +453,11 @@ export const SourceSelectionPage: React.FC = () => {
                   <div style={{ position: 'absolute', top: '22px', right: '40px', width: '30.988px', height: '30.988px', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3 }}>
                     {/* 원형 배경 */}
                     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none" style={{ position: 'absolute', width: '30.988px', height: '30.988px' }}>
-                      <circle cx="15.8064" cy="15.9978" r="14.1324" stroke={selectedScreen === 'screen3' ? "#2FEB49" : "white"} strokeWidth="2.723"/>
+                      <circle cx="15.8064" cy="15.9978" r="14.1324" stroke={selectedScreens['screen3'] ? "#2FEB49" : "white"} strokeWidth="2.723"/>
                     </svg>
                     {/* 체크마크 중앙 배치 */}
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="12" viewBox="0 0 16 12" fill="none" style={{ position: 'relative', zIndex: 10, width: '13.063px', height: '8.826px' }}>
-                      <path d="M1.27734 6.33706L5.40236 10.4105L14.3399 1.58472" stroke={selectedScreen === 'screen3' ? "#2FEB49" : "white"} strokeWidth="2.269" strokeLinecap="round"/>
+                      <path d="M1.27734 6.33706L5.40236 10.4105L14.3399 1.58472" stroke={selectedScreens['screen3'] ? "#2FEB49" : "white"} strokeWidth="2.269" strokeLinecap="round"/>
                     </svg>
                   </div>
                 </div>
@@ -437,7 +465,7 @@ export const SourceSelectionPage: React.FC = () => {
                 {/* 하단 버튼 오버레이 */}
                 <div style={{ position: 'absolute', bottom: '30px', left: '50%', transform: 'translateX(-50%)' }}>
                   <svg xmlns="http://www.w3.org/2000/svg" width="179" height="31" viewBox="0 0 180 31" fill="none" style={{ width: '178.943px', height: '30.29px', flexShrink: 0 }}>
-                    <path d="M159.491 0.40625H20.1578L0.585938 30.696H179.529L159.491 0.40625Z" fill={selectedScreen === 'screen3' ? "url(#paint0_linear_1958_9666_3_selected)" : "url(#paint0_linear_1958_9666_3)"}/>
+                    <path d="M159.491 0.40625H20.1578L0.585938 30.696H179.529L159.491 0.40625Z" fill={selectedScreens['screen3'] ? "url(#paint0_linear_1958_9666_3_selected)" : "url(#paint0_linear_1958_9666_3)"}/>
                     <defs>
                       <linearGradient id="paint0_linear_1958_9666_3" x1="90.0573" y1="0.40625" x2="90.0573" y2="30.696" gradientUnits="userSpaceOnUse">
                         <stop stopColor="#717DFF"/>
@@ -469,7 +497,7 @@ export const SourceSelectionPage: React.FC = () => {
 
       {/* Button before Footer */}
       <div className="flex justify-center pb-8">
-        <Button1 onClick={() => console.log('Button clicked!')}>
+        <Button1 onClick={handleComplete}>
           완료
         </Button1>
       </div>
