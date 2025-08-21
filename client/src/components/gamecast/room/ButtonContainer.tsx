@@ -76,18 +76,46 @@ export const ButtonContainer = ({
   const activeCurrentPlayer = currentPlayer || contextPlayer;
   const isHost = activeCurrentPlayer?.role === 'host' || activeCurrentPlayer?.isHost;
   
-  // 모든 플레이어가 준비됐는지 확인
-  const allPlayersReady = participants?.every(p => p.preparationStatus?.isReady) || false;
+  // 서버 기반 모든 플레이어 준비 상태 우선 사용
+  const serverAllReady = preparation.allPlayersReady;
+  const serverCanStartRecording = preparation.canStartRecording;
+  const serverMessage = preparation.serverMessage;
   
-  // 🔍 allPlayersReady 상태 디버깅
-  console.log('🔍 [ButtonContainer] allPlayersReady 상태:', {
-    allPlayersReady,
-    participantsCount: participants?.length || 0,
-    participantsPreparation: participants?.map(p => ({
-      guestUserId: p.guestUserId,
-      nickname: p.nickname,
-      isReady: p.preparationStatus?.isReady
-    })) || [],
+  // Fallback: 클라이언트 기반 3단계 준비 상태 확인 (서버와 동일한 로직)
+  const clientAllReady = participants?.every(p => {
+    const status = p.preparationStatus;
+    if (!status) return false;
+    
+    // 서버와 동일한 3단계 검증: characterSetup + screenSetup + isReady
+    return status.characterSetup === true &&
+           status.screenSetup === true &&
+           status.isReady === true;
+  }) || false;
+  
+  // 최종 준비 상태: 서버 우선, 클라이언트 fallback
+  const allPlayersReady = serverAllReady || clientAllReady;
+  
+  // 🔍 준비 상태 디버깅 (서버 + 클라이언트)
+  console.log('🔍 [ButtonContainer] 준비 상태 비교:', {
+    serverBased: {
+      allReady: serverAllReady,
+      canStartRecording: serverCanStartRecording,
+      readyCount: preparation.readyCount,
+      totalCount: preparation.totalCount,
+      message: serverMessage
+    },
+    clientBased: {
+      allReady: clientAllReady,
+      participantsCount: participants?.length || 0,
+      participants3Stage: participants?.map(p => ({
+        nickname: p.nickname,
+        characterSetup: p.preparationStatus?.characterSetup,
+        screenSetup: p.preparationStatus?.screenSetup,
+        isReady: p.preparationStatus?.isReady,
+        fullReady: p.preparationStatus?.characterSetup && p.preparationStatus?.screenSetup && p.preparationStatus?.isReady
+      }))
+    },
+    final: { allPlayersReady },
     isHost,
     timestamp: new Date().toLocaleTimeString()
   });
@@ -97,7 +125,12 @@ export const ButtonContainer = ({
   const currentPlayerData = participants?.find(p => 
     p.guestUserId === currentPlayerGuestId || p.id === currentPlayerGuestId
   );
-  const isPlayerReady = currentPlayerData?.preparationStatus?.isReady || false;
+  // 현재 플레이어의 3단계 준비 상태 확인
+  const currentPlayerStatus = currentPlayerData?.preparationStatus;
+  const isPlayerReady = currentPlayerStatus ? 
+    (currentPlayerStatus.characterSetup === true &&
+     currentPlayerStatus.screenSetup === true &&
+     currentPlayerStatus.isReady === true) : false;
   
   // 🔍 준비 상태 디버깅 (isReady/finalReady 동일 변수 체크)
   console.log('🔍 [ButtonContainer] 준비 상태 디버깅:', {
@@ -109,7 +142,8 @@ export const ButtonContainer = ({
         characterSetup: currentPlayerData.preparationStatus?.characterSetup,
         screenSetup: currentPlayerData.preparationStatus?.screenSetup,
         isReady: currentPlayerData.preparationStatus?.isReady, // 서버의 finalReady와 동일
-        hasIsReadyField: 'isReady' in (currentPlayerData.preparationStatus || {})
+        hasIsReadyField: 'isReady' in (currentPlayerData.preparationStatus || {}),
+        is3StageReady: currentPlayerStatus?.characterSetup && currentPlayerStatus?.screenSetup && currentPlayerStatus?.isReady
       }
     } : null,
     isPlayerReady,
@@ -344,8 +378,20 @@ export const ButtonContainer = ({
     
     if (allPlayersReady) {
       if (countdown !== null) {
-        return isHost ? `녹화 시작 ${countdown}초...` : `녹화 시작 ${countdown}초...`;
+        return `자동 녹화 시작 ${countdown}초...`;
       }
+      
+      // 서버 메시지 우선 사용
+      if (serverMessage) {
+        return isHost ? "자동 녹화 곧 시작!" : serverMessage;
+      }
+      
+      // 서버 준비 상태 기반 메시지
+      if (serverAllReady && serverCanStartRecording) {
+        return isHost ? "자동 녹화 곧 시작!" : "모든 플레이어 준비 완료! 곧 자동으로 녹화가 시작됩니다...";
+      }
+      
+      // Fallback 메시지
       if (isHost) {
         return "녹화 시작";
       } else {
@@ -415,6 +461,8 @@ export const ButtonContainer = ({
             </div>
           ))}
           <div>모든 플레이어 준비: {allPlayersReady ? '✅' : '❌'}</div>
+          <div>서버 준비 상태: {preparation.readyCount}/{preparation.totalCount} {serverAllReady ? '✅' : '❌'}</div>
+          {serverMessage && <div>서버 메시지: {serverMessage}</div>}
           <div>녹화 상태: {recording.isRecording ? '🎬 녹화중' : recording.uploading ? '📤 업로드중' : '⏸️ 대기'}</div>
           <div>마이크 권한: {
             recording.microphonePermission === 'granted' ? '✅ 허용' :

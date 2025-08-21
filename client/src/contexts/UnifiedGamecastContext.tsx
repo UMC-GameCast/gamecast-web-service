@@ -211,6 +211,13 @@ interface UnifiedGamecastState {
     characterSetup: boolean;
     screenSetup: boolean;
     isReady: boolean;
+    // 서버 기반 모든 플레이어 준비 상태
+    allPlayersReady: boolean;
+    canStartRecording: boolean;
+    readyCount: number;
+    totalCount: number;
+    serverMessage: string | null;
+    lastUpdated: number | null;
   };
   
   // 실시간 연결 상태 (WebRTC 제거됨)
@@ -246,6 +253,20 @@ type UnifiedGamecastAction =
   | { type: 'SET_PARTICIPANTS'; payload: Player[] }
   | { type: 'UPDATE_PARTICIPANT'; payload: { guestUserId: string; updates: Partial<Player> } }
   | { type: 'SET_PREPARATION'; payload: Partial<UnifiedGamecastState['preparation']> }
+  | { type: 'SET_ALL_PLAYERS_READY'; payload: { 
+      allReady: boolean; 
+      canStartRecording: boolean;
+      readyCount: number;
+      totalCount: number;
+      message: string;
+      timestamp: string;
+    } }
+  | { type: 'SET_READY_STATUS'; payload: { 
+      readyCount: number;
+      totalCount: number;
+      canStartRecording: boolean;
+      timestamp: string;
+    } }
   | { type: 'SET_SOCKET'; payload: Socket | null }
   | { type: 'SET_VOICE_CONNECTED'; payload: boolean }
   | { type: 'SET_RECORDING_STATE'; payload: Partial<UnifiedGamecastState['recording']> }
@@ -262,7 +283,13 @@ const initialState: UnifiedGamecastState = {
   preparation: {
     characterSetup: false,
     screenSetup: false,
-    isReady: false
+    isReady: false,
+    allPlayersReady: false,
+    canStartRecording: false,
+    readyCount: 0,
+    totalCount: 0,
+    serverMessage: null,
+    lastUpdated: null
   },
   realtime: {
     socket: null,
@@ -353,6 +380,41 @@ const unifiedGamecastReducer = (state: UnifiedGamecastState, action: UnifiedGame
       return {
         ...state,
         preparation: { ...state.preparation, ...action.payload }
+      };
+    
+    case 'SET_ALL_PLAYERS_READY':
+      console.log('🎯 [Reducer] SET_ALL_PLAYERS_READY:', {
+        payload: action.payload,
+        timestamp: new Date().toLocaleTimeString()
+      });
+      return {
+        ...state,
+        preparation: {
+          ...state.preparation,
+          allPlayersReady: action.payload.allReady,
+          canStartRecording: action.payload.canStartRecording,
+          readyCount: action.payload.readyCount,
+          totalCount: action.payload.totalCount,
+          serverMessage: action.payload.message,
+          lastUpdated: Date.now()
+        }
+      };
+    
+    case 'SET_READY_STATUS':
+      console.log('📊 [Reducer] SET_READY_STATUS:', {
+        payload: action.payload,
+        timestamp: new Date().toLocaleTimeString()
+      });
+      return {
+        ...state,
+        preparation: {
+          ...state.preparation,
+          readyCount: action.payload.readyCount,
+          totalCount: action.payload.totalCount,
+          canStartRecording: action.payload.canStartRecording,
+          allPlayersReady: action.payload.canStartRecording,
+          lastUpdated: Date.now()
+        }
       };
     
     case 'SET_SOCKET':
@@ -1999,6 +2061,55 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
         console.error('❌ [Context] 동기화 녹화 시작 실패:', error);
         dispatch({ type: 'SET_ERROR', payload: '녹화 시작에 실패했습니다.' });
       }
+    });
+
+    // 모든 플레이어 준비 완료 이벤트 (서버 자동 감지)
+    socket.on('all-users-ready', (data) => {
+      console.log('🎯 [Context] 모든 플레이어 준비 완료 신호 수신:', data);
+      
+      // Context 상태 업데이트
+      dispatch({ 
+        type: 'SET_ALL_PLAYERS_READY', 
+        payload: { 
+          allReady: true, 
+          canStartRecording: data.canStartRecording,
+          readyCount: data.readyCount,
+          totalCount: data.totalCount,
+          message: data.message,
+          timestamp: data.timestamp
+        }
+      });
+      
+      // 자동 녹화 시작 로직
+      if (data.canStartRecording) {
+        console.log('🎬 [Context] 자동 녹화 시작 트리거');
+        setTimeout(() => {
+          // 호스트만 서버에 녹화 시작 신호 전송
+          if (stateRef.current.currentPlayer?.isHost || stateRef.current.currentPlayer?.role === 'host') {
+            console.log('🎬 [Context] 호스트가 자동 녹화 시작 요청');
+            if (globalSocket) {
+              globalSocket.emit('host-start-recording', { roomCode: stateRef.current.currentRoom?.roomCode });
+            }
+          } else {
+            console.log('ℹ️ [Context] 게스트는 녹화 시작 대기 중...');
+          }
+        }, 1000); // 1초 후 자동 시작
+      }
+    });
+
+    // 준비 상태 업데이트 이벤트
+    socket.on('ready-status-update', (data) => {
+      console.log('📊 [Context] 준비 상태 업데이트 수신:', data);
+      
+      dispatch({ 
+        type: 'SET_READY_STATUS', 
+        payload: { 
+          readyCount: data.readyCount,
+          totalCount: data.totalCount,
+          canStartRecording: data.canStartRecording,
+          timestamp: data.timestamp
+        }
+      });
     });
 
     socket.on('recording-stop', async () => {

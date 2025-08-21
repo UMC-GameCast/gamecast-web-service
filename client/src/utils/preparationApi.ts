@@ -33,16 +33,32 @@ export const updatePreparationAPI = async (
   preparationData: PreparationUpdateData
 ): Promise<{ success: boolean; error?: string }> => {
   try {
-    const requestPayload = {
-      roomCode,
-      ...preparationData
-    };
+    // 서버가 기대하는 필드명으로 변환
+    const serverPayload: any = { roomCode, guestUserId: preparationData.guestUserId };
     
-    console.log('📤 [PreparationAPI] REST API 요청:', {
+    // 필드명 매핑: 클라이언트 -> 서버
+    if (preparationData.characterSetup !== undefined) {
+      serverPayload.characterReady = preparationData.characterSetup;
+    }
+    if (preparationData.screenSetup !== undefined) {
+      serverPayload.screenReady = preparationData.screenSetup;
+    }
+    if (preparationData.isReady !== undefined) {
+      serverPayload.finalReady = preparationData.isReady;
+    }
+    
+    const requestPayload = serverPayload;
+    
+    console.log('📤 [PreparationAPI] REST API 요청 (필드명 매핑):', {
       url: `${API_BASE_URL}/api/rooms/preparation`,
       roomCode,
-      originalData: preparationData,
-      requestPayload: requestPayload,
+      originalClientData: preparationData,
+      mappedServerPayload: requestPayload,
+      fieldMapping: {
+        'characterSetup → characterReady': preparationData.characterSetup,
+        'screenSetup → screenReady': preparationData.screenSetup,
+        'isReady → finalReady': preparationData.isReady
+      },
       requestPayloadStringified: JSON.stringify(requestPayload, null, 2)
     });
 
