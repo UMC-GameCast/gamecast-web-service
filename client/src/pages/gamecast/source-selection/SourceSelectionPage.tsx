@@ -9,14 +9,23 @@ import { Footer } from '../../../components/gamecast/common/Footer'
 import { PageTransition } from '../../../components/gamecast/common/PageTransition'
 import { Button1 } from '../../../components/gamecast/common/Button1'
 
+// 선택된 소스 인터페이스
+interface SelectedSource {
+  id: string; // 고유 식별자 (highlightIndex_participantId)
+  highlightIndex: number; // 0, 1, 2
+  participantId: string; // 'host', 'user1', 'user2'  
+  participantName: string; // '초토로', '소질이', '톰쥬'
+  videoUrl: string; // 게임영상 + 게임음성
+  audioUrl: string; // 플레이어 목소리
+}
+
 export const SourceSelectionPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { state, actions } = useUnifiedGamecast();
   const [selectedVideos, setSelectedVideos] = useState<{[key: string]: string}>({});
-  const [selectedScreens, setSelectedScreens] = useState<{[key: string]: boolean}>({});
   const [loading, setLoading] = useState<boolean>(true);
-  const [selectedProfiles, setSelectedProfiles] = useState<{[key: string]: boolean}>({});
+  const [selectedSources, setSelectedSources] = useState<SelectedSource[]>([]);
   const [highlightData, setHighlightData] = useState<any>(null);
 
   // API에서 하이라이트 동영상 가져오기
@@ -102,22 +111,82 @@ export const SourceSelectionPage: React.FC = () => {
   }, [searchParams, actions.loadRoomDataForEditing, actions.enableDemoMode]);
 
 
+  // 참여자 ID를 이름으로 변환
+  const getParticipantName = (participantId: string) => {
+    if (participantId === 'host') {
+      return state.participants?.find(p => p.isHost)?.nickname || '호스트';
+    }
+    const participant = state.participants?.find(p => p.guestUserId === participantId);
+    return participant?.nickname || participantId;
+  };
+
+  // 소스 선택/해제 함수
+  const toggleSourceSelection = (highlightIndex: number, participantId: string) => {
+    if (!highlightData) return;
+
+    const sourceId = `${highlightIndex}_${participantId}`;
+    const existingIndex = selectedSources.findIndex(source => source.id === sourceId);
+
+    if (existingIndex >= 0) {
+      // 이미 선택된 소스라면 제거
+      setSelectedSources(prev => prev.filter(source => source.id !== sourceId));
+    } else {
+      // 새로운 소스 선택
+      const highlight = highlightData.highlights[highlightIndex];
+      const clips = highlight.clip_files.clips_by_participant;
+      const participantClip = clips[participantId as keyof typeof clips];
+
+      if (participantClip) {
+        const newSource: SelectedSource = {
+          id: sourceId,
+          highlightIndex,
+          participantId,
+          participantName: getParticipantName(participantId),
+          videoUrl: participantClip.video.s3_url,
+          audioUrl: participantClip.audio.s3_url
+        };
+        setSelectedSources(prev => [...prev, newSource]);
+      }
+    }
+  };
+
+  // 소스가 선택되었는지 확인
+  const isSourceSelected = (highlightIndex: number, participantId: string) => {
+    const sourceId = `${highlightIndex}_${participantId}`;
+    return selectedSources.some(source => source.id === sourceId);
+  };
+
+
   const handleScreenSelect = (screenId: string) => {
-    setSelectedScreens(prev => ({
-      ...prev,
-      [screenId]: !prev[screenId]
-    }));
+    const highlightIndex = parseInt(screenId.replace('screen', '')) - 1; // screen1 -> 0, screen2 -> 1, screen3 -> 2
+    toggleSourceSelection(highlightIndex, 'host');
   };
 
-  const handleProfileSelect = (profileId: string) => {
-    setSelectedProfiles(prev => ({
-      ...prev,
-      [profileId]: !prev[profileId]
-    }));
-  };
+  const handleComplete = async () => {
+    if (selectedSources.length === 0) {
+      alert('편집할 영상을 선택해주세요.');
+      return;
+    }
 
-  const handleComplete = () => {
-    navigate('/gamecast/subtitle-edit');
+    try {
+      console.log('🚀 [SourceSelection] 편집 시작 - 선택된 소스:', selectedSources.length);
+      
+      // Context에 선택된 소스 저장
+      actions.setEditingSources(selectedSources);
+      
+      // 파일 다운로드 시작
+      const downloadSuccess = await actions.downloadFiles(selectedSources);
+      
+      if (downloadSuccess) {
+        console.log('✅ [SourceSelection] 파일 다운로드 완료, 편집 페이지로 이동');
+        navigate('/gamecast/subtitle-edit');
+      } else {
+        alert('파일 다운로드에 실패했습니다. 다시 시도해주세요.');
+      }
+    } catch (error) {
+      console.error('❌ [SourceSelection] 편집 시작 실패:', error);
+      alert('편집 시작 중 오류가 발생했습니다.');
+    }
   };
 
   const containerVariants = {
@@ -186,7 +255,7 @@ export const SourceSelectionPage: React.FC = () => {
 
             {/* SVG 테두리 - 앞 레이어 */}
             <svg xmlns="http://www.w3.org/2000/svg" width="414" height="255" viewBox="0 0 414 255" fill="none" style={{ position: 'absolute', top: '0', left: '0', width: '407.865px', height: '249.672px', zIndex: 2 }}>
-              <path d="M108.125 252.672H34.3353L5.52704 224.874V191.517L19.6785 170.796V80.8329L3 70.7247V31.8083L34.8407 3H374.475L408.338 28.7758L409.854 68.7031L396.713 77.8004V170.29L410.865 187.474V223.863L381.551 252.672H307.256L283.502 220.831H130.363L108.125 252.672Z" stroke={selectedScreens[screenId] ? `url(#paint0_linear_1960_31730_${highlightIndex + 1}_selected)` : `url(#paint0_linear_1960_31730_${highlightIndex + 1})`} strokeWidth="4.66"/>
+              <path d="M108.125 252.672H34.3353L5.52704 224.874V191.517L19.6785 170.796V80.8329L3 70.7247V31.8083L34.8407 3H374.475L408.338 28.7758L409.854 68.7031L396.713 77.8004V170.29L410.865 187.474V223.863L381.551 252.672H307.256L283.502 220.831H130.363L108.125 252.672Z" stroke={isSourceSelected(highlightIndex, 'host') ? `url(#paint0_linear_1960_31730_${highlightIndex + 1}_selected)` : `url(#paint0_linear_1960_31730_${highlightIndex + 1})`} strokeWidth="4.66"/>
               <defs>
                 <linearGradient id={`paint0_linear_1960_31730_${highlightIndex + 1}`} x1="206.932" y1="3" x2="206.932" y2="252.672" gradientUnits="userSpaceOnUse">
                   <stop stopColor="#3170FF"/>
@@ -202,10 +271,10 @@ export const SourceSelectionPage: React.FC = () => {
             {/* 오버레이 원형 아이콘 - 최상위 레이어 */}
             <div style={{ position: 'absolute', top: '22px', right: '40px', width: '30.988px', height: '30.988px', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3 }}>
               <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none" style={{ position: 'absolute', width: '30.988px', height: '30.988px' }}>
-                <circle cx="15.8064" cy="15.9978" r="14.1324" stroke={selectedScreens[screenId] ? "#2FEB49" : "white"} strokeWidth="2.723"/>
+                <circle cx="15.8064" cy="15.9978" r="14.1324" stroke={isSourceSelected(highlightIndex, 'host') ? "#2FEB49" : "white"} strokeWidth="2.723"/>
               </svg>
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="12" viewBox="0 0 16 12" fill="none" style={{ position: 'relative', zIndex: 10, width: '13.063px', height: '8.826px' }}>
-                <path d="M1.27734 6.33706L5.40236 10.4105L14.3399 1.58472" stroke={selectedScreens[screenId] ? "#2FEB49" : "white"} strokeWidth="2.269" strokeLinecap="round"/>
+                <path d="M1.27734 6.33706L5.40236 10.4105L14.3399 1.58472" stroke={isSourceSelected(highlightIndex, 'host') ? "#2FEB49" : "white"} strokeWidth="2.269" strokeLinecap="round"/>
               </svg>
             </div>
           </div>
@@ -213,7 +282,7 @@ export const SourceSelectionPage: React.FC = () => {
           {/* 하단 버튼 오버레이 */}
           <div style={{ position: 'absolute', bottom: '30px', left: '50%', transform: 'translateX(-50%)' }}>
             <svg xmlns="http://www.w3.org/2000/svg" width="179" height="31" viewBox="0 0 180 31" fill="none" style={{ width: '178.943px', height: '30.29px', flexShrink: 0 }}>
-              <path d="M159.491 0.40625H20.1578L0.585938 30.696H179.529L159.491 0.40625Z" fill={selectedScreens[screenId] ? `url(#paint0_linear_1958_9666_${highlightIndex + 1}_selected)` : `url(#paint0_linear_1958_9666_${highlightIndex + 1})`}/>
+              <path d="M159.491 0.40625H20.1578L0.585938 30.696H179.529L159.491 0.40625Z" fill={isSourceSelected(highlightIndex, 'host') ? `url(#paint0_linear_1958_9666_${highlightIndex + 1}_selected)` : `url(#paint0_linear_1958_9666_${highlightIndex + 1})`}/>
               <defs>
                 <linearGradient id={`paint0_linear_1958_9666_${highlightIndex + 1}`} x1="90.0573" y1="0.40625" x2="90.0573" y2="30.696" gradientUnits="userSpaceOnUse">
                   <stop stopColor="#717DFF"/>
@@ -243,10 +312,11 @@ export const SourceSelectionPage: React.FC = () => {
 
   // 프로필 아이템 컴포넌트
   const ProfileItem: React.FC<{ screenId: string; itemIndex: number }> = ({ screenId, itemIndex }) => {
-    const profileId = `${screenId}_profile_${itemIndex}`;
-    const isSelected = selectedProfiles[profileId];
     const guestPlayers = getGuestPlayers();
     const player = guestPlayers[itemIndex - 1]; // 1-based index를 0-based로 변환
+    const highlightIndex = parseInt(screenId.replace('screen', '')) - 1; // screen1 -> 0, screen2 -> 1, screen3 -> 2
+    const participantId = player?.guestUserId || `user${itemIndex}`;
+    const isSelected = isSourceSelected(highlightIndex, participantId);
     
     return (
       <div 
@@ -262,7 +332,7 @@ export const SourceSelectionPage: React.FC = () => {
           transition: 'all 0.3s ease'
         }}
         className="group"
-        onClick={() => handleProfileSelect(profileId)}
+        onClick={() => toggleSourceSelection(highlightIndex, participantId)}
         onMouseEnter={(e) => {
           e.currentTarget.style.transform = 'scale(1.2)';
           e.currentTarget.style.zIndex = '10';
@@ -419,10 +489,64 @@ export const SourceSelectionPage: React.FC = () => {
         </motion.div>
           </main>
 
+          {/* 선택된 소스 목록 */}
+          {selectedSources.length > 0 && (
+            <div className="mt-8 mb-4">
+              <h3 className="text-white text-lg font-semibold mb-4 text-center">
+                선택된 영상 ({selectedSources.length}개)
+              </h3>
+              <div className="bg-black bg-opacity-30 rounded-lg p-4 max-w-2xl mx-auto">
+                <div className="space-y-2">
+                  {selectedSources.map((source) => (
+                    <div 
+                      key={source.id} 
+                      className="flex items-center justify-between bg-black bg-opacity-20 rounded px-3 py-2"
+                    >
+                      <span className="text-white text-sm">
+                        하이라이트 {source.highlightIndex + 1} - {source.participantName} 시점
+                      </span>
+                      <button
+                        onClick={() => toggleSourceSelection(source.highlightIndex, source.participantId)}
+                        className="text-red-400 hover:text-red-300 text-sm ml-2"
+                      >
+                        제거
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 다운로드 진행률 */}
+          {state.editing.isDownloading && (
+            <div className="mt-4 mb-6">
+              <div className="text-white text-center mb-2">
+                파일 다운로드 중... {Math.round(state.editing.downloadProgress)}%
+              </div>
+              <div className="bg-gray-700 rounded-full h-2 max-w-md mx-auto">
+                <div 
+                  className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${state.editing.downloadProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Button */}
           <div className="flex justify-center py-8">
-            <Button1 onClick={handleComplete}>
-              완료
+            <Button1 
+              onClick={handleComplete}
+              disabled={selectedSources.length === 0 || state.editing.isDownloading}
+              style={{
+                opacity: (selectedSources.length === 0 || state.editing.isDownloading) ? 0.5 : 1,
+                cursor: (selectedSources.length === 0 || state.editing.isDownloading) ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {state.editing.isDownloading 
+                ? '다운로드 중...' 
+                : `완료 ${selectedSources.length > 0 ? `(${selectedSources.length}개 선택됨)` : ''}`
+              }
             </Button1>
           </div>
         </div>

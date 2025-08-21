@@ -247,6 +247,14 @@ interface UnifiedGamecastState {
     showMicGuide: boolean;
     forceRender: number; // 강제 리렌더링용
   };
+  
+  // 편집 상태
+  editing: {
+    selectedSources: any[]; // SelectedSource[]
+    downloadedFiles: {[key: string]: Blob};
+    isDownloading: boolean;
+    downloadProgress: number;
+  };
 }
 
 // 액션 타입
@@ -277,6 +285,9 @@ type UnifiedGamecastAction =
   | { type: 'SET_VOICE_CONNECTED'; payload: boolean }
   | { type: 'SET_RECORDING_STATE'; payload: Partial<UnifiedGamecastState['recording']> }
   | { type: 'SET_UI_STATE'; payload: Partial<UnifiedGamecastState['ui']> }
+  | { type: 'SET_EDITING_SOURCES'; payload: any[] }
+  | { type: 'SET_DOWNLOADED_FILES'; payload: {[key: string]: Blob} }
+  | { type: 'SET_DOWNLOAD_PROGRESS'; payload: { isDownloading: boolean; progress: number } }
   | { type: 'RESET_STATE' };
 
 // 초기 상태
@@ -315,6 +326,12 @@ const initialState: UnifiedGamecastState = {
     showCharacterSetup: false,
     showMicGuide: false,
     forceRender: 0
+  },
+  editing: {
+    selectedSources: [],
+    downloadedFiles: {},
+    isDownloading: false,
+    downloadProgress: 0
   }
 };
 
@@ -487,6 +504,28 @@ const unifiedGamecastReducer = (state: UnifiedGamecastState, action: UnifiedGame
       return {
         ...state,
         _forceUpdateTimestamp: action.payload
+      };
+
+    case 'SET_EDITING_SOURCES':
+      return {
+        ...state,
+        editing: { ...state.editing, selectedSources: action.payload }
+      };
+    
+    case 'SET_DOWNLOADED_FILES':
+      return {
+        ...state,
+        editing: { ...state.editing, downloadedFiles: action.payload }
+      };
+    
+    case 'SET_DOWNLOAD_PROGRESS':
+      return {
+        ...state,
+        editing: { 
+          ...state.editing, 
+          isDownloading: action.payload.isDownloading,
+          downloadProgress: action.payload.progress
+        }
       };
 
     case 'RESET_STATE':
@@ -3334,6 +3373,72 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
     });
   }, []);
 
+  // 편집 관련 함수들
+  const setEditingSources = useCallback((sources: any[]) => {
+    dispatch({
+      type: 'SET_EDITING_SOURCES',
+      payload: sources
+    });
+  }, []);
+
+  const setDownloadedFiles = useCallback((files: {[key: string]: Blob}) => {
+    dispatch({
+      type: 'SET_DOWNLOADED_FILES',
+      payload: files
+    });
+  }, []);
+
+  const setDownloadProgress = useCallback((isDownloading: boolean, progress: number) => {
+    dispatch({
+      type: 'SET_DOWNLOAD_PROGRESS',
+      payload: { isDownloading, progress }
+    });
+  }, []);
+
+  const downloadFiles = useCallback(async (sources: any[]) => {
+    try {
+      setDownloadProgress(true, 0);
+      
+      const totalFiles = sources.length * 2; // video + audio per source
+      let downloadedFiles = 0;
+      const downloadedData: {[key: string]: Blob} = {};
+
+      for (const source of sources) {
+        console.log(`🔽 다운로드 시작: ${source.participantName} - 하이라이트 ${source.highlightIndex + 1}`);
+        
+        // Video 다운로드
+        const videoResponse = await fetch(source.videoUrl);
+        const videoBlob = await videoResponse.blob();
+        const videoFileName = `highlight_${source.highlightIndex + 1}_${source.participantId}_video.mp4`;
+        downloadedData[videoFileName] = videoBlob;
+        
+        downloadedFiles++;
+        setDownloadProgress(true, (downloadedFiles / totalFiles) * 100);
+        
+        // Audio 다운로드
+        const audioResponse = await fetch(source.audioUrl);
+        const audioBlob = await audioResponse.blob();
+        const audioFileName = `highlight_${source.highlightIndex + 1}_${source.participantId}_audio.mp3`;
+        downloadedData[audioFileName] = audioBlob;
+        
+        downloadedFiles++;
+        setDownloadProgress(true, (downloadedFiles / totalFiles) * 100);
+      }
+
+      console.log('✅ 모든 파일 다운로드 완료:', Object.keys(downloadedData));
+      
+      // Context에 다운로드된 데이터 저장
+      setDownloadedFiles(downloadedData);
+      setDownloadProgress(false, 100);
+      
+      return true;
+    } catch (error) {
+      console.error('❌ 파일 다운로드 실패:', error);
+      setDownloadProgress(false, 0);
+      return false;
+    }
+  }, [setDownloadProgress, setDownloadedFiles]);
+
   const actions = {
     refreshRoomState,
     leaveRoom,
@@ -3354,6 +3459,8 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
     setError,
     loadRoomDataForEditing, // 📋 편집용 방 정보 조회
     enableDemoMode, // 🎭 데모 모드 활성화
+    setEditingSources, // 📂 편집할 소스 설정
+    downloadFiles, // 🔽 파일 다운로드
     gameRecorder: gameRecorderRef.current // 🎬 GameRecorder 인스턴스 제공
   };
 
