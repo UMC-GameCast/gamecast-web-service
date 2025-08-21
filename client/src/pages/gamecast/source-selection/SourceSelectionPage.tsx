@@ -211,14 +211,27 @@ export const SourceSelectionPage: React.FC = () => {
     const videoUrl = selectedVideos[screenId] || '';
     
     return (
-      <div className="w-fit h-fit relative">
+      <div 
+        className="w-fit h-fit relative group cursor-pointer"
+        style={{
+          transition: 'transform 0.3s ease',
+          transformOrigin: 'center center'
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'scale(1.05)';
+          e.currentTarget.style.zIndex = '10';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'scale(1)';
+          e.currentTarget.style.zIndex = '1';
+        }}
+      >
         {/* 영상화면과 버튼 컨테이너 */}
         <div style={{ position: 'relative', width: '407.865px', height: '280px' }}>
           {/* 영상화면 div */}
           <div 
             style={{ position: 'absolute', top: '0', left: '0', width: '407.865px', height: '249.672px', flexShrink: 0 }}
             onClick={() => handleScreenSelect(screenId)}
-            className="cursor-pointer"
           >
             {/* 영상 내용 - 맨 뒤 레이어 */}
             <div style={{ position: 'absolute', top: '0', left: '0', right: '0', bottom: '0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', zIndex: 1 }}>
@@ -489,34 +502,6 @@ export const SourceSelectionPage: React.FC = () => {
         </motion.div>
           </main>
 
-          {/* 선택된 소스 목록 */}
-          {selectedSources.length > 0 && (
-            <div className="mt-8 mb-4">
-              <h3 className="text-white text-lg font-semibold mb-4 text-center">
-                선택된 영상 ({selectedSources.length}개)
-              </h3>
-              <div className="bg-black bg-opacity-30 rounded-lg p-4 max-w-2xl mx-auto">
-                <div className="space-y-2">
-                  {selectedSources.map((source) => (
-                    <div 
-                      key={source.id} 
-                      className="flex items-center justify-between bg-black bg-opacity-20 rounded px-3 py-2"
-                    >
-                      <span className="text-white text-sm">
-                        하이라이트 {source.highlightIndex + 1} - {source.participantName} 시점
-                      </span>
-                      <button
-                        onClick={() => toggleSourceSelection(source.highlightIndex, source.participantId)}
-                        className="text-red-400 hover:text-red-300 text-sm ml-2"
-                      >
-                        제거
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* 다운로드 진행률 */}
           {state.editing.isDownloading && (
