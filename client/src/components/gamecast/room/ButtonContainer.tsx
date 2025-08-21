@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { RoomButton } from "./RoomButton";
 import NoticeIcon from "../../../assets/gamecast/Room/notice.svg?react";
@@ -85,12 +85,27 @@ export const ButtonContainer = ({
     p.guestUserId === currentPlayerGuestId || p.id === currentPlayerGuestId
   );
   
-  // 현재 플레이어의 3단계 준비 상태 확인
+  // 현재 플레이어의 준비 상태 확인 (캐릭터 그라데이션과 동일한 단순 조건)
   const currentPlayerStatus = currentPlayerData?.preparationStatus;
-  const isPlayerReady = currentPlayerStatus ? 
-    (currentPlayerStatus.characterSetup === true &&
-     currentPlayerStatus.screenSetup === true &&
-     currentPlayerStatus.isReady === true) : false;
+  const isPlayerReady = currentPlayerStatus?.isReady || false;
+
+  // 🔍 준비 상태 변경 시 상세 디버깅 (안전한 의존성으로 수정)
+  useEffect(() => {
+    if (Math.random() < 0.1) { // 10% 확률로만 로깅하여 스팸 방지
+      console.log('🎮 [ButtonContainer] isPlayerReady 상태 변경:', {
+        isPlayerReady,
+        currentPlayerGuestId,
+        currentPlayerData: !!currentPlayerData,
+        currentPlayerStatus: {
+          characterSetup: currentPlayerStatus?.characterSetup,
+          screenSetup: currentPlayerStatus?.screenSetup,
+          isReady: currentPlayerStatus?.isReady,
+        },
+        participantsCount: participants?.length || 0,
+        timestamp: new Date().toLocaleTimeString()
+      });
+    }
+  }, [isPlayerReady]); // 의존성을 isPlayerReady만으로 제한
   
   // 서버 기반 모든 플레이어 준비 상태 우선 사용
   const serverAllReady = preparation.allPlayersReady;
