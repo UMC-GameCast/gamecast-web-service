@@ -243,6 +243,7 @@ interface UnifiedGamecastState {
   ui: {
     showCharacterSetup: boolean;
     showMicGuide: boolean;
+    forceRender: number; // 강제 리렌더링용
   };
 }
 
@@ -309,7 +310,8 @@ const initialState: UnifiedGamecastState = {
   },
   ui: {
     showCharacterSetup: false,
-    showMicGuide: false
+    showMicGuide: false,
+    forceRender: 0
   }
 };
 
@@ -433,10 +435,34 @@ const unifiedGamecastReducer = (state: UnifiedGamecastState, action: UnifiedGame
       };
     
     case 'SET_RECORDING_STATE':
-      return {
+      const newRecordingState = { ...state.recording, ...action.payload };
+      console.log('🔄 [Reducer] SET_RECORDING_STATE:', {
+        before: state.recording,
+        after: newRecordingState,
+        payload: action.payload,
+        isRecordingChanged: state.recording.isRecording !== newRecordingState.isRecording,
+        timestamp: new Date().toLocaleTimeString()
+      });
+      
+      const newState = {
         ...state,
-        recording: { ...state.recording, ...action.payload }
+        recording: newRecordingState
       };
+      
+      // 강제 리렌더링을 위한 추가 상태 변경
+      if (newRecordingState.isRecording !== state.recording.isRecording) {
+        console.log('🚨 [Reducer] 녹화 상태 변경 감지 - 강제 상태 업데이트');
+        newState.ui = {
+          ...newState.ui,
+          forceRender: Date.now()
+        };
+        
+        // 추가: 모든 상태 객체를 새로 생성하여 참조 변경 강제
+        newState.participants = [...state.participants];
+        newState.preparation = { ...state.preparation, lastUpdated: Date.now() };
+      }
+      
+      return newState;
     
     case 'SET_UI_STATE':
       // SET_UI_STATE 로그 제거 (준비 상태와 무관)
@@ -500,6 +526,16 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
   // 🔧 최신 state를 참조하기 위한 ref
   const stateRef = useRef(state);
   stateRef.current = state;
+  
+  // Provider 상태 변화 추적 (recording 상태만)
+  React.useEffect(() => {
+    console.log('🏗️ [UnifiedGamecastProvider] recording 상태 변화:', {
+      isRecording: state.recording.isRecording,
+      startTime: state.recording.startTime,
+      recordingObjectReference: state.recording,
+      timestamp: new Date().toLocaleTimeString()
+    });
+  }, [state.recording]);
   
   // 🎬 GameRecorder 인스턴스 생성 (안정적인 싱글톤)
   const gameRecorderRef = useRef<GameRecorder | null>(null);
@@ -2122,11 +2158,31 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
               type: 'SET_UI_STATE',
               payload: { 
                 forceUpdate: Date.now(),
-                recordingStarted: true
+                recordingStarted: true,
+                forceRender: Date.now() // 추가 강제 리렌더링
               }
             });
             
             console.log('✅ [Context] 녹화 상태 업데이트 완료 - 강제 UI 새로고침');
+            
+            // 추가 강제 리렌더링 (RecordingButton 업데이트 확보)
+            setTimeout(() => {
+              dispatch({
+                type: 'SET_RECORDING_STATE',
+                payload: { 
+                  isRecording: true,
+                  startTime: currentTime,
+                  lastUpdated: Date.now()
+                }
+              });
+              dispatch({
+                type: 'SET_UI_STATE',
+                payload: { 
+                  forceRender: Date.now() + 1000 // 연속 강제 업데이트
+                }
+              });
+              console.log('🔄 [Context] RecordingButton 강제 업데이트 완료');
+            }, 100);
             
             // GameRecorder 시작
             gameRecorderRef.current?.startSyncRecording().catch(error => {
