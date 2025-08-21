@@ -17,6 +17,7 @@ export const SourceSelectionPage: React.FC = () => {
   const [selectedScreens, setSelectedScreens] = useState<{[key: string]: boolean}>({});
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedProfiles, setSelectedProfiles] = useState<{[key: string]: boolean}>({});
+  const [highlightData, setHighlightData] = useState<any>(null);
 
   // API에서 하이라이트 동영상 가져오기
   const fetchHighlightVideos = async () => {
@@ -30,18 +31,17 @@ export const SourceSelectionPage: React.FC = () => {
       console.log('📡 API 응답 데이터:', data);
       
       if (data.success && data.highlights && data.highlights.length > 0) {
-        const firstHighlight = data.highlights[0];
-        const clips = firstHighlight.clip_files.clips_by_participant;
+        // 전체 하이라이트 데이터 저장
+        setHighlightData(data);
         
-        const videoUrls = {
-          screen1: clips.host?.video?.s3_url || '',
-          screen2: clips.user1?.video?.s3_url || '',
-          screen3: clips.user2?.video?.s3_url || ''
-        };
+        // 첫 번째 하이라이트의 방장 영상들을 미리보기용으로 설정
+        const videoUrls: {[key: string]: string} = {};
+        data.highlights.forEach((highlight: any, index: number) => {
+          const clips = highlight.clip_files.clips_by_participant;
+          videoUrls[`screen${index + 1}`] = clips.host?.video?.s3_url || '';
+        });
         
         console.log('🎥 설정된 동영상 URLs:', videoUrls);
-        
-        // 각 화면에 해당하는 동영상 URL 설정
         setSelectedVideos(videoUrls);
       } else {
         console.error('❌ API 응답에서 하이라이트 데이터를 찾을 수 없습니다:', data);
@@ -66,8 +66,8 @@ export const SourceSelectionPage: React.FC = () => {
           console.log('🎭 [SourceSelection] 데모 모드 활성화');
           // 데모 모드로 실행 (서버 로드 없이 바로 데모 데이터 사용)
           actions.enableDemoMode();
-          // 데모 모드에서는 하이라이트 동영상 로딩도 스킵
-          setLoading(false);
+          // 데모 모드에서도 하이라이트 동영상 로드
+          await fetchHighlightVideos();
         } else if (roomCode) {
           console.log('📋 [SourceSelection] 실제 방 정보 조회 시작:', roomCode);
           
@@ -85,14 +85,16 @@ export const SourceSelectionPage: React.FC = () => {
           console.warn('⚠️ [SourceSelection] roomCode 파라미터가 없습니다 - 데모 모드로 실행');
           // 파라미터가 없는 경우 데모 모드로 실행 (서버 로드 없이)
           actions.enableDemoMode();
-          setLoading(false);
+          // 기본 동영상도 로드
+          await fetchHighlightVideos();
         }
       } catch (error) {
         console.error('❌ [SourceSelection] 초기화 실패:', error);
         console.log('🎭 [SourceSelection] 오류 발생으로 데모 모드로 전환');
-        // 에러 발생 시 데모 모드로 fallback (서버 로드 없이)
+        // 에러 발생 시 데모 모드로 fallback
         actions.enableDemoMode();
-        setLoading(false);
+        // 에러가 발생해도 기본 동영상은 로드
+        await fetchHighlightVideos();
       }
     };
 
@@ -132,6 +134,111 @@ export const SourceSelectionPage: React.FC = () => {
   // 게스트 플레이어 가져오기 (호스트 제외)
   const getGuestPlayers = () => {
     return state.participants?.filter(p => !p.isHost) || [];
+  };
+
+  // 화면 컴포넌트
+  const ScreenItem: React.FC<{ highlightIndex: number }> = ({ highlightIndex }) => {
+    const screenId = `screen${highlightIndex + 1}`;
+    const videoUrl = selectedVideos[screenId] || '';
+    
+    return (
+      <div className="w-fit h-fit relative">
+        {/* 영상화면과 버튼 컨테이너 */}
+        <div style={{ position: 'relative', width: '407.865px', height: '280px' }}>
+          {/* 영상화면 div */}
+          <div 
+            style={{ position: 'absolute', top: '0', left: '0', width: '407.865px', height: '249.672px', flexShrink: 0 }}
+            onClick={() => handleScreenSelect(screenId)}
+            className="cursor-pointer"
+          >
+            {/* 영상 내용 - 맨 뒤 레이어 */}
+            <div style={{ position: 'absolute', top: '0', left: '0', right: '0', bottom: '0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', zIndex: 1 }}>
+              {loading ? (
+                <span style={{ fontSize: '14px', opacity: 0.7 }}>동영상 로딩 중...</span>
+              ) : videoUrl ? (
+                <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+                  <video 
+                    src={videoUrl} 
+                    style={{ 
+                      width: '100%', 
+                      height: '100%', 
+                      objectFit: 'cover',
+                      mask: `url(#controller-mask-${highlightIndex + 1})`,
+                      WebkitMask: `url(#controller-mask-${highlightIndex + 1})`
+                    }} 
+                    muted 
+                    autoPlay 
+                    loop 
+                  />
+                  <svg width="0" height="0" style={{ position: 'absolute' }}>
+                    <defs>
+                      <mask id={`controller-mask-${highlightIndex + 1}`}>
+                        <rect width="100%" height="100%" fill="black"/>
+                        <path d="M108.125 252.672H34.3353L5.52704 224.874V191.517L19.6785 170.796V80.8329L3 70.7247V31.8083L34.8407 3H374.475L408.338 28.7758L409.854 68.7031L396.713 77.8004V170.29L410.865 187.474V223.863L381.551 252.672H307.256L283.502 220.831H130.363L108.125 252.672Z" fill="white" transform="scale(0.984, 0.98)"/>
+                      </mask>
+                    </defs>
+                  </svg>
+                </div>
+              ) : (
+                <span style={{ fontSize: '14px', opacity: 0.7 }}>동영상을 불러올 수 없습니다</span>
+              )}
+            </div>
+
+            {/* SVG 테두리 - 앞 레이어 */}
+            <svg xmlns="http://www.w3.org/2000/svg" width="414" height="255" viewBox="0 0 414 255" fill="none" style={{ position: 'absolute', top: '0', left: '0', width: '407.865px', height: '249.672px', zIndex: 2 }}>
+              <path d="M108.125 252.672H34.3353L5.52704 224.874V191.517L19.6785 170.796V80.8329L3 70.7247V31.8083L34.8407 3H374.475L408.338 28.7758L409.854 68.7031L396.713 77.8004V170.29L410.865 187.474V223.863L381.551 252.672H307.256L283.502 220.831H130.363L108.125 252.672Z" stroke={selectedScreens[screenId] ? `url(#paint0_linear_1960_31730_${highlightIndex + 1}_selected)` : `url(#paint0_linear_1960_31730_${highlightIndex + 1})`} strokeWidth="4.66"/>
+              <defs>
+                <linearGradient id={`paint0_linear_1960_31730_${highlightIndex + 1}`} x1="206.932" y1="3" x2="206.932" y2="252.672" gradientUnits="userSpaceOnUse">
+                  <stop stopColor="#3170FF"/>
+                  <stop offset="1" stopColor="#A2D2FF"/>
+                </linearGradient>
+                <linearGradient id={`paint0_linear_1960_31730_${highlightIndex + 1}_selected`} x1="206.932" y1="3" x2="206.932" y2="252.672" gradientUnits="userSpaceOnUse">
+                  <stop stopColor="#B2FEB4"/>
+                  <stop offset="1" stopColor="#2FEB49"/>
+                </linearGradient>
+              </defs>
+            </svg>
+            
+            {/* 오버레이 원형 아이콘 - 최상위 레이어 */}
+            <div style={{ position: 'absolute', top: '22px', right: '40px', width: '30.988px', height: '30.988px', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3 }}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none" style={{ position: 'absolute', width: '30.988px', height: '30.988px' }}>
+                <circle cx="15.8064" cy="15.9978" r="14.1324" stroke={selectedScreens[screenId] ? "#2FEB49" : "white"} strokeWidth="2.723"/>
+              </svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="12" viewBox="0 0 16 12" fill="none" style={{ position: 'relative', zIndex: 10, width: '13.063px', height: '8.826px' }}>
+                <path d="M1.27734 6.33706L5.40236 10.4105L14.3399 1.58472" stroke={selectedScreens[screenId] ? "#2FEB49" : "white"} strokeWidth="2.269" strokeLinecap="round"/>
+              </svg>
+            </div>
+          </div>
+          
+          {/* 하단 버튼 오버레이 */}
+          <div style={{ position: 'absolute', bottom: '30px', left: '50%', transform: 'translateX(-50%)' }}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="179" height="31" viewBox="0 0 180 31" fill="none" style={{ width: '178.943px', height: '30.29px', flexShrink: 0 }}>
+              <path d="M159.491 0.40625H20.1578L0.585938 30.696H179.529L159.491 0.40625Z" fill={selectedScreens[screenId] ? `url(#paint0_linear_1958_9666_${highlightIndex + 1}_selected)` : `url(#paint0_linear_1958_9666_${highlightIndex + 1})`}/>
+              <defs>
+                <linearGradient id={`paint0_linear_1958_9666_${highlightIndex + 1}`} x1="90.0573" y1="0.40625" x2="90.0573" y2="30.696" gradientUnits="userSpaceOnUse">
+                  <stop stopColor="#717DFF"/>
+                  <stop offset="1" stopColor="#340E82"/>
+                </linearGradient>
+                <linearGradient id={`paint0_linear_1958_9666_${highlightIndex + 1}_selected`} x1="90.0573" y1="0.40625" x2="90.0573" y2="30.696" gradientUnits="userSpaceOnUse">
+                  <stop stopColor="#B2FEB4"/>
+                  <stop offset="1" stopColor="#2FEB49"/>
+                </linearGradient>
+              </defs>
+              <text x="90" y="20" textAnchor="middle" fill="white" fontSize="14" fontFamily="Noto Sans, sans-serif" fontWeight="600">
+                화면 {highlightIndex + 1}
+              </text>
+            </svg>
+          </div>
+        </div>
+        
+        {/* 프로필 게스트 div */}
+        <div className="프로필게스트 flex justify-center items-center gap-[28px] mt-[10px]">
+          {getGuestPlayers().map((_, index) => (
+            <ProfileItem key={index + 1} screenId={screenId} itemIndex={index + 1} />
+          ))}
+        </div>
+      </div>
+    );
   };
 
   // 프로필 아이템 컴포넌트
@@ -303,310 +410,11 @@ export const SourceSelectionPage: React.FC = () => {
           animate="visible"
           variants={containerVariants}
         >
-          {/* 전체 영상 div */}
+          {/* 전체 영상 div - 동적 렌더링 */}
           <div className="flex justify-center items-start gap-[45px] w-fit">
-            {/* 화면1 div */}
-            <div className="w-fit h-fit relative">
-              {/* 영상화면과 버튼 컨테이너 */}
-              <div style={{ position: 'relative', width: '407.865px', height: '280px' }}>
-                {/* 영상화면 div */}
-                <div 
-                  style={{ position: 'absolute', top: '0', left: '0', width: '407.865px', height: '249.672px', flexShrink: 0 }}
-                  onClick={() => handleScreenSelect('screen1')}
-                  className="cursor-pointer"
-                >
-                  {/* 영상 내용 - 맨 뒤 레이어 */}
-                  <div style={{ position: 'absolute', top: '0', left: '0', right: '0', bottom: '0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', zIndex: 1 }}>
-                    {loading ? (
-                      <span style={{ fontSize: '14px', opacity: 0.7 }}>동영상 로딩 중...</span>
-                    ) : selectedVideos['screen1'] ? (
-                      <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
-                        <video 
-                          src={selectedVideos['screen1']} 
-                          style={{ 
-                            width: '100%', 
-                            height: '100%', 
-                            objectFit: 'cover',
-                            mask: 'url(#controller-mask-1)',
-                            WebkitMask: 'url(#controller-mask-1)'
-                          }}
-                          autoPlay
-                          muted
-                          loop
-                        />
-                        <svg width="0" height="0" style={{ position: 'absolute' }}>
-                          <defs>
-                            <mask id="controller-mask-1">
-                              <rect width="100%" height="100%" fill="black"/>
-                              <path d="M108.125 252.672H34.3353L5.52704 224.874V191.517L19.6785 170.796V80.8329L3 70.7247V31.8083L34.8407 3H374.475L408.338 28.7758L409.854 68.7031L396.713 77.8004V170.29L410.865 187.474V223.863L381.551 252.672H307.256L283.502 220.831H130.363L108.125 252.672Z" fill="white" transform="scale(0.984, 0.98)"/>
-                            </mask>
-                          </defs>
-                        </svg>
-                      </div>
-                    ) : (
-                      <span style={{ fontSize: '14px', opacity: 0.7 }}>동영상을 불러올 수 없습니다</span>
-                    )}
-                  </div>
-
-                  {/* SVG 테두리 - 앞 레이어 */}
-                  <svg xmlns="http://www.w3.org/2000/svg" width="414" height="255" viewBox="0 0 414 255" fill="none" style={{ position: 'absolute', top: '0', left: '0', width: '407.865px', height: '249.672px', zIndex: 2 }}>
-                    <path d="M108.125 252.672H34.3353L5.52704 224.874V191.517L19.6785 170.796V80.8329L3 70.7247V31.8083L34.8407 3H374.475L408.338 28.7758L409.854 68.7031L396.713 77.8004V170.29L410.865 187.474V223.863L381.551 252.672H307.256L283.502 220.831H130.363L108.125 252.672Z" stroke={selectedScreens['screen1'] ? "url(#paint0_linear_1960_31730_1_selected)" : "url(#paint0_linear_1960_31730_1)"} strokeWidth="4.66"/>
-                    <defs>
-                      <linearGradient id="paint0_linear_1960_31730_1" x1="206.932" y1="3" x2="206.932" y2="252.672" gradientUnits="userSpaceOnUse">
-                        <stop stopColor="#3170FF"/>
-                        <stop offset="1" stopColor="#A2D2FF"/>
-                      </linearGradient>
-                      <linearGradient id="paint0_linear_1960_31730_1_selected" x1="206.932" y1="3" x2="206.932" y2="252.672" gradientUnits="userSpaceOnUse">
-                        <stop stopColor="#B2FEB4"/>
-                        <stop offset="1" stopColor="#2FEB49"/>
-                      </linearGradient>
-                    </defs>
-                  </svg>
-                  
-                  {/* 오버레이 원형 아이콘 - 최상위 레이어 */}
-                  <div style={{ position: 'absolute', top: '22px', right: '40px', width: '30.988px', height: '30.988px', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3 }}>
-                    {/* 원형 배경 */}
-                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none" style={{ position: 'absolute', width: '30.988px', height: '30.988px' }}>
-                      <circle cx="15.8064" cy="15.9978" r="14.1324" stroke={selectedScreens['screen1'] ? "#2FEB49" : "white"} strokeWidth="2.723"/>
-                    </svg>
-                    {/* 체크마크 중앙 배치 */}
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="12" viewBox="0 0 16 12" fill="none" style={{ position: 'relative', zIndex: 10, width: '13.063px', height: '8.826px' }}>
-                      <path d="M1.27734 6.33706L5.40236 10.4105L14.3399 1.58472" stroke={selectedScreens['screen1'] ? "#2FEB49" : "white"} strokeWidth="2.269" strokeLinecap="round"/>
-                    </svg>
-                  </div>
-                </div>
-                
-                {/* 하단 버튼 오버레이 */}
-                <div style={{ position: 'absolute', bottom: '30px', left: '50%', transform: 'translateX(-50%)' }}>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="179" height="31" viewBox="0 0 180 31" fill="none" style={{ width: '178.943px', height: '30.29px', flexShrink: 0 }}>
-                    <path d="M159.491 0.40625H20.1578L0.585938 30.696H179.529L159.491 0.40625Z" fill={selectedScreens['screen1'] ? "url(#paint0_linear_1958_9666_1_selected)" : "url(#paint0_linear_1958_9666_1)"}/>
-                    <defs>
-                      <linearGradient id="paint0_linear_1958_9666_1" x1="90.0573" y1="0.40625" x2="90.0573" y2="30.696" gradientUnits="userSpaceOnUse">
-                        <stop stopColor="#717DFF"/>
-                        <stop offset="1" stopColor="#340E82"/>
-                      </linearGradient>
-                      <linearGradient id="paint0_linear_1958_9666_1_selected" x1="90.0573" y1="0.40625" x2="90.0573" y2="30.696" gradientUnits="userSpaceOnUse">
-                        <stop stopColor="#B2FEB4"/>
-                        <stop offset="1" stopColor="#2FEB49"/>
-                      </linearGradient>
-                    </defs>
-                    <text x="90" y="20" textAnchor="middle" fill="white" fontSize="14" fontFamily="Noto Sans, sans-serif" fontWeight="600">
-                      화면 1
-                    </text>
-                  </svg>
-                </div>
-              </div>
-              
-              {/* 프로필 게스트 div */}
-              <div className="프로필게스트 flex justify-center items-center gap-[28px] mt-[10px]">
-                {/* 게스트 플레이어 수만큼 프로필 아이템 생성 */}
-                {getGuestPlayers().map((_, index) => (
-                  <ProfileItem key={index + 1} screenId="screen1" itemIndex={index + 1} />
-                ))}
-              </div>
-            </div>
-            
-            {/* 화면2 div */}
-            <div className="w-fit h-fit rounded-lg relative">
-              {/* 영상화면과 버튼 컨테이너 */}
-              <div style={{ position: 'relative', width: '407.865px', height: '280px' }}>
-                {/* 영상화면 div */}
-                <div 
-                  style={{ position: 'absolute', top: '0', left: '0', width: '407.865px', height: '249.672px', flexShrink: 0 }}
-                  onClick={() => handleScreenSelect('screen2')}
-                  className="cursor-pointer"
-                >
-                  {/* 영상 내용 - 맨 뒤 레이어 */}
-                  <div style={{ position: 'absolute', top: '0', left: '0', right: '0', bottom: '0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', zIndex: 1 }}>
-                    {loading ? (
-                      <span style={{ fontSize: '14px', opacity: 0.7 }}>동영상 로딩 중...</span>
-                    ) : selectedVideos['screen2'] ? (
-                      <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
-                        <video 
-                          src={selectedVideos['screen2']} 
-                          style={{ 
-                            width: '100%', 
-                            height: '100%', 
-                            objectFit: 'cover',
-                            mask: 'url(#controller-mask-2)',
-                            WebkitMask: 'url(#controller-mask-2)'
-                          }}
-                          autoPlay
-                          muted
-                          loop
-                        />
-                        <svg width="0" height="0" style={{ position: 'absolute' }}>
-                          <defs>
-                            <mask id="controller-mask-2">
-                              <rect width="100%" height="100%" fill="black"/>
-                              <path d="M108.125 252.672H34.3353L5.52704 224.874V191.517L19.6785 170.796V80.8329L3 70.7247V31.8083L34.8407 3H374.475L408.338 28.7758L409.854 68.7031L396.713 77.8004V170.29L410.865 187.474V223.863L381.551 252.672H307.256L283.502 220.831H130.363L108.125 252.672Z" fill="white" transform="scale(0.984, 0.98)"/>
-                            </mask>
-                          </defs>
-                        </svg>
-                      </div>
-                    ) : (
-                      <span style={{ fontSize: '14px', opacity: 0.7 }}>동영상을 불러올 수 없습니다</span>
-                    )}
-                  </div>
-
-                  {/* SVG 테두리 - 앞 레이어 */}
-                  <svg xmlns="http://www.w3.org/2000/svg" width="414" height="255" viewBox="0 0 414 255" fill="none" style={{ position: 'absolute', top: '0', left: '0', width: '407.865px', height: '249.672px', zIndex: 2 }}>
-                    <path d="M108.125 252.672H34.3353L5.52704 224.874V191.517L19.6785 170.796V80.8329L3 70.7247V31.8083L34.8407 3H374.475L408.338 28.7758L409.854 68.7031L396.713 77.8004V170.29L410.865 187.474V223.863L381.551 252.672H307.256L283.502 220.831H130.363L108.125 252.672Z" stroke={selectedScreens['screen2'] ? "url(#paint0_linear_1960_31730_2_selected)" : "url(#paint0_linear_1960_31730_2)"} strokeWidth="4.66"/>
-                    <defs>
-                      <linearGradient id="paint0_linear_1960_31730_2" x1="206.932" y1="3" x2="206.932" y2="252.672" gradientUnits="userSpaceOnUse">
-                        <stop stopColor="#3170FF"/>
-                        <stop offset="1" stopColor="#A2D2FF"/>
-                      </linearGradient>
-                      <linearGradient id="paint0_linear_1960_31730_2_selected" x1="206.932" y1="3" x2="206.932" y2="252.672" gradientUnits="userSpaceOnUse">
-                        <stop stopColor="#B2FEB4"/>
-                        <stop offset="1" stopColor="#2FEB49"/>
-                      </linearGradient>
-                    </defs>
-                  </svg>
-                  
-                  {/* 오버레이 원형 아이콘 - 최상위 레이어 */}
-                  <div style={{ position: 'absolute', top: '22px', right: '40px', width: '30.988px', height: '30.988px', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3 }}>
-                    {/* 원형 배경 */}
-                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none" style={{ position: 'absolute', width: '30.988px', height: '30.988px' }}>
-                      <circle cx="15.8064" cy="15.9978" r="14.1324" stroke={selectedScreens['screen2'] ? "#2FEB49" : "white"} strokeWidth="2.723"/>
-                    </svg>
-                    {/* 체크마크 중앙 배치 */}
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="12" viewBox="0 0 16 12" fill="none" style={{ position: 'relative', zIndex: 10, width: '13.063px', height: '8.826px' }}>
-                      <path d="M1.27734 6.33706L5.40236 10.4105L14.3399 1.58472" stroke={selectedScreens['screen2'] ? "#2FEB49" : "white"} strokeWidth="2.269" strokeLinecap="round"/>
-                    </svg>
-                  </div>
-                </div>
-                
-                {/* 하단 버튼 오버레이 */}
-                <div style={{ position: 'absolute', bottom: '30px', left: '50%', transform: 'translateX(-50%)' }}>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="179" height="31" viewBox="0 0 180 31" fill="none" style={{ width: '178.943px', height: '30.29px', flexShrink: 0 }}>
-                    <path d="M159.491 0.40625H20.1578L0.585938 30.696H179.529L159.491 0.40625Z" fill={selectedScreens['screen2'] ? "url(#paint0_linear_1958_9666_2_selected)" : "url(#paint0_linear_1958_9666_2)"}/>
-                    <defs>
-                      <linearGradient id="paint0_linear_1958_9666_2" x1="90.0573" y1="0.40625" x2="90.0573" y2="30.696" gradientUnits="userSpaceOnUse">
-                        <stop stopColor="#717DFF"/>
-                        <stop offset="1" stopColor="#340E82"/>
-                      </linearGradient>
-                      <linearGradient id="paint0_linear_1958_9666_2_selected" x1="90.0573" y1="0.40625" x2="90.0573" y2="30.696" gradientUnits="userSpaceOnUse">
-                        <stop stopColor="#B2FEB4"/>
-                        <stop offset="1" stopColor="#2FEB49"/>
-                      </linearGradient>
-                    </defs>
-                    <text x="90" y="20" textAnchor="middle" fill="white" fontSize="14" fontFamily="Noto Sans, sans-serif" fontWeight="600">
-                      화면 2
-                    </text>
-                  </svg>
-                </div>
-              </div>
-              
-              {/* 프로필 게스트 div */}
-              <div className="프로필게스트 flex justify-center items-center gap-[28px] mt-[10px]">
-                {/* 게스트 플레이어 수만큼 프로필 아이템 생성 */}
-                {getGuestPlayers().map((_, index) => (
-                  <ProfileItem key={index + 1} screenId="screen2" itemIndex={index + 1} />
-                ))}
-              </div>
-            </div>
-            
-            {/* 화면3 div */}
-            <div className="w-fit h-fit rounded-lg relative">
-              {/* 영상화면과 버튼 컨테이너 */}
-              <div style={{ position: 'relative', width: '407.865px', height: '280px' }}>
-                {/* 영상화면 div */}
-                <div 
-                  style={{ position: 'absolute', top: '0', left: '0', width: '407.865px', height: '249.672px', flexShrink: 0 }}
-                  onClick={() => handleScreenSelect('screen3')}
-                  className="cursor-pointer"
-                >
-                  {/* 영상 내용 - 맨 뒤 레이어 */}
-                  <div style={{ position: 'absolute', top: '0', left: '0', right: '0', bottom: '0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', zIndex: 1 }}>
-                    {loading ? (
-                      <span style={{ fontSize: '14px', opacity: 0.7 }}>동영상 로딩 중...</span>
-                    ) : selectedVideos['screen3'] ? (
-                      <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
-                        <video 
-                          src={selectedVideos['screen3']} 
-                          style={{ 
-                            width: '100%', 
-                            height: '100%', 
-                            objectFit: 'cover',
-                            mask: 'url(#controller-mask-3)',
-                            WebkitMask: 'url(#controller-mask-3)'
-                          }}
-                          autoPlay
-                          muted
-                          loop
-                        />
-                        <svg width="0" height="0" style={{ position: 'absolute' }}>
-                          <defs>
-                            <mask id="controller-mask-3">
-                              <rect width="100%" height="100%" fill="black"/>
-                              <path d="M108.125 252.672H34.3353L5.52704 224.874V191.517L19.6785 170.796V80.8329L3 70.7247V31.8083L34.8407 3H374.475L408.338 28.7758L409.854 68.7031L396.713 77.8004V170.29L410.865 187.474V223.863L381.551 252.672H307.256L283.502 220.831H130.363L108.125 252.672Z" fill="white" transform="scale(0.984, 0.98)"/>
-                            </mask>
-                          </defs>
-                        </svg>
-                      </div>
-                    ) : (
-                      <span style={{ fontSize: '14px', opacity: 0.7 }}>동영상을 불러올 수 없습니다</span>
-                    )}
-                  </div>
-
-                  {/* SVG 테두리 - 앞 레이어 */}
-                  <svg xmlns="http://www.w3.org/2000/svg" width="414" height="255" viewBox="0 0 414 255" fill="none" style={{ position: 'absolute', top: '0', left: '0', width: '407.865px', height: '249.672px', zIndex: 2 }}>
-                    <path d="M108.125 252.672H34.3353L5.52704 224.874V191.517L19.6785 170.796V80.8329L3 70.7247V31.8083L34.8407 3H374.475L408.338 28.7758L409.854 68.7031L396.713 77.8004V170.29L410.865 187.474V223.863L381.551 252.672H307.256L283.502 220.831H130.363L108.125 252.672Z" stroke={selectedScreens['screen3'] ? "url(#paint0_linear_1960_31730_3_selected)" : "url(#paint0_linear_1960_31730_3)"} strokeWidth="4.66"/>
-                    <defs>
-                      <linearGradient id="paint0_linear_1960_31730_3" x1="206.932" y1="3" x2="206.932" y2="252.672" gradientUnits="userSpaceOnUse">
-                        <stop stopColor="#3170FF"/>
-                        <stop offset="1" stopColor="#A2D2FF"/>
-                      </linearGradient>
-                      <linearGradient id="paint0_linear_1960_31730_3_selected" x1="206.932" y1="3" x2="206.932" y2="252.672" gradientUnits="userSpaceOnUse">
-                        <stop stopColor="#B2FEB4"/>
-                        <stop offset="1" stopColor="#2FEB49"/>
-                      </linearGradient>
-                    </defs>
-                  </svg>
-                  
-                  {/* 오버레이 원형 아이콘 - 최상위 레이어 */}
-                  <div style={{ position: 'absolute', top: '22px', right: '40px', width: '30.988px', height: '30.988px', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3 }}>
-                    {/* 원형 배경 */}
-                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none" style={{ position: 'absolute', width: '30.988px', height: '30.988px' }}>
-                      <circle cx="15.8064" cy="15.9978" r="14.1324" stroke={selectedScreens['screen3'] ? "#2FEB49" : "white"} strokeWidth="2.723"/>
-                    </svg>
-                    {/* 체크마크 중앙 배치 */}
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="12" viewBox="0 0 16 12" fill="none" style={{ position: 'relative', zIndex: 10, width: '13.063px', height: '8.826px' }}>
-                      <path d="M1.27734 6.33706L5.40236 10.4105L14.3399 1.58472" stroke={selectedScreens['screen3'] ? "#2FEB49" : "white"} strokeWidth="2.269" strokeLinecap="round"/>
-                    </svg>
-                  </div>
-                </div>
-                
-                {/* 하단 버튼 오버레이 */}
-                <div style={{ position: 'absolute', bottom: '30px', left: '50%', transform: 'translateX(-50%)' }}>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="179" height="31" viewBox="0 0 180 31" fill="none" style={{ width: '178.943px', height: '30.29px', flexShrink: 0 }}>
-                    <path d="M159.491 0.40625H20.1578L0.585938 30.696H179.529L159.491 0.40625Z" fill={selectedScreens['screen3'] ? "url(#paint0_linear_1958_9666_3_selected)" : "url(#paint0_linear_1958_9666_3)"}/>
-                    <defs>
-                      <linearGradient id="paint0_linear_1958_9666_3" x1="90.0573" y1="0.40625" x2="90.0573" y2="30.696" gradientUnits="userSpaceOnUse">
-                        <stop stopColor="#717DFF"/>
-                        <stop offset="1" stopColor="#340E82"/>
-                      </linearGradient>
-                      <linearGradient id="paint0_linear_1958_9666_3_selected" x1="90.0573" y1="0.40625" x2="90.0573" y2="30.696" gradientUnits="userSpaceOnUse">
-                        <stop stopColor="#B2FEB4"/>
-                        <stop offset="1" stopColor="#2FEB49"/>
-                      </linearGradient>
-                    </defs>
-                    <text x="90" y="20" textAnchor="middle" fill="white" fontSize="14" fontFamily="Noto Sans, sans-serif" fontWeight="600">
-                      화면 3
-                    </text>
-                  </svg>
-                </div>
-              </div>
-              
-              {/* 프로필 게스트 div */}
-              <div className="프로필게스트 flex justify-center items-center gap-[28px] mt-[10px]">
-                {/* 게스트 플레이어 수만큼 프로필 아이템 생성 */}
-                {getGuestPlayers().map((_, index) => (
-                  <ProfileItem key={index + 1} screenId="screen3" itemIndex={index + 1} />
-                ))}
-              </div>
-            </div>
+            {highlightData && highlightData.highlights.map((_, index) => (
+              <ScreenItem key={index} highlightIndex={index} />
+            ))}
           </div>
         </motion.div>
           </main>
