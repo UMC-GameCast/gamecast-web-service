@@ -5,6 +5,8 @@ import RenderModal from './components/RenderModal'
 import VideoUploader from './components/VideoUploader'
 import MultiSpeakerAudioUploader from './components/MultiSpeakerAudioUploader'
 import { Navigation } from '../../../components/gamecast/common/Navigation';
+
+import { PageTransition } from '../../../components/gamecast/common/PageTransition';
 import SubtitleEditMainPanel from './components/SubtitleEditMainPanel';
 import SubtitleTimelinePanel from './components/SubtitleTimelinePanel';
 
@@ -19,7 +21,6 @@ const SubtitleEditPage: React.FC = () => {
     duration,
     isPlaying,
     selectedSegment,
-    showHelp,
     showAudioUploader,
     showMultiSpeakerUploader,
     showVideoUploader,
@@ -36,13 +37,12 @@ const SubtitleEditPage: React.FC = () => {
     
     // 액션
     setSelectedSegment,
-    setShowHelp,
-    setShowAudioUploader,
     setShowMultiSpeakerUploader,
     setShowVideoUploader,
     setIsRendering,
     setRenderProgress,
     setDuration,
+    setCurrentTime,
     
     // 이벤트 핸들러
     handleVideoUploaded,
@@ -58,9 +58,6 @@ const SubtitleEditPage: React.FC = () => {
     deleteSubtitleSegment,
     updateSubtitleSegment,
     handleTextChange,
-    togglePlayback,
-    exportSubtitles,
-    importSubtitles,
     handleFFmpegRender,
     handleClientSideRender
   } = useSubtitleEditor(timelineRef)
@@ -93,9 +90,31 @@ const SubtitleEditPage: React.FC = () => {
   }
 
   return (
-    <>
+    <PageTransition className="min-h-screen w-full flex flex-col justify-between bg-[linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,6,72,1)_100%)] relative overflow-hidden">
+      
+      {/* 배경 장식 이미지 */}
+      <img 
+        src="/assets/gamecast/participate/desingBG.png"
+        alt="배경 장식"
+        className="absolute inset-0 w-full h-full object-fill pointer-events-none z-0 opacity-60"
+      />
+      
+      {/* 메인페이지 스타일의 그라디언트 원형 배경 효과들 */}
+      <div 
+        className="absolute w-[1919px] h-[1919px] flex-shrink-0 rounded-full top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 -z-10"
+        style={{
+          background: 'radial-gradient(50% 50% at 50% 50%, rgba(68, 60, 179, 0.30) 0%, rgba(0, 0, 0, 0.00) 100%)'
+        }}
+      />
+      <div 
+        className="absolute w-[1500px] h-[1500px] flex-shrink-0 rounded-full top-3/4 right-1/4 -translate-x-1/2 -translate-y-1/2 -z-10"
+        style={{
+          background: 'radial-gradient(50% 50% at 50% 50%, rgba(176, 119, 255, 0.25) 0%, rgba(0, 0, 0, 0.00) 100%)'
+        }}
+      />
+      
       <Navigation />
-      <div className="min-h-screen text-white" style={{ backgroundColor: '#87CEEB' }}>
+      <div className="min-h-screen text-white relative z-10">
         {/* 숨겨진 메인 동영상 업로드용 file input */}
         <input
           ref={fileInputRef}
@@ -150,6 +169,7 @@ const SubtitleEditPage: React.FC = () => {
               setSelectedSegment={setSelectedSegment as (id: string | null) => void}
               setPendingSmallVideoIndex={setPendingSmallVideoIndex as (index: number | null) => void}
               onDurationChange={setDuration}
+              onTimeUpdate={setCurrentTime}
             />
           </div>
           {/* 구분선 */}
@@ -171,27 +191,61 @@ const SubtitleEditPage: React.FC = () => {
           >
             {/* 유저 리스트 */}
             <div className="flex flex-col" style={{ width: 80 }}>
+              {/* 타임라인 헤더 높이만큼 여백 추가 (헤더: 32.578px + spacer: 12px) */}
+              <div style={{ height: '44.578px' }} />
               {[...Array(5)].map((_, idx) => (
-                <div key={idx} className="h-[50px] flex items-center justify-center text-sm font-semibold text-gray-300">
-                  {`유저${idx + 1}`}
+                <div key={idx} className="h-[50px] flex items-center justify-center">
+                  {/* 이미지div랑 이름div를 감싸는 div */}
+                  <div style={{ width: '31px', height: '45px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                    {/* 아바타 이미지 (동그라미) */}
+                    <div style={{
+                      width: '28px',
+                      height: '28px',
+                      borderRadius: '50%',
+                      backgroundColor: `hsl(${idx * 72}, 60%, 60%)`, // 각 유저마다 다른 색상
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '12px',
+                      fontWeight: 'bold',
+                      color: '#FFF'
+                    }}>
+                      {idx + 1}
+                    </div>
+                    {/* 유저 이름 */}
+                    <div style={{
+                      color: '#FFF',
+                      textAlign: 'center',
+                      fontFamily: '"Rozha One"',
+                      fontSize: '10px',
+                      fontStyle: 'normal',
+                      fontWeight: 400,
+                      lineHeight: '150%', /* 15px */
+                      letterSpacing: '-0.19px',
+                      alignSelf: 'stretch'
+                    }}>
+                      유저{idx + 1}
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
             {/* 타임라인 */}
             <div className="flex-1">
-              <SubtitleTimelinePanel
-                videoUrl={videoUrl}
-                subtitleSegments={subtitleSegments}
-                speakers={speakers}
-                emotions={emotions}
-                selectedSegment={selectedSegment}
-                duration={duration}
-                timelineRef={timelineRef as React.RefObject<HTMLDivElement | null>}
-                handleDragStart={handleDragStart}
-                handleResizeStart={handleResizeStart}
-                setSelectedSegment={setSelectedSegment as (id: string | null) => void}
-                handleTextChange={handleTextChange}
-              />
+                          <SubtitleTimelinePanel
+              videoUrl={videoUrl}
+              subtitleSegments={subtitleSegments}
+              speakers={speakers}
+              emotions={emotions}
+              selectedSegment={selectedSegment}
+              duration={duration}
+              currentTime={currentTime}
+              timelineRef={timelineRef as React.RefObject<HTMLDivElement | null>}
+              handleDragStart={handleDragStart}
+              handleResizeStart={handleResizeStart}
+              setSelectedSegment={setSelectedSegment as (id: string | null) => void}
+              handleTextChange={handleTextChange}
+            />
             </div>
           </div>
           {/* 렌더링 모달 */}
@@ -213,23 +267,16 @@ const SubtitleEditPage: React.FC = () => {
             </div>
           )}
         </div>
-        <footer className="footer">
+        <footer className="footer relative z-10">
           {/* SubtitleHeader를 맨 아래로 이동 */}
           <SubtitleHeader
-            showHelp={showHelp}
             showVideoUploader={showVideoUploader}
-            showAudioUploader={showAudioUploader}
             showMultiSpeakerUploader={showMultiSpeakerUploader}
             isRendering={isRendering}
             videoUrl={videoUrl}
-            onToggleHelp={() => setShowHelp(!showHelp)}
             onToggleVideoUploader={() => setShowVideoUploader(!showVideoUploader)}
-            onToggleAudioUploader={() => setShowAudioUploader(!showAudioUploader)}
             onToggleMultiSpeakerUploader={() => setShowMultiSpeakerUploader(!showMultiSpeakerUploader)}
-            onImportSubtitles={importSubtitles}
-            onExportSubtitles={exportSubtitles}
             onAddSubtitleSegment={addSubtitleSegment}
-            onTogglePlayback={togglePlayback}
             onFFmpegRender={handleFFmpegRender}
             onCanvasRender={handleClientSideRender}
             onMainVideoUpload={() => fileInputRef.current?.click()}
@@ -237,7 +284,7 @@ const SubtitleEditPage: React.FC = () => {
           />
         </footer>
       </div>
-    </>
+    </PageTransition>
   )
 }
 

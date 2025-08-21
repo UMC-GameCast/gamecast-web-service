@@ -206,3 +206,43 @@ interface CharacterData {
 - Socket ID to guestUserId mapping for participant tracking
 - Connection quality monitoring and error handling
 - Automatic reconnection and cleanup on page unload
+
+## Subtitle Editor Feature
+
+### Advanced Subtitle Generation System
+- **Single Speaker**: OpenAI Whisper API with Korean auto-detection
+- **Multi-Speaker**: Support for 5 distinct speakers (맥쥬, 초록색매실, 소정양주, 김모질, 돔토로)
+- **Individual Processing**: Each speaker's audio processed separately
+- **Batch Processing**: All uploaded files processed together with time-based sorting
+
+### Rendering Options
+- **FFmpeg Rendering**: Primary method using FFmpeg.wasm
+- **Canvas Rendering**: Fallback method for compatibility
+- **Format Support**: MP4, WebM input; SRT subtitle export/import
+
+### Editor Controls
+- **Keyboard Shortcuts**: Space (play/pause), Delete (remove), Ctrl+N (new), Ctrl+S (export), Ctrl+O (import)
+- **Timeline Editing**: Drag for time adjustment, resize for duration
+- **Real-time Preview**: Live subtitle preview with emotion and speaker settings
+
+### File Structure for Subtitle Editor
+- **Main Page**: `client/src/pages/gamecast/subtitle-edit/SubtitleEditPage.tsx`
+- **Components**: `client/src/pages/gamecast/subtitle-edit/components/` (VideoPlayer, TimelineEditor, etc.)
+- **Custom Hook**: `client/src/pages/gamecast/subtitle-edit/hooks/useSubtitleEditor.ts`
+- **Types**: `client/src/pages/gamecast/subtitle-edit/types/index.ts`
+
+## Testing and Quality Assurance
+
+### No Test Framework Configured
+- Currently no automated testing setup in client or backend
+- Relies on manual testing and TypeScript type checking
+- When implementing tests, check existing project structure first
+
+### Code Quality Commands
+```bash
+# Client code quality checks
+cd client
+npm run type-check    # TypeScript validation without build
+npm run lint         # ESLint code analysis
+npm run lint:fix     # Auto-fix ESLint issues
+```

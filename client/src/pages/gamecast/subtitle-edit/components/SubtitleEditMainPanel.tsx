@@ -1,12 +1,12 @@
 import React from 'react';
 import VideoSection from '../components/VideoSection';
 import SubtitleStylePanel from '../components/SubtitleStylePanel';
-import TimelineHeader from './TimelineHeader';
+
 import SmallVideoList from './SmallVideoList';
 
 interface SubtitleEditMainPanelProps {
   videos: any[];
-  videoUrl: string;
+  videoUrl: string | null;
   subtitleSegments: any[];
   speakers: any[];
   emotions: any[];
@@ -32,6 +32,7 @@ interface SubtitleEditMainPanelProps {
   setSelectedSegment: (id: string | null) => void;
   setPendingSmallVideoIndex: (index: number | null) => void;
   onDurationChange: (duration: number) => void;
+  onTimeUpdate: (time: number) => void;
 }
 
 const SubtitleEditMainPanel: React.FC<SubtitleEditMainPanelProps> = ({
@@ -45,7 +46,6 @@ const SubtitleEditMainPanel: React.FC<SubtitleEditMainPanelProps> = ({
   isPlaying,
   showVideoUploader,
   showAudioUploader,
-  activeVideoIndex,
   handleVideoDelete,
   handleVideoUploadStart,
   handleMainVideoUploaded,
@@ -62,11 +62,8 @@ const SubtitleEditMainPanel: React.FC<SubtitleEditMainPanelProps> = ({
   setSelectedSegment,
   setPendingSmallVideoIndex,
   onDurationChange,
+  onTimeUpdate,
 }) => {
-  const [zoom, setZoom] = React.useState(100);
-  const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    // 구현 필요: 타임라인 클릭 시 시간 이동
-  };
 
   return (
     <div className="p-4">
@@ -76,7 +73,7 @@ const SubtitleEditMainPanel: React.FC<SubtitleEditMainPanelProps> = ({
           style={{
             display: 'flex',
             height: '408.475px',
-            padding: '9.262px 20px 9.262px 9.262px',
+            padding: '6px',
             flexDirection: 'column',
             alignItems: 'flex-start',
             gap: '9.262px',
@@ -84,6 +81,7 @@ const SubtitleEditMainPanel: React.FC<SubtitleEditMainPanelProps> = ({
             border: '1.852px solid #94A8DD',
             width: '216.26px',
             marginRight: '19.1px',
+            overflow: 'hidden',
           }}
         >
           <SmallVideoList
@@ -106,7 +104,7 @@ const SubtitleEditMainPanel: React.FC<SubtitleEditMainPanelProps> = ({
               isPlaying={isPlaying}
               showVideoUploader={showVideoUploader}
               showAudioUploader={showAudioUploader}
-              onTimeUpdate={() => {}}
+              onTimeUpdate={onTimeUpdate}
               onDurationChange={onDurationChange}
               onPlayPause={() => {}}
               onVideoUploaded={handleMainVideoUploaded}

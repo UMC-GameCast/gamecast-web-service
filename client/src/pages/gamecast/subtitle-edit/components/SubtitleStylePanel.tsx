@@ -267,16 +267,19 @@ const SubtitleStylePanel: React.FC<SubtitleStylePanelProps> = ({
           <div style={{ display: 'flex', flexDirection: 'row', gap: '8px', width: '100%' }}>
             {emotionOptions.map((emotion) => {
               const isSelected = selectedEmotion === emotion.id;
+              const isDisabled = selectedEmphasis === 'normal'; // 일반 자막일 때 비활성화
               return (
                 <button
                   key={emotion.id}
-                  onClick={() => onEmotionChange(emotion.id)}
+                  onClick={() => !isDisabled && onEmotionChange(emotion.id)}
+                  disabled={isDisabled}
                   style={{
                     width: '101.25px',
                     height: '46px',
-                    borderRadius: isSelected ? '9.262px' : '9px',
-                    border: isSelected ? '1.292px solid #FFF' : '1.292px solid #6483FF',
-                    background: isSelected ? '#1D1F3B' : 'transparent',
+                    borderRadius: '9.262px',
+                    border: isSelected && !isDisabled ? '1.292px solid #FFF' : '1.292px solid #6483FF',
+                    background: isSelected && !isDisabled ? '#1D1F3B' : 'transparent',
+                    opacity: isDisabled ? 0.5 : 1, // 비활성화 시 투명도
                     display: 'flex',
                     padding: '9.262px 0',
                     justifyContent: 'center',
@@ -286,7 +289,7 @@ const SubtitleStylePanel: React.FC<SubtitleStylePanelProps> = ({
                     color: '#6483FF',
                     fontWeight: 700,
                     fontSize: '16px',
-                    cursor: 'pointer',
+                    cursor: isDisabled ? 'not-allowed' : 'pointer',
                     transition: 'all 0.2s',
                     textAlign: 'center',
                   }}
