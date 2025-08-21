@@ -2061,61 +2061,61 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
       if (data.canStartRecording) {
         console.log('🎬 [Context] 3초 카운트다운 시작');
         
-        // 카운트다운 시작 알림
+        // 카운트다운 시작 (3초부터 시작)
+        let countdownTime = 3;
         dispatch({
           type: 'SET_PREPARATION',
-          payload: { countdown: 3 }
+          payload: { countdown: countdownTime }
         });
         
-        // 3초 카운트다운
-        let countdownTime = 3;
-        const countdownInterval = setInterval(() => {
+        // 즉시 첫 번째 카운트다운 실행 후 setInterval로 나머지 처리
+        const runCountdown = () => {
           countdownTime--;
-          dispatch({
-            type: 'SET_PREPARATION',
-            payload: { countdown: countdownTime }
-          });
           
-          if (countdownTime <= 0) {
-            clearInterval(countdownInterval);
+          if (countdownTime > 0) {
+            dispatch({
+              type: 'SET_PREPARATION',
+              payload: { countdown: countdownTime }
+            });
+            setTimeout(runCountdown, 1000);
+          } else {
+            // 모든 사용자에게 녹화 시작 이벤트 직접 발생
+            const recordingStartData = {
+              startedBy: 'AUTO_SYSTEM',
+              autoStarted: true,
+              timestamp: new Date()
+            };
             
-            // 카운트다운 완료 후 녹화 시작
-            setTimeout(() => {
-              // 모든 사용자에게 녹화 시작 이벤트 직접 발생
-              const recordingStartData = {
-                startedBy: 'AUTO_SYSTEM',
-                autoStarted: true,
-                timestamp: new Date()
-              };
-              
-              console.log('🎬 [Context] 자동 녹화 시작 (클라이언트):', recordingStartData);
-              
-              // 녹화 상태 업데이트
-              const currentTime = Date.now();
-              dispatch({ 
-                type: 'SET_RECORDING_STATE', 
-                payload: { 
-                  isRecording: true, 
-                  recordingTime: 0,
-                  startTime: currentTime,
-                  uploading: false,
-                  uploadProgress: 0
-                }
-              });
-              
-              // 카운트다운 상태 리셋
-              dispatch({
-                type: 'SET_PREPARATION',
-                payload: { countdown: null }
-              });
-              
-              // GameRecorder 시작
-              gameRecorderRef.current?.startSyncRecording().catch(error => {
-                console.error('❌ [Context] 자동 녹화 시작 실패:', error);
-              });
-            }, 100);
+            console.log('🎬 [Context] 자동 녹화 시작 (클라이언트):', recordingStartData);
+            
+            // 녹화 상태 업데이트
+            const currentTime = Date.now();
+            dispatch({ 
+              type: 'SET_RECORDING_STATE', 
+              payload: { 
+                isRecording: true, 
+                recordingTime: 0,
+                startTime: currentTime,
+                uploading: false,
+                uploadProgress: 0
+              }
+            });
+            
+            // 카운트다운 상태 리셋
+            dispatch({
+              type: 'SET_PREPARATION',
+              payload: { countdown: null }
+            });
+            
+            // GameRecorder 시작
+            gameRecorderRef.current?.startSyncRecording().catch(error => {
+              console.error('❌ [Context] 자동 녹화 시작 실패:', error);
+            });
           }
-        }, 1000);
+        };
+        
+        // 1초 후에 첫 번째 카운트다운 실행 (3 → 2)
+        setTimeout(runCountdown, 1000);
       }
     });
 
