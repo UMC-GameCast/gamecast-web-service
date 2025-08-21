@@ -11,9 +11,9 @@ export default defineConfig({
   server: {
     host: true,
     port: 3000,
-    allowedHosts: ['.ngrok-free.app', '.ngrok.io', '.ngrok.app'], // 🔑 ngrok 도메인 허용
-    // 개발용으로는 모든 호스트 허용도 가능
-    // allowedHosts: 'all'
+    allowedHosts: 'all', // 🔑 모든 호스트에서 접속 허용 (개발용)
+    // 프로덕션에서는 특정 도메인만 허용:
+    // allowedHosts: ['.ngrok-free.app', '.ngrok.io', '.ngrok.app']
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Cross-Origin-Embedder-Policy': 'require-corp'
