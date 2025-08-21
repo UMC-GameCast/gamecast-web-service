@@ -94,6 +94,16 @@ const DevRecordingButton: React.FC = () => {
             roomCode: state.currentRoom.roomCode,
             timestamp: new Date().toLocaleTimeString()
           });
+          
+          // 서버 응답을 기다리지 않고 버튼 상태만 즉시 업데이트
+          console.log('⚡ [DevButton] 서버 이벤트 전송 완료, 버튼 상태 즉시 반영');
+          
+          // 즉시 녹화 상태를 true로 변경 (UI 피드백)
+          actions.updateRecordingState({ 
+            isRecording: true,
+            startTime: Date.now() 
+          });
+          
         } else {
           // Fallback: 로컬 녹화 시작
           console.log('⚠️ [DevButton] 소켓 없음 - 로컬 녹화 시작으로 fallback');

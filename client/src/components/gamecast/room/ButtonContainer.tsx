@@ -72,9 +72,25 @@ export const ButtonContainer = ({
     recording
   } = state;
   
+  
   // 기본값 설정
   const activeCurrentPlayer = currentPlayer || contextPlayer;
   const isHost = activeCurrentPlayer?.role === 'host' || activeCurrentPlayer?.isHost;
+  
+  // 현재 플레이어의 guestUserId 찾기
+  const currentPlayerGuestId = activeCurrentPlayer?.guestUserId;
+  
+  // 현재 플레이어 데이터 찾기
+  const currentPlayerData = participants?.find(p => 
+    p.guestUserId === currentPlayerGuestId || p.id === currentPlayerGuestId
+  );
+  
+  // 현재 플레이어의 3단계 준비 상태 확인
+  const currentPlayerStatus = currentPlayerData?.preparationStatus;
+  const isPlayerReady = currentPlayerStatus ? 
+    (currentPlayerStatus.characterSetup === true &&
+     currentPlayerStatus.screenSetup === true &&
+     currentPlayerStatus.isReady === true) : false;
   
   // 서버 기반 모든 플레이어 준비 상태 우선 사용
   const serverAllReady = preparation.allPlayersReady;
@@ -95,67 +111,42 @@ export const ButtonContainer = ({
   // 최종 준비 상태: 서버 우선, 클라이언트 fallback
   const allPlayersReady = serverAllReady || clientAllReady;
   
-  // 🔍 준비 상태 디버깅 (서버 + 클라이언트)
-  console.log('🔍 [ButtonContainer] 준비 상태 비교:', {
-    serverBased: {
-      allReady: serverAllReady,
-      canStartRecording: serverCanStartRecording,
-      readyCount: preparation.readyCount,
-      totalCount: preparation.totalCount,
-      message: serverMessage
-    },
-    clientBased: {
-      allReady: clientAllReady,
-      participantsCount: participants?.length || 0,
-      participants3Stage: participants?.map(p => ({
-        nickname: p.nickname,
-        characterSetup: p.preparationStatus?.characterSetup,
-        screenSetup: p.preparationStatus?.screenSetup,
-        isReady: p.preparationStatus?.isReady,
-        fullReady: p.preparationStatus?.characterSetup && p.preparationStatus?.screenSetup && p.preparationStatus?.isReady
-      }))
-    },
-    final: { allPlayersReady },
-    isHost,
-    timestamp: new Date().toLocaleTimeString()
-  });
+  // 🔍 준비 상태 디버깅 (확률적 로깅으로 스팸 방지)
+  if (Math.random() < 0.01) {
+    console.log('🔍 [ButtonContainer] 준비 상태 비교 (1% 샘플링):', {
+      serverBased: {
+        allReady: serverAllReady,
+        canStartRecording: serverCanStartRecording,
+        readyCount: preparation.readyCount,
+        totalCount: preparation.totalCount,
+        message: serverMessage
+      },
+      clientBased: {
+        allReady: clientAllReady,
+        participantsCount: participants?.length || 0
+      },
+      final: { allPlayersReady },
+      isHost,
+      timestamp: new Date().toLocaleTimeString()
+    });
+  }
 
-  // 현재 플레이어의 준비 상태
-  const currentPlayerGuestId = activeCurrentPlayer?.guestUserId || activeCurrentPlayer?.id;
-  const currentPlayerData = participants?.find(p => 
-    p.guestUserId === currentPlayerGuestId || p.id === currentPlayerGuestId
-  );
-  // 현재 플레이어의 3단계 준비 상태 확인
-  const currentPlayerStatus = currentPlayerData?.preparationStatus;
-  const isPlayerReady = currentPlayerStatus ? 
-    (currentPlayerStatus.characterSetup === true &&
-     currentPlayerStatus.screenSetup === true &&
-     currentPlayerStatus.isReady === true) : false;
   
-  // 🔍 준비 상태 디버깅 (isReady/finalReady 동일 변수 체크)
-  console.log('🔍 [ButtonContainer] 준비 상태 디버깅:', {
-    currentPlayerGuestId,
-    currentPlayerData: currentPlayerData ? {
-      guestUserId: currentPlayerData.guestUserId,
-      nickname: currentPlayerData.nickname,
-      preparationStatus: {
-        characterSetup: currentPlayerData.preparationStatus?.characterSetup,
-        screenSetup: currentPlayerData.preparationStatus?.screenSetup,
-        isReady: currentPlayerData.preparationStatus?.isReady, // 서버의 finalReady와 동일
-        hasIsReadyField: 'isReady' in (currentPlayerData.preparationStatus || {}),
-        is3StageReady: currentPlayerStatus?.characterSetup && currentPlayerStatus?.screenSetup && currentPlayerStatus?.isReady
-      }
-    } : null,
-    isPlayerReady,
-    participantsCount: participants?.length,
-    recordingState: {
-      isRecording: recording.isRecording,
-      startTime: recording.startTime,
-      duration: recordingDuration,
-      uploading: recording.uploading
-    },
-    timestamp: new Date().toLocaleTimeString()
-  });
+  // 🔍 준비 상태 디버깅 (확률적 로깅으로 스팸 방지)
+  if (Math.random() < 0.005) {
+    console.log('🔍 [ButtonContainer] 준비 상태 디버깅 (0.5% 샘플링):', {
+      currentPlayerGuestId,
+      isPlayerReady,
+      participantsCount: participants?.length,
+      recordingState: {
+        isRecording: recording.isRecording,
+        startTime: recording.startTime,
+        duration: recordingDuration,
+        uploading: recording.uploading
+      },
+      timestamp: new Date().toLocaleTimeString()
+    });
+  }
 
   // 서버 자동 녹화 카운트다운 상태 (UI 표시용)
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -318,18 +309,8 @@ export const ButtonContainer = ({
     }
     
     if (allPlayersReady) {
-      // 모든 플레이어 준비 완료 시 호스트만 녹화 시작 가능
-      if (isHost) {
-        console.log('🎬 [ButtonContainer] 호스트가 녹화 시작 버튼 클릭');
-        try {
-          actions.startRecording();
-          console.log('✅ [ButtonContainer] 녹화 시작 요청 완료');
-        } catch (error) {
-          console.error('❌ [ButtonContainer] 녹화 시작 실패:', error);
-        }
-      } else {
-        console.log('ℹ️ [ButtonContainer] 게스트는 녹화 시작 불가 - 호스트 대기 중');
-      }
+      // 자동 녹화 시스템이 활성화된 상태 - 수동 클릭 비활성화
+      console.log('⚠️ [ButtonContainer] 모든 플레이어 준비 완료 - 자동 녹화 대기 중, 수동 클릭 무시');
       return;
     } else {
       // 준비 상태 토글
@@ -359,14 +340,24 @@ export const ButtonContainer = ({
     }
   };
 
-  // 준비하기 버튼의 텍스트 결정 (새로운 Context 기반)
+  // 준비하기 버튼의 텍스트 결정 (새로운 Context 기반) - 우선순위 수정
   const getReadyButtonText = (): string => {
+    // 1순위: 업로드 중 (최우선)
     if (recording.uploading) {
       return `업로드 중... ${recording.uploadProgress}%`;
     }
     
-    if (recording.isRecording) {
+    // 2순위: 녹화 중 (자동녹화 곧 시작보다 우선) - 강화된 조건
+    if (recording.isRecording && recording.startTime) {
       const timeText = formatTime(recordingDuration);
+      console.log('🔍 [ButtonContainer] 녹화 중 상태 감지:', {
+        isRecording: recording.isRecording,
+        hasStartTime: !!recording.startTime,
+        timeText,
+        recordingDuration,
+        timestamp: new Date().toLocaleTimeString()
+      });
+      
       if (isHost) {
         // 호스트가 마우스 호버 시 "녹화 종료" 표시
         return isHoveringHostButton ? "녹화 종료" : `녹화중 ${timeText}`;
@@ -376,7 +367,8 @@ export const ButtonContainer = ({
       }
     }
     
-    if (allPlayersReady) {
+    // 3순위: 모든 플레이어 준비 완료 (녹화 중이 아닐 때만)
+    if (allPlayersReady && !recording.isRecording) {
       if (countdown !== null) {
         return `자동 녹화 시작 ${countdown}초...`;
       }
@@ -399,7 +391,7 @@ export const ButtonContainer = ({
       }
     }
     
-    // 기본 준비 상태 텍스트
+    // 4순위: 기본 준비 상태 텍스트
     return isPlayerReady ? "준비 취소" : "준비하기";
   };
 
@@ -420,9 +412,9 @@ export const ButtonContainer = ({
       return !isHost;
     }
     
-    // 모든 플레이어 준비 완료 시에는 호스트만 녹화 시작 가능
+    // 모든 플레이어 준비 완료 시에는 자동 시스템 활성화 - 수동 클릭 비활성화
     if (allPlayersReady) {
-      return !isHost;
+      return true;  // 자동 녹화 대기 중이므로 모든 클릭 비활성화
     }
     
     // 기본적으로 준비 상태 토글은 설정이 완료된 경우에만 가능
@@ -526,7 +518,7 @@ export const ButtonContainer = ({
           <RoomButton 
             onClick={handleReadyOrRecording}
             disabled={getReadyButtonDisabled()}
-            isReady={isPlayerReady && !recording.isRecording && !recording.uploading}
+            isReady={isPlayerReady}
           >
             {getReadyButtonText()}
 

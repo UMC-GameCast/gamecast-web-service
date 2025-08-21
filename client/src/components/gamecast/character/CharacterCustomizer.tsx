@@ -92,7 +92,7 @@ export const CharacterCustomizer: React.FC<CharacterCustomizerProps> = ({ onChar
   // 컴포넌트 마운트 시와 선택된 카테고리 변경 시 슬라이더 위치 업데이트
   useEffect(() => {
     updateSliderPosition();
-  }, [selectedCategory, updateSliderPosition]);
+  }, [selectedCategory]); // updateSliderPosition 의존성 제거로 무한 리렌더링 방지
 
   // 윈도우 리사이즈 시 슬라이더 위치 재계산
   useEffect(() => {
@@ -127,10 +127,10 @@ export const CharacterCustomizer: React.FC<CharacterCustomizerProps> = ({ onChar
     nickname
   }), [selectedOptions, selectedColors, nickname]);
 
-  // 캐릭터 데이터 변경 시 부모 컴포넌트에 전달
+  // 캐릭터 데이터 변경 시 부모 컴포넌트에 전달 (onCharacterChange 의존성 제거)
   useEffect(() => {
     onCharacterChange?.(characterData);
-  }, [characterData, onCharacterChange]);
+  }, [characterData]); // onCharacterChange 의존성 제거로 무한 리렌더링 방지
 
   const handleCategorySelect = useCallback((categoryId: string) => {
     setSelectedCategory(categoryId);

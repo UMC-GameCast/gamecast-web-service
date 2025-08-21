@@ -1354,15 +1354,29 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
       // 에러 상태 해제
       dispatch({ type: 'SET_ERROR', payload: null });
       
-      // 🎤 마이크 권한 요청 (방 참여 성공 후 자동으로 실행)
+      // 🎤 마이크 권한 요청 (방 참여 성공 후 자동으로 실행) - 에러 개선  
       setTimeout(async () => {
+        console.log('⏰ [joined-room-success] 0.5초 후 마이크 권한 자동 요청 시작');
         try {
-          console.log('🎤 [joined-room-success] 마이크 권한 자동 요청 시작');
-          await requestMicrophonePermission();
-          console.log('✅ [joined-room-success] 마이크 권한 획득 완료');
+          console.log('🎤 [joined-room-success] requestMicrophonePermission 호출');
+          const audioStream = await requestMicrophonePermission();
+          console.log('✅ [joined-room-success] 마이크 권한 획득 완료:', {
+            streamId: audioStream?.id || 'none',
+            hasStream: !!audioStream
+          });
         } catch (error) {
-          console.warn('⚠️ [joined-room-success] 마이크 권한 요청 실패 (사용자가 거부했을 수 있음):', error);
-          // 에러는 requestMicrophonePermission 내부에서 처리되므로 여기서는 로그만
+          console.warn('⚠️ [joined-room-success] 마이크 권한 요청 실패:', error);
+          
+          // 마이크 에러는 방 사용에 치명적이지 않으므로 에러 상태를 클리어
+          dispatch({ type: 'SET_ERROR', payload: null });
+          
+          // 사용자에게 부드러운 안내 (선택사항)
+          const errorMessage = error instanceof Error ? error.message : '';
+          if (errorMessage.includes('NotFoundError') || errorMessage.includes('device not found')) {
+            console.info('ℹ️ [joined-room-success] 마이크 디바이스가 감지되지 않았습니다. 화면 녹화는 정상적으로 사용할 수 있습니다.');
+          } else if (errorMessage.includes('NotAllowedError')) {
+            console.info('ℹ️ [joined-room-success] 마이크 권한이 거부되었습니다. 필요시 브라우저 설정에서 허용할 수 있습니다.');
+          }
         }
       }, 500); // 방 참여 후 0.5초 후 마이크 권한 요청
     });
@@ -2035,30 +2049,48 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
     socket.on('recording-started', async (data) => {
       console.log('🎬 [Context] 자동 녹화 시작 신호 수신:', data);
       
+      // 즉시 UI 상태 업데이트 (사용자 피드백) - 강화된 동기화
+      const currentTime = Date.now();
+      const recordingPayload = { 
+        isRecording: true, 
+        recordingTime: 0,
+        startTime: currentTime,
+        uploading: false,
+        uploadProgress: 0
+      };
+      
+      console.log('⚡ [Context] 녹화 상태 즉시 업데이트 (강화):', recordingPayload);
+      dispatch({ 
+        type: 'SET_RECORDING_STATE', 
+        payload: recordingPayload
+      });
+      
+      // 추가: 강제 리렌더링을 위한 UI 상태 업데이트
+      console.log('🔄 [Context] UI 강제 동기화 업데이트');
+      dispatch({
+        type: 'SET_UI_STATE',
+        payload: { 
+          lastUpdated: currentTime,
+          recordingStarted: true 
+        }
+      });
+      
       try {
         // GameRecorder로 동기화 녹화 시작
         console.log('🎮 [Context] GameRecorder 시작 시도...');
         await gameRecorderRef.current?.startSyncRecording();
-        console.log('🎮 [Context] GameRecorder 시작 완료');
-        
-        // Context 상태 업데이트
-        const recordingPayload = { 
-          isRecording: true, 
-          recordingTime: 0,
-          startTime: Date.now(),
-          uploading: false,
-          uploadProgress: 0
-        };
-        
-        console.log('🔄 [Context] 녹화 상태 업데이트:', recordingPayload);
-        dispatch({ 
-          type: 'SET_RECORDING_STATE', 
-          payload: recordingPayload
+        console.log('✅ [Context] GameRecorder 시작 성공 - UI 상태 확인:', {
+          isRecording: true,
+          startTime: currentTime,
+          shouldShowTimer: true
         });
-        
-        console.log('✅ [Context] 동기화 녹화 시작 완료');
       } catch (error) {
         console.error('❌ [Context] 동기화 녹화 시작 실패:', error);
+        // 실패 시 상태 롤백
+        dispatch({ 
+          type: 'SET_RECORDING_STATE', 
+          payload: { isRecording: false, startTime: null } 
+        });
         dispatch({ type: 'SET_ERROR', payload: '녹화 시작에 실패했습니다.' });
       }
     });
@@ -2152,6 +2184,11 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
             } 
           });
           
+          // 사용자에게 녹화 완료 알림
+          setTimeout(() => {
+            alert('🎉 녹화가 완료되었습니다!\n\n파일이 성공적으로 업로드되었습니다.');
+          }, 500);
+          
         } else {
           throw new Error(uploadResult?.error || '업로드에 실패했습니다');
         }
@@ -2209,6 +2246,11 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
               uploadProgress: 100
             } 
           });
+          
+          // 사용자에게 녹화 완료 알림
+          setTimeout(() => {
+            alert('🎉 녹화가 완료되었습니다!\n\n파일이 성공적으로 업로드되었습니다.');
+          }, 500);
           
         } else {
           throw new Error(uploadResult?.error || '업로드에 실패했습니다');
@@ -2814,7 +2856,14 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
     try {
       console.log('🎤 [Context] 마이크 권한 요청 시작');
       
-      // 이미 권한이 있고 스트림이 있다면 스킵
+      // 이미 권한이 있고 스트림이 있다면 스킵 - 디버깅 강화
+      console.log('🔍 [Context] 현재 마이크 권한 상태 확인:', {
+        microphonePermission: state.recording.microphonePermission,
+        hasAudioStream: !!state.recording.audioStream,
+        audioStreamId: state.recording.audioStream?.id || 'none',
+        shouldSkip: state.recording.microphonePermission === 'granted' && !!state.recording.audioStream
+      });
+      
       if (state.recording.microphonePermission === 'granted' && state.recording.audioStream) {
         console.log('✅ [Context] 마이크 권한 이미 획득됨, 스킵');
         return state.recording.audioStream;
@@ -2884,16 +2933,18 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
         } 
       });
       
-      // 사용자에게 오류 알림
+      // 마이크 에러에 대한 부드러운 처리 - 방 사용은 계속 가능
       if (permission === 'denied') {
-        dispatch({ 
-          type: 'SET_ERROR', 
-          payload: '마이크 권한이 필요합니다. 브라우저 설정에서 마이크 권한을 허용해주세요.' 
-        });
+        // 권한 거부는 사용자 선택이므로 에러로 표시하지 않음
+        console.info('ℹ️ [Context] 마이크 권한이 거부되었습니다. 화면 녹화만 사용 가능합니다.');
+      } else if (errorMessage.includes('NotFoundError') || errorMessage.includes('device not found')) {
+        // 디바이스 없음도 에러로 표시하지 않음
+        console.info('ℹ️ [Context] 마이크 디바이스를 찾을 수 없습니다. 화면 녹화만 사용 가능합니다.');
       } else {
+        // 기타 예상치 못한 에러만 표시
         dispatch({ 
           type: 'SET_ERROR', 
-          payload: `마이크 접근에 실패했습니다: ${errorMessage}` 
+          payload: `마이크 설정 중 문제가 발생했습니다. 화면 녹화는 정상적으로 사용할 수 있습니다.` 
         });
       }
       
