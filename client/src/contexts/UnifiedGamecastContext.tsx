@@ -12,6 +12,7 @@ import {
 } from '../utils/roomManager';
 import { GameRecorder } from '../utils/GameRecorder';
 import { audioManager } from '../utils/audioManager';
+import { DEMO_ROOM_DATA } from '../constants/demoData';
 
 // 🔧 강화된 Socket 연결 상태 관리
 interface SocketState {
@@ -253,6 +254,7 @@ type UnifiedGamecastAction =
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'SET_ROOM'; payload: Room | null }
+  | { type: 'SET_ROOM_DATA'; payload: { currentRoom: Room; participants: Player[]; loading: boolean } }
   | { type: 'SET_PLAYER'; payload: Player | null }
   | { type: 'SET_PARTICIPANTS'; payload: Player[] }
   | { type: 'UPDATE_PARTICIPANT'; payload: { guestUserId: string; updates: Partial<Player> } }
@@ -330,6 +332,14 @@ const unifiedGamecastReducer = (state: UnifiedGamecastState, action: UnifiedGame
         ...state, 
         currentRoom: action.payload,
         participants: action.payload?.participants || []
+      };
+    
+    case 'SET_ROOM_DATA':
+      return {
+        ...state,
+        currentRoom: action.payload.currentRoom,
+        participants: action.payload.participants || [],
+        loading: action.payload.loading ?? state.loading
       };
     
     case 'SET_PLAYER':
@@ -2266,10 +2276,9 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
             });
             
             if (isHost) {
-              // 호스트는 source-selection 페이지로 이동 (roomCode 포함)
-              const roomCode = stateRef.current.currentRoom?.roomCode;
-              navigate(`/gamecast/source-selection?roomCode=${roomCode}`);
-              console.log('👑 [Context] 호스트 -> source-selection 페이지 이동:', roomCode);
+              // 호스트는 source-selection 페이지로 이동 (데모 모드 우선)
+              navigate('/gamecast/source-selection?demo=true');
+              console.log('👑 [Context] 호스트 -> source-selection 페이지 이동 (데모 모드)');
             } else {
               // 게스트는 메인 페이지로 이동
               navigate('/');
@@ -2347,10 +2356,9 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
             });
             
             if (isHost) {
-              // 호스트는 source-selection 페이지로 이동 (roomCode 포함)
-              const roomCode = stateRef.current.currentRoom?.roomCode;
-              navigate(`/gamecast/source-selection?roomCode=${roomCode}`);
-              console.log('👑 [Context] 호스트 -> source-selection 페이지 이동:', roomCode);
+              // 호스트는 source-selection 페이지로 이동 (데모 모드 우선)
+              navigate('/gamecast/source-selection?demo=true');
+              console.log('👑 [Context] 호스트 -> source-selection 페이지 이동 (데모 모드)');
             } else {
               // 게스트는 메인 페이지로 이동
               navigate('/');
@@ -3298,6 +3306,34 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
     }
   }, []);
 
+  // 데모 모드 활성화 함수
+  const enableDemoMode = useCallback(() => {
+    console.log('🎭 [Context] 데모 모드 활성화');
+    
+    dispatch({
+      type: 'SET_ROOM_DATA',
+      payload: {
+        currentRoom: DEMO_ROOM_DATA,
+        participants: DEMO_ROOM_DATA.participants,
+        loading: false
+      }
+    });
+    
+    // 호스트 플레이어를 현재 플레이어로 설정
+    const hostPlayer = DEMO_ROOM_DATA.participants.find(p => p.isHost);
+    if (hostPlayer) {
+      dispatch({
+        type: 'SET_CURRENT_PLAYER',
+        payload: hostPlayer
+      });
+    }
+    
+    console.log('✅ [Context] 데모 데이터 로드 완료:', {
+      roomCode: DEMO_ROOM_DATA.roomCode,
+      participants: DEMO_ROOM_DATA.participants.length
+    });
+  }, []);
+
   const actions = {
     refreshRoomState,
     leaveRoom,
@@ -3317,6 +3353,7 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
     setUIState,
     setError,
     loadRoomDataForEditing, // 📋 편집용 방 정보 조회
+    enableDemoMode, // 🎭 데모 모드 활성화
     gameRecorder: gameRecorderRef.current // 🎬 GameRecorder 인스턴스 제공
   };
 

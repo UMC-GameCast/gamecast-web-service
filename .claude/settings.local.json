@@ -40,7 +40,8 @@
     ],
     "deny": [],
     "additionalDirectories": [
-      "C:\\c\\Users\\chisu\\Desktop\\merge\\gamecast-web-service"
+      "C:\\c\\Users\\chisu\\Desktop\\merge\\gamecast-web-service",
+      "C:\\c\\Users\\chisu\\Desktop\\demo"
     ]
   }
 }

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useUnifiedGamecast } from '../../../contexts/UnifiedGamecastContext'
+import { isDemoMode, isDemoRoomCode } from '../../../constants/demoData'
+import { renderCharacterLayers } from '../../../utils/characterRenderer'
 import { Navigation } from '../../../components/gamecast/common/Navigation'
 import { Footer } from '../../../components/gamecast/common/Footer'
 import { PageTransition } from '../../../components/gamecast/common/PageTransition'
@@ -56,13 +58,20 @@ export const SourceSelectionPage: React.FC = () => {
   useEffect(() => {
     const initializePageData = async () => {
       try {
-        // URL에서 roomCode 파라미터 확인
+        // URL 파라미터 확인
         const roomCode = searchParams.get('roomCode');
+        const isDemo = isDemoMode(searchParams);
         
-        if (roomCode) {
-          console.log('📋 [SourceSelection] 방 정보 조회 시작:', roomCode);
+        if (isDemo || isDemoRoomCode(roomCode || '')) {
+          console.log('🎭 [SourceSelection] 데모 모드 활성화');
+          // 데모 모드로 실행 (서버 로드 없이 바로 데모 데이터 사용)
+          actions.enableDemoMode();
+          // 데모 모드에서는 하이라이트 동영상 로딩도 스킵
+          setLoading(false);
+        } else if (roomCode) {
+          console.log('📋 [SourceSelection] 실제 방 정보 조회 시작:', roomCode);
           
-          // Context를 통해 방 정보 조회
+          // 실제 서버에서 방 정보 조회
           await actions.loadRoomDataForEditing(roomCode);
           
           console.log('✅ [SourceSelection] 방 정보 조회 완료:', {
@@ -73,27 +82,23 @@ export const SourceSelectionPage: React.FC = () => {
           // 하이라이트 동영상 가져오기 (방 코드 기반으로)
           await fetchHighlightVideos();
         } else {
-          console.warn('⚠️ [SourceSelection] roomCode 파라미터가 없습니다');
-          // roomCode가 없는 경우 기본 동영상 로드
-          await fetchHighlightVideos();
+          console.warn('⚠️ [SourceSelection] roomCode 파라미터가 없습니다 - 데모 모드로 실행');
+          // 파라미터가 없는 경우 데모 모드로 실행 (서버 로드 없이)
+          actions.enableDemoMode();
+          setLoading(false);
         }
       } catch (error) {
         console.error('❌ [SourceSelection] 초기화 실패:', error);
-        // 에러가 발생해도 기본 동영상은 로드
-        await fetchHighlightVideos();
+        console.log('🎭 [SourceSelection] 오류 발생으로 데모 모드로 전환');
+        // 에러 발생 시 데모 모드로 fallback (서버 로드 없이)
+        actions.enableDemoMode();
+        setLoading(false);
       }
     };
 
     initializePageData();
-  }, [searchParams, actions.loadRoomDataForEditing]);
+  }, [searchParams, actions.loadRoomDataForEditing, actions.enableDemoMode]);
 
-  const handleVideoUpload = (event: React.ChangeEvent<HTMLInputElement>, screenId: string) => {
-    const file = event.target.files?.[0];
-    if (file && file.type.startsWith('video/')) {
-      const videoUrl = URL.createObjectURL(file);
-      setSelectedVideos(prev => ({ ...prev, [screenId]: videoUrl }));
-    }
-  };
 
   const handleScreenSelect = (screenId: string) => {
     setSelectedScreens(prev => ({
@@ -124,10 +129,17 @@ export const SourceSelectionPage: React.FC = () => {
     }
   };
 
+  // 게스트 플레이어 가져오기 (호스트 제외)
+  const getGuestPlayers = () => {
+    return state.participants?.filter(p => !p.isHost) || [];
+  };
+
   // 프로필 아이템 컴포넌트
   const ProfileItem: React.FC<{ screenId: string; itemIndex: number }> = ({ screenId, itemIndex }) => {
     const profileId = `${screenId}_profile_${itemIndex}`;
     const isSelected = selectedProfiles[profileId];
+    const guestPlayers = getGuestPlayers();
+    const player = guestPlayers[itemIndex - 1]; // 1-based index를 0-based로 변환
     
     return (
       <div 
@@ -139,9 +151,19 @@ export const SourceSelectionPage: React.FC = () => {
           alignItems: 'center',
           justifyContent: 'center',
           position: 'relative',
-          cursor: 'pointer'
+          cursor: 'pointer',
+          transition: 'all 0.3s ease'
         }}
+        className="group"
         onClick={() => handleProfileSelect(profileId)}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'scale(1.2)';
+          e.currentTarget.style.zIndex = '10';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'scale(1)';
+          e.currentTarget.style.zIndex = '1';
+        }}
       >
       {/* 배경 SVG - 모든 아이템에 표시 */}
       <svg 
@@ -160,6 +182,62 @@ export const SourceSelectionPage: React.FC = () => {
       >
         <path d="M55.3314 62.7102H0.900391V8.61203L9.32679 0.192139H63.564V54.8712L55.3314 62.7102Z" fill="#2B2968" fillOpacity="0.37"/>
       </svg>
+      
+      {/* 플레이어 캐릭터 렌더링 */}
+      {player && player.characterInfo?.isCustomized && (
+        <div 
+          style={{
+            position: 'absolute',
+            width: '50px',
+            height: '50px',
+            zIndex: 2,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
+          {renderCharacterLayers(player.characterInfo.characterData)}
+        </div>
+      )}
+      
+      {/* 호버시 표시되는 닉네임과 추가하기 텍스트 */}
+      {player && (
+        <div 
+          className="group-hover:block hidden"
+          style={{
+            position: 'absolute',
+            bottom: '-25px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 15,
+            textAlign: 'center',
+            textShadow: '1px 1px 2px rgba(0, 0, 0, 0.8)'
+          }}
+        >
+          <div 
+            style={{
+              color: 'white',
+              fontSize: '12px',
+              fontWeight: '600',
+              lineHeight: '14px',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            {player.nickname} 시점
+          </div>
+          <div 
+            style={{
+              color: 'white',
+              fontSize: '10px',
+              fontWeight: '500',
+              lineHeight: '12px',
+              marginTop: '2px'
+            }}
+          >
+            추가하기
+          </div>
+        </div>
+      )}
       
       {/* 테두리 SVG - 배경보다 위에 표시 */}
       <svg 
@@ -194,63 +272,41 @@ export const SourceSelectionPage: React.FC = () => {
       {/* Navigation Header */}
       <Navigation />
       
-      {/* 플레이어 정보 디버그 섹션 */}
-      {state.currentRoom && (
-        <div style={{ 
-          backgroundColor: 'rgba(0,0,0,0.3)', 
-          margin: '20px', 
-          padding: '15px', 
-          borderRadius: '8px',
-          color: 'white',
-          fontSize: '12px'
-        }}>
-          <h3>📋 방 정보 (편집용)</h3>
-          <p>방 코드: {state.currentRoom.roomCode}</p>
-          <p>참여자 수: {state.participants?.length || 0}명</p>
-          {state.participants?.map((participant, index) => (
-            <div key={participant.guestUserId} style={{ marginLeft: '10px', marginTop: '5px' }}>
-              <span>👤 {participant.nickname || participant.name} </span>
-              <span>({participant.isHost ? '호스트' : '게스트'}) </span>
-              <span>ID: {participant.guestUserId}</span>
-              {participant.characterInfo?.isCustomized && (
-                <span> 🎭 캐릭터 설정됨</span>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
       
-      {/* Header Text - 70px below navigation */}
-      <div className="pt-[28px] pb-[30px]">
-        <h1 
-          style={{
-            color: '#FFF',
-            textAlign: 'center',
-            fontFamily: 'Noto Sans, sans-serif',
-            fontSize: '35px',
-            fontStyle: 'normal',
-            fontWeight: 700,
-            lineHeight: '150%', /* 52.5px */
-            letterSpacing: '-0.665px'
-          }}
-        >
-          재밌는 소스를 찾았어요!<br />
-          자막을 생성할 영상을 골라주세요!
-        </h1>
-      </div>
-      
-      {/* Main Content */}
-      <main className="flex-1 relative z-10 px-4 pb-20">
+      {/* 메인 컨텐츠 컨테이너 - 중앙 배치 */}
+      <div className="flex-1 flex flex-col justify-center items-center px-4">
+        <div className="w-fit">
+          {/* Header Text */}
+          <div className="pb-[50px]">
+            <h1 
+              style={{
+                color: '#FFF',
+                textAlign: 'center',
+                fontFamily: 'Noto Sans, sans-serif',
+                fontSize: '35px',
+                fontStyle: 'normal',
+                fontWeight: 700,
+                lineHeight: '150%', /* 52.5px */
+                letterSpacing: '-0.665px'
+              }}
+            >
+              재밌는 소스를 찾았어요!<br />
+              자막을 생성할 영상을 골라주세요!
+            </h1>
+          </div>
+          
+          {/* Main Content */}
+          <main className="relative z-10 py-10">
         <motion.div 
-          className="max-w-6xl mx-auto"
+          className="w-fit mx-auto"
           initial="hidden"
           animate="visible"
           variants={containerVariants}
         >
           {/* 전체 영상 div */}
-          <div className="flex justify-center gap-[45px]">
+          <div className="flex justify-center items-start gap-[45px] w-fit">
             {/* 화면1 div */}
-            <div className="w-[488px] h-[448px] relative">
+            <div className="w-fit h-fit relative">
               {/* 영상화면과 버튼 컨테이너 */}
               <div style={{ position: 'relative', width: '407.865px', height: '280px' }}>
                 {/* 영상화면 div */}
@@ -343,15 +399,15 @@ export const SourceSelectionPage: React.FC = () => {
               
               {/* 프로필 게스트 div */}
               <div className="프로필게스트 flex justify-center items-center gap-[28px] mt-[10px]">
-                {/* 프로필 아이템 4개 */}
-                {[1, 2, 3, 4].map((index) => (
-                  <ProfileItem key={index} screenId="screen1" itemIndex={index} />
+                {/* 게스트 플레이어 수만큼 프로필 아이템 생성 */}
+                {getGuestPlayers().map((_, index) => (
+                  <ProfileItem key={index + 1} screenId="screen1" itemIndex={index + 1} />
                 ))}
               </div>
             </div>
             
             {/* 화면2 div */}
-            <div className="w-[488px] h-[448px]  rounded-lg relative">
+            <div className="w-fit h-fit rounded-lg relative">
               {/* 영상화면과 버튼 컨테이너 */}
               <div style={{ position: 'relative', width: '407.865px', height: '280px' }}>
                 {/* 영상화면 div */}
@@ -444,15 +500,15 @@ export const SourceSelectionPage: React.FC = () => {
               
               {/* 프로필 게스트 div */}
               <div className="프로필게스트 flex justify-center items-center gap-[28px] mt-[10px]">
-                {/* 프로필 아이템 4개 */}
-                {[1, 2, 3, 4].map((index) => (
-                  <ProfileItem key={index} screenId="screen2" itemIndex={index} />
+                {/* 게스트 플레이어 수만큼 프로필 아이템 생성 */}
+                {getGuestPlayers().map((_, index) => (
+                  <ProfileItem key={index + 1} screenId="screen2" itemIndex={index + 1} />
                 ))}
               </div>
             </div>
             
             {/* 화면3 div */}
-            <div className="w-[488px] h-[448px]  rounded-lg relative">
+            <div className="w-fit h-fit rounded-lg relative">
               {/* 영상화면과 버튼 컨테이너 */}
               <div style={{ position: 'relative', width: '407.865px', height: '280px' }}>
                 {/* 영상화면 div */}
@@ -545,136 +601,27 @@ export const SourceSelectionPage: React.FC = () => {
               
               {/* 프로필 게스트 div */}
               <div className="프로필게스트 flex justify-center items-center gap-[28px] mt-[10px]">
-                {/* 프로필 아이템 4개 */}
-                {[1, 2, 3, 4].map((index) => (
-                  <ProfileItem key={index} screenId="screen3" itemIndex={index} />
+                {/* 게스트 플레이어 수만큼 프로필 아이템 생성 */}
+                {getGuestPlayers().map((_, index) => (
+                  <ProfileItem key={index + 1} screenId="screen3" itemIndex={index + 1} />
                 ))}
               </div>
             </div>
           </div>
         </motion.div>
-      </main>
+          </main>
 
-      {/* Button before Footer */}
-      <div className="flex justify-center pb-8">
-        <Button1 onClick={handleComplete}>
-          완료
-        </Button1>
+          {/* Button */}
+          <div className="flex justify-center py-8">
+            <Button1 onClick={handleComplete}>
+              완료
+            </Button1>
+          </div>
+        </div>
       </div>
 
       {/* Footer */}
       <Footer />
-      
-      {/* 동영상 업로드 버튼들 */}
-      <div style={{ position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, display: 'flex', gap: '12px' }}>
-        {/* 화면1 업로드 */}
-        <input
-          type="file"
-          accept="video/*"
-          onChange={(e) => handleVideoUpload(e, 'screen1')}
-          style={{ display: 'none' }}
-          id="video-upload-1"
-        />
-        <label
-          htmlFor="video-upload-1"
-          style={{
-            display: 'inline-block',
-            padding: '12px 20px',
-            backgroundColor: '#717DFF',
-            color: 'white',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            fontFamily: 'Noto Sans, sans-serif',
-            fontSize: '13px',
-            fontWeight: '600',
-            border: 'none',
-            boxShadow: '0 4px 12px rgba(113, 125, 255, 0.3)',
-            transition: 'all 0.3s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#5a67d8';
-            e.currentTarget.style.transform = 'translateY(-2px)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = '#717DFF';
-            e.currentTarget.style.transform = 'translateY(0)';
-          }}
-        >
-          📹 화면1
-        </label>
-
-        {/* 화면2 업로드 */}
-        <input
-          type="file"
-          accept="video/*"
-          onChange={(e) => handleVideoUpload(e, 'screen2')}
-          style={{ display: 'none' }}
-          id="video-upload-2"
-        />
-        <label
-          htmlFor="video-upload-2"
-          style={{
-            display: 'inline-block',
-            padding: '12px 20px',
-            backgroundColor: '#717DFF',
-            color: 'white',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            fontFamily: 'Noto Sans, sans-serif',
-            fontSize: '13px',
-            fontWeight: '600',
-            border: 'none',
-            boxShadow: '0 4px 12px rgba(113, 125, 255, 0.3)',
-            transition: 'all 0.3s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#5a67d8';
-            e.currentTarget.style.transform = 'translateY(-2px)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = '#717DFF';
-            e.currentTarget.style.transform = 'translateY(0)';
-          }}
-        >
-          📹 화면2
-        </label>
-
-        {/* 화면3 업로드 */}
-        <input
-          type="file"
-          accept="video/*"
-          onChange={(e) => handleVideoUpload(e, 'screen3')}
-          style={{ display: 'none' }}
-          id="video-upload-3"
-        />
-        <label
-          htmlFor="video-upload-3"
-          style={{
-            display: 'inline-block',
-            padding: '12px 20px',
-            backgroundColor: '#717DFF',
-            color: 'white',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            fontFamily: 'Noto Sans, sans-serif',
-            fontSize: '13px',
-            fontWeight: '600',
-            border: 'none',
-            boxShadow: '0 4px 12px rgba(113, 125, 255, 0.3)',
-            transition: 'all 0.3s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#5a67d8';
-            e.currentTarget.style.transform = 'translateY(-2px)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = '#717DFF';
-            e.currentTarget.style.transform = 'translateY(0)';
-          }}
-        >
-          📹 화면3
-        </label>
-      </div>
     </PageTransition>
   )
 }
