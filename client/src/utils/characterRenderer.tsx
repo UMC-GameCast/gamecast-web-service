@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import type { CharacterData } from '../types/room';
 
 /**
@@ -19,6 +19,7 @@ export const renderCharacterLayers = (characterData: CharacterData): React.React
         alt="몸통"
         className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full h-full object-contain"
         style={{ zIndex: 1 }}
+        loading="lazy"
       />
     );
   }
@@ -34,6 +35,7 @@ export const renderCharacterLayers = (characterData: CharacterData): React.React
         alt="머리"
         className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full h-full object-contain"
         style={{ zIndex: 2 }}
+        loading="lazy"
       />
     );
   }
@@ -48,6 +50,7 @@ export const renderCharacterLayers = (characterData: CharacterData): React.React
         alt="얼굴"
         className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full h-full object-contain"
         style={{ zIndex: 3 }}
+        loading="lazy"
       />
     );
   }
@@ -67,6 +70,7 @@ export const renderCharacterLayers = (characterData: CharacterData): React.React
         alt="상의"
         className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full h-full object-contain"
         style={{ zIndex: 4 }}
+        loading="lazy"
       />
     );
   }
@@ -82,6 +86,7 @@ export const renderCharacterLayers = (characterData: CharacterData): React.React
         alt="하의"
         className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full h-full object-contain"
         style={{ zIndex: 5 }}
+        loading="lazy"
       />
     );
   }
@@ -105,6 +110,7 @@ export const renderCharacterLayers = (characterData: CharacterData): React.React
         alt="장신구"
         className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full h-full object-contain"
         style={{ zIndex: 6 }}
+        loading="lazy"
       />
     );
   }
@@ -121,7 +127,7 @@ interface CharacterRendererProps {
   style?: React.CSSProperties;
 }
 
-export const CharacterRenderer: React.FC<CharacterRendererProps> = ({ 
+export const CharacterRenderer: React.FC<CharacterRendererProps> = memo(({ 
   characterData, 
   className = "relative w-full h-full",
   style 
@@ -131,4 +137,4 @@ export const CharacterRenderer: React.FC<CharacterRendererProps> = ({
       {renderCharacterLayers(characterData)}
     </div>
   );
-};
+});

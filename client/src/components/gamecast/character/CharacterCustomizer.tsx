@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { getAssetsByCategory, getAssetColors, type CharacterAsset } from "../../../utils/characterAssetManager";
 import { useRoom } from "../../../hooks/useRoom";
 import { renderCharacterLayers } from "../../../utils/characterRenderer";
@@ -60,17 +60,17 @@ export const CharacterCustomizer: React.FC<CharacterCustomizerProps> = ({ onChar
   const tabsRef = useRef<(HTMLButtonElement | null)[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // 현재 카테고리의 에셋 가져오기
-  const getCurrentAssets = (): CharacterAsset[] => {
+  // 현재 카테고리의 에셋 메모이제이션
+  const currentAssets = useMemo((): CharacterAsset[] => {
     return getAssetsByCategory(selectedCategory as 'hair' | 'top' | 'bottom' | 'accessory' | 'face');
-  };
+  }, [selectedCategory]);
 
-  // 현재 선택된 에셋의 색상 옵션 가져오기
-  const getCurrentColors = () => {
+  // 현재 선택된 에셋의 색상 옵션 메모이제이션
+  const currentColors = useMemo(() => {
     const selectedAssetId = selectedOptions[selectedCategory];
     if (!selectedAssetId) return [];
     return getAssetColors(selectedAssetId);
-  };
+  }, [selectedOptions, selectedCategory]);
 
   // 슬라이더 위치 업데이트 함수
   const updateSliderPosition = useCallback(() => {
@@ -120,21 +120,23 @@ export const CharacterCustomizer: React.FC<CharacterCustomizerProps> = ({ onChar
     }
   }, [currentPlayer, initialCharacterData]);
 
+  // 캐릭터 데이터 메모이제이션
+  const characterData = useMemo((): CharacterData => ({
+    selectedOptions,
+    selectedColors,
+    nickname
+  }), [selectedOptions, selectedColors, nickname]);
+
   // 캐릭터 데이터 변경 시 부모 컴포넌트에 전달
   useEffect(() => {
-    const characterData: CharacterData = {
-      selectedOptions,
-      selectedColors,
-      nickname
-    };
     onCharacterChange?.(characterData);
-  }, [selectedOptions, selectedColors, nickname]); // onCharacterChange 제거하여 무한 렌더링 방지
+  }, [characterData, onCharacterChange]);
 
-  const handleCategorySelect = (categoryId: string) => {
+  const handleCategorySelect = useCallback((categoryId: string) => {
     setSelectedCategory(categoryId);
-  };
+  }, []);
 
-  const handleOptionSelect = (optionId: string) => {
+  const handleOptionSelect = useCallback((optionId: string) => {
     // 얼굴(face) 카테고리는 해제 불가, 이미 선택된 옵션을 다시 클릭하면 선택 해제
     if (selectedOptions[selectedCategory] === optionId && selectedCategory !== 'face') {
       setSelectedOptions(prev => ({
@@ -169,9 +171,9 @@ export const CharacterCustomizer: React.FC<CharacterCustomizerProps> = ({ onChar
         [selectedCategory]: defaultColor
       }));
     }
-  };
+  }, [selectedOptions, selectedCategory]);
 
-  const handleColorSelect = (color: string) => {
+  const handleColorSelect = useCallback((color: string) => {
     // 얼굴(face) 카테고리의 몸통 색상은 해제 불가, 이미 선택된 색상을 다시 클릭하면 선택 해제
     if (selectedColors[selectedCategory] === color && selectedCategory !== 'face') {
       setSelectedColors(prev => ({
@@ -184,13 +186,13 @@ export const CharacterCustomizer: React.FC<CharacterCustomizerProps> = ({ onChar
         [selectedCategory]: color
       }));
     }
-  };
+  }, [selectedColors, selectedCategory]);
 
-  const handleNicknameClick = () => {
+  const handleNicknameClick = useCallback(() => {
     setIsEditingNickname(true);
-  };
+  }, []);
 
-  const handleNicknameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleNicknameChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     
     // 한글과 영어 글자 수 체크
@@ -202,27 +204,22 @@ export const CharacterCustomizer: React.FC<CharacterCustomizerProps> = ({ onChar
     if (koreanCount <= 7 && englishCount + otherCount <= 12) {
       setNickname(value);
     }
-  };
+  }, []);
 
-  const handleNicknameSubmit = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleNicknameSubmit = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       setIsEditingNickname(false);
     }
-  };
+  }, []);
 
-  const handleNicknameBlur = () => {
+  const handleNicknameBlur = useCallback(() => {
     setIsEditingNickname(false);
-  };
+  }, []);
 
-  // 현재 선택된 에셋들로 캐릭터 미리보기 렌더링
-  const renderCharacterPreview = () => {
-    const characterData: CharacterData = {
-      selectedOptions,
-      selectedColors,
-      nickname
-    };
+  // 캐릭터 미리보기 메모이제이션
+  const characterPreview = useMemo(() => {
     return renderCharacterLayers(characterData);
-  };
+  }, [characterData]);
 
   return (
     <div className="flex gap-[39px] w-full max-w-[1320px] min-h-[557px] mx-auto px-4">
@@ -233,7 +230,7 @@ export const CharacterCustomizer: React.FC<CharacterCustomizerProps> = ({ onChar
           <div className="w-full h-full rounded-lg relative overflow-hidden flex items-center justify-center">
             {/* 캐릭터 레이어들 컨테이너 */}
             <div className="relative w-full h-full">
-              {renderCharacterPreview()}
+              {characterPreview}
             </div>
           </div>
         </div>
@@ -383,7 +380,7 @@ export const CharacterCustomizer: React.FC<CharacterCustomizerProps> = ({ onChar
               
               {/* 형태 옵션 그리드 */}
               <div className="flex gap-[20px] flex-wrap">
-                {getCurrentAssets().length > 0 ? getCurrentAssets().map((asset) => (
+                {currentAssets.length > 0 ? currentAssets.map((asset) => (
                   <button
                     key={asset.id}
                     onClick={() => handleOptionSelect(asset.id)}
@@ -499,7 +496,7 @@ export const CharacterCustomizer: React.FC<CharacterCustomizerProps> = ({ onChar
               
               {/* 색상 팔레트 */}
               <div className="flex gap-[12px] flex-wrap">
-                {getCurrentColors().length > 0 ? getCurrentColors().map((colorOption) => {
+                {currentColors.length > 0 ? currentColors.map((colorOption) => {
                   // 색상값 그대로 사용 (default는 갈색 #8B7355)
                   const displayColor = colorOption.value;
                   
