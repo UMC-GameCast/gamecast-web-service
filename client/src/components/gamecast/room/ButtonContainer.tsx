@@ -275,31 +275,6 @@ export const ButtonContainer = ({
 
   return (
     <div className="w-full flex flex-col items-end">
-      {/* 플레이어 준비 상태 및 녹화 정보 표시 (개발용) */}
-      {participants && participants.length > 0 && (
-        <div className="mb-2 text-white text-sm bg-black bg-opacity-50 p-2 rounded">
-          <div>준비 상태:</div>
-          {participants.map(player => (
-            <div key={player.guestUserId || player.id}>
-              {player.nickname}: {player.preparationStatus?.isReady ? '✅' : '❌'}
-              {player.preparationStatus?.characterSetup && ' 🎭'}
-              {player.preparationStatus?.screenSetup && ' 🖥️'}
-            </div>
-          ))}
-          <div>모든 플레이어 준비: {allPlayersReady ? '✅' : '❌'}</div>
-          <div>서버 준비 상태: {preparation.readyCount}/{preparation.totalCount} {serverAllReady ? '✅' : '❌'}</div>
-          {serverMessage && <div>서버 메시지: {serverMessage}</div>}
-          <div>녹화 상태: {recording.isRecording ? '🎬 녹화중' : recording.uploading ? '📤 업로드중' : '⏸️ 대기'}</div>
-          <div>마이크 권한: {
-            recording.microphonePermission === 'granted' ? '✅ 허용' :
-            recording.microphonePermission === 'denied' ? '❌ 거부' :
-            recording.microphonePermission === 'error' ? '⚠️ 오류' : '⏳ 요청중'
-          }</div>
-          {recording.uploading && (
-            <div>업로드 진행: {recording.uploadProgress}%</div>
-          )}
-        </div>
-      )}
       
       {/* 툴팁 - 말풍선 형태 */}
       {shouldShowTooltip() && (

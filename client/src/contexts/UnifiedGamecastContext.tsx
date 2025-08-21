@@ -508,6 +508,7 @@ const UnifiedGamecastContext = createContext<{
     // 녹화 관리
     startRecording: () => void;
     stopRecording: () => void;
+    hostStopRecording: () => void; // 호스트 녹화 종료 (서버 이벤트 발송)
     uploadRecordingToServer: () => Promise<any>;
     requestMicrophonePermission: () => Promise<MediaStream>;
     gameRecorder: GameRecorder | null;
@@ -2839,6 +2840,40 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
     }
   };
 
+  // 호스트 녹화 종료 (서버 이벤트 발송으로 모든 플레이어 동기화)
+  const hostStopRecording = () => {
+    console.log('🛑 [Context] 호스트 녹화 종료 요청');
+    
+    const currentState = stateRef.current;
+    const roomCode = currentState.currentRoom?.roomCode;
+    const socket = currentState.realtime.socket;
+    
+    if (!roomCode) {
+      console.error('❌ [Context] 방 코드가 없습니다');
+      dispatch({
+        type: 'SET_ERROR',
+        payload: '방 정보를 찾을 수 없습니다'
+      });
+      return;
+    }
+    
+    if (!socket || !socket.connected) {
+      console.error('❌ [Context] 소켓이 연결되지 않았습니다');
+      dispatch({
+        type: 'SET_ERROR',
+        payload: '서버와의 연결이 끊어졌습니다'
+      });
+      return;
+    }
+    
+    // 서버에 호스트 녹화 종료 이벤트 발송
+    socket.emit('host-stop-recording', { roomCode });
+    console.log('📡 [Context] host-stop-recording 이벤트 발송:', {
+      roomCode,
+      timestamp: new Date().toLocaleTimeString()
+    });
+  };
+
   // 녹화 데이터 서버 업로드 (별도 함수)
   const uploadRecordingToServer = async () => {
     console.log('📤 [Context] 서버 업로드 요청');
@@ -3203,6 +3238,7 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
     attemptAutoRecovery, // 🔄 자동 복구 시스템
     startRecording,
     stopRecording,
+    hostStopRecording,
     uploadRecordingToServer,
     requestMicrophonePermission, // 🎤 마이크 권한 요청
     setUIState,

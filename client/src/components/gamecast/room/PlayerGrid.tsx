@@ -211,13 +211,6 @@ export const PlayerGrid: React.FC<PlayerGridProps> = ({
           // 🎯 해당 플레이어의 preparation status 조회 (participants 데이터에서 직접 가져오기)
           const playerPreparationStatus = player.preparationStatus || null;
           
-          console.log('🔍 [PlayerGrid] PlayerCard에 전달할 준비 상태:', {
-            guestUserId: player.guestUserId,
-            nickname: player.nickname,
-            preparationStatus: playerPreparationStatus,
-            isReady: playerPreparationStatus?.isReady,
-            timestamp: new Date().toLocaleTimeString()
-          });
           
                   // Preparation status 매칭 로그 제거 (무한 로그 방지)
           

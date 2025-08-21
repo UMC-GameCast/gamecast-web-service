@@ -328,16 +328,6 @@ export const RoomPage = () => {
             </div>
             
 
-            {/* 기존 마이크 상태 표시 */}
-            <div className="fixed left-4 top-32 z-[9999]">
-              <MicrophoneStatusIndicator
-                hasPermission={!!localStream}
-                isConnected={voiceChatConnected}
-                isLocalMuted={isLocalMuted}
-                error={error && error.includes('마이크') ? error : null}
-                onRequestPermission={() => setShowMicGuide(true)}
-              />
-            </div>
 
 
 

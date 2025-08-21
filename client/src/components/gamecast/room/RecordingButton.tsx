@@ -158,10 +158,11 @@ export const RecordingButton: React.FC<RecordingButtonProps> = ({
       if (isHost) {
         console.log('🛑 [RecordingButton] 호스트가 녹화 종료 요청');
         try {
-          actions.stopRecording();
-          console.log('✅ [RecordingButton] 녹화 종료 요청 완료');
+          // 서버에 host-stop-recording 이벤트 발송 (모든 플레이어 동기화)
+          actions.hostStopRecording();
+          console.log('✅ [RecordingButton] 호스트 녹화 종료 이벤트 발송 완료');
         } catch (error) {
-          console.error('❌ [RecordingButton] 녹화 종료 실패:', error);
+          console.error('❌ [RecordingButton] 호스트 녹화 종료 실패:', error);
         }
       } else {
         console.log('⚠️ [RecordingButton] 게스트는 녹화를 종료할 수 없음');
@@ -269,21 +270,6 @@ export const RecordingButton: React.FC<RecordingButtonProps> = ({
         setIsHoveringHostButton(false);
       }}
     >
-      {/* 디버그 정보 임시 표시 */}
-      <div style={{ 
-        position: 'absolute', 
-        top: '-60px', 
-        left: '0', 
-        background: 'rgba(255,0,0,0.8)', 
-        color: 'white', 
-        padding: '5px', 
-        fontSize: '12px',
-        zIndex: 9999 
-      }}>
-        RecordingButton: isRecording={recording.isRecording ? 'true' : 'false'}, 
-        startTime={recording.startTime || 'null'},
-        allPlayersReady={allPlayersReady ? 'true' : 'false'}
-      </div>
       
       <RoomButton 
         key={`recording-${recording.isRecording ? '1' : '0'}-${recording.startTime || 0}-${Math.floor(recordingDuration/1000)}-${allPlayersReady ? '1' : '0'}-${forceUpdate}-${ui.forceRender}`}

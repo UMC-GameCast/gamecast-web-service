@@ -252,6 +252,17 @@ export class GameRecorder {
     try {
       console.log('🛑 [GameRecorder] Stopping synchronized recording...');
 
+      // Duration 계산 (녹화 종료 전에)
+      const recordingDuration = Math.round((Date.now() - this.startTime) / 1000);
+      this.state.duration = recordingDuration;
+      this.state.isRecording = false;
+
+      console.log('⏱️ [GameRecorder] Recording duration calculated:', {
+        startTime: this.startTime,
+        endTime: Date.now(),
+        duration: recordingDuration
+      });
+
       // 녹화 종료
       await Promise.all([
         this.stopScreenRecording(),
@@ -596,8 +607,7 @@ export class GameRecorder {
       // FormData 생성
       const formData = new FormData();
       
-      // 서버에서 변환 처리를 위해 WebM 파일을 MP4/WAV 파일명으로 전송
-      // 실제 변환은 서버에서 FFmpeg 등으로 처리
+      // WebM 파일을 그대로 전송 (서버에서 WebM 지원)
       formData.append('video', videoBlob, `recording_${roomCode}_${userId}.webm`);
       formData.append('audio', audioBlob, `audio_${roomCode}_${userId}.webm`);
       formData.append('roomCode', roomCode);
@@ -640,8 +650,8 @@ export class GameRecorder {
       return {
         success: true,
         result,
-        videoFile: result?.videoFile || `recording_${roomCode}_${userId}.mp4`,
-        audioFile: result?.audioFile || `audio_${roomCode}_${userId}.wav`,
+        videoFile: result?.videoFile || `recording_${roomCode}_${userId}.webm`,
+        audioFile: result?.audioFile || `audio_${roomCode}_${userId}.webm`,
         uploadTime: new Date().toISOString(),
         duration: this.state.duration
       };
@@ -679,20 +689,63 @@ export class GameRecorder {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       
-      // 업로드 진행률 추적
+      console.log('🚀 [GameRecorder] 업로드 시작:', {
+        url,
+        formDataEntries: Array.from(formData.entries()).map(([key, value]) => ({
+          key,
+          type: typeof value,
+          size: value instanceof File ? value.size : 'N/A'
+        }))
+      });
+      
+      // 업로드 진행률 추적 - 강화된 로깅
       xhr.upload.addEventListener('progress', (event) => {
+        console.log('📈 [GameRecorder] Progress event triggered:', {
+          lengthComputable: event.lengthComputable,
+          loaded: event.loaded,
+          total: event.total,
+          timestamp: new Date().toISOString()
+        });
+        
         if (event.lengthComputable) {
           const progress = Math.round((event.loaded / event.total) * 100);
-          console.log(`📊 [GameRecorder] Upload progress: ${progress}%`);
+          console.log(`📊 [GameRecorder] Upload progress: ${progress}% (${event.loaded}/${event.total})`);
           if (this.onUploadProgress) {
             this.onUploadProgress(progress);
+          }
+        } else {
+          console.warn('⚠️ [GameRecorder] Progress not computable');
+          // 진행률을 알 수 없는 경우라도 1% 이상으로 설정하여 UI가 반응하도록
+          if (this.onUploadProgress) {
+            this.onUploadProgress(1);
           }
         }
       });
       
+      // 업로드 시작 감지
+      xhr.upload.addEventListener('loadstart', () => {
+        console.log('🎬 [GameRecorder] 업로드 시작됨 - loadstart 이벤트');
+        if (this.onUploadProgress) {
+          this.onUploadProgress(1);
+        }
+      });
+      
+      // 요청 상태 변화 모니터링
+      xhr.addEventListener('readystatechange', () => {
+        console.log('🔄 [GameRecorder] ReadyState 변경:', {
+          readyState: xhr.readyState,
+          status: xhr.status,
+          statusText: xhr.statusText
+        });
+      });
+      
       // 업로드 완료
       xhr.addEventListener('load', () => {
-        console.log('✅ [GameRecorder] Upload completed with status:', xhr.status);
+        console.log('✅ [GameRecorder] Upload completed with status:', {
+          status: xhr.status,
+          statusText: xhr.statusText,
+          responseLength: xhr.responseText?.length || 0
+        });
         
         // Response 객체처럼 동작하는 객체 생성
         const response = {
@@ -708,8 +761,13 @@ export class GameRecorder {
       });
       
       // 업로드 에러
-      xhr.addEventListener('error', () => {
-        console.error('❌ [GameRecorder] Upload error');
+      xhr.addEventListener('error', (event) => {
+        console.error('❌ [GameRecorder] Upload error:', {
+          event,
+          readyState: xhr.readyState,
+          status: xhr.status,
+          statusText: xhr.statusText
+        });
         reject(new Error('네트워크 오류가 발생했습니다'));
       });
       
@@ -727,8 +785,10 @@ export class GameRecorder {
       });
       
       // 요청 시작
+      console.log('📡 [GameRecorder] XHR 요청 시작 - POST', url);
       xhr.open('POST', url);
       xhr.send(formData);
+      console.log('📤 [GameRecorder] FormData 전송 완료');
     });
   }
 
