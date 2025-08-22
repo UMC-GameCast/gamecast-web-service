@@ -11,7 +11,6 @@ import SettingIcon from "../../../assets/gamecast/Room/setting.svg?react";
 import { PlayerGrid } from "../../../components/gamecast/room/PlayerGrid.tsx";
 import { MicrophonePermissionGuide } from "../../../components/gamecast/common/MicrophonePermissionGuide";
 import { MicrophoneStatusIndicator } from "../../../components/gamecast/common/MicrophoneStatusIndicator";
-import DevRecordingButton from "../../../components/common/DevRecordingButton";
 import { logMediaFormatSupport } from "../../../utils/MediaFormatChecker";
 
 // 올바른 닉네임을 표시하기 위한 유틸리티 함수 (participants 목록 기반)
@@ -486,8 +485,6 @@ export const RoomPage = () => {
         </div>
       )}
 
-      {/* 개발용 강제 녹화 시작 버튼 (스티키) */}
-      <DevRecordingButton />
 
     </React.Fragment>
   );

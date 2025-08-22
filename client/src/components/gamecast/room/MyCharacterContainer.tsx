@@ -77,13 +77,6 @@ export const MyCharacterContainer: React.FC<MyCharacterContainerProps> = ({
               }}
             >
               캐릭터를 설정 해주세요
-              {/* ✨ 단순화된 디버깅 정보 */}
-              {import.meta.env.DEV && (
-                <div className="mt-2 text-xs text-red-400">
-                  DEBUG: hasCharacter={hasCharacter ? 'true' : 'false'} | 
-                  isCustomized={currentPlayer?.characterInfo?.isCustomized ? 'Y' : 'N'}
-                </div>
-              )}
             </div>
           )}
           
