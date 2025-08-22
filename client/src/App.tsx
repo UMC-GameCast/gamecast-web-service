@@ -29,6 +29,7 @@ function App() {
             <Route path="/room" element={<RoomPage />} />
             <Route path="/character-setup" element={<CharacterSetupPage />} />
             <Route path="/source-extraction" element={<SourceExtractionPage />} />
+            <Route path="/source-selection" element={<SourceSelectionPage />} />
             <Route path="/gamecast/source-selection" element={<SourceSelectionPage />} />
             <Route path="/subtitle-generation" element={<SubtitleGenerationPage />} />
             <Route path="/gamecast/subtitle-edit" element={<SubtitleEditPage />} />

@@ -4,7 +4,7 @@ import type { CharacterData } from '../types/room';
 /**
  * 캐릭터 데이터로부터 레이어드 이미지를 렌더링하는 유틸리티
  */
-export const renderCharacterLayers = (characterData: CharacterData): React.ReactNode[] => {
+export const renderCharacterLayers = (characterData: CharacterData, face?: string): React.ReactNode[] => {
   const layers = [];
   const basePath = '/src/assets/gamecast/characterCustom/charactorasset';
   const { selectedOptions, selectedColors } = characterData;
@@ -47,14 +47,40 @@ export const renderCharacterLayers = (characterData: CharacterData): React.React
   // 3. 얼굴 (face) - 얼굴 카테고리에서 선택된 얼굴 형태
   const selectedFace = selectedOptions['face'];
   if (selectedFace) {
+    // face 파라미터가 제공되면 해당 감정 표정을 사용, 없으면 기본 표정
+    const faceExpression = face || 'default';
+    
+    // 감정별 파일명 매핑
+    const getEmotionFileName = (emotion: string) => {
+      switch (emotion) {
+        case 'happy': return 'default'; // 기본 표정을 행복으로 사용
+        case 'angry': return 'angry';
+        case 'sad': return 'sad';
+        case 'surprised': return 'surprise'; // surprise -> surprised 매핑
+        case 'normal': 
+        case 'default':
+        default: 
+          return 'default';
+      }
+    };
+    
+    const emotionFile = getEmotionFileName(faceExpression);
+    
     layers.push(
       <img
         key="face"
-        src={`${basePath}/${selectedFace}/default.png`}
+        src={`${basePath}/${selectedFace}/${emotionFile}.png`}
         alt="얼굴"
         className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full h-full object-contain"
         style={{ zIndex: 3 }}
         loading="lazy"
+        onError={(e) => {
+          // 감정 표정 이미지가 없으면 기본 표정으로 fallback
+          const target = e.currentTarget;
+          if (emotionFile !== 'default') {
+            target.src = `${basePath}/${selectedFace}/default.png`;
+          }
+        }}
       />
     );
   }
@@ -129,16 +155,18 @@ interface CharacterRendererProps {
   characterData: CharacterData;
   className?: string;
   style?: React.CSSProperties;
+  face?: string;
 }
 
 export const CharacterRenderer: React.FC<CharacterRendererProps> = memo(({ 
   characterData, 
   className = "relative w-full h-full",
-  style 
+  style,
+  face
 }) => {
   return (
     <div className={className} style={style}>
-      {renderCharacterLayers(characterData)}
+      {renderCharacterLayers(characterData, face)}
     </div>
   );
 });

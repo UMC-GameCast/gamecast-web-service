@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react'
 import type { SubtitleSegment, Speaker, Emotion } from '../types'
 import { useUnifiedRoom } from '../../../../contexts/UnifiedGamecastContext'
+import { renderCharacterLayers } from '../../../../utils/characterRenderer'
 
 interface VideoPlayerProps {
   videoUrl: string | null
@@ -318,7 +319,32 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   // 감정 강조 자막: 오른쪽 아래 캐릭터 + 가운데 아래 자막
   const renderEmotionSubtitle = (subtitle: SubtitleSegment) => {
     const speaker = speakers.find(s => s.id === subtitle.speaker)
-    const participant = participants?.find(p => p.guestUserId === speaker?.name) || participants?.[0]
+    // 스피커 이름과 정확히 매칭되는 참여자 찾기
+    let participant = participants?.find(p => p.guestUserId === speaker?.name)
+    
+    // guestUserId로 찾지 못했으면 nickname으로 시도
+    if (!participant && speaker?.name) {
+      participant = participants?.find(p => p.nickname === speaker.name)
+    }
+    
+    // 여전히 찾지 못했으면 speaker id로 시도 (숫자를 제거하고 매칭)
+    if (!participant && speaker?.id) {
+      const speakerIndex = parseInt(speaker.id.replace(/[^0-9]/g, '')) - 1
+      participant = participants?.[speakerIndex]
+    }
+    
+    // 마지막으로 fallback
+    if (!participant) {
+      participant = participants?.[0]
+    }
+    
+    // 디버깅 로그
+    console.log('🎭 [VideoPlayer] Speaker-Participant mapping:', {
+      subtitle: subtitle.text,
+      speaker: speaker,
+      participantFound: participant?.nickname,
+      allParticipants: participants?.map(p => ({ nickname: p.nickname, guestUserId: p.guestUserId }))
+    })
     const hairColor = participant?.characterInfo?.selectedColors?.hair || 'E0A'
     const borderColor = `#${hairColor}`
     // 감정에 따른 face 값 결정
@@ -330,10 +356,48 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         <div className="absolute bottom-4 right-4 z-20" style={{
           width: '300px',
           height: '300px',
-          backgroundColor: '#808080',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
           borderRadius: '8px'
         }}>
-          {/* 캐릭터가 여기에 들어갈 예정 - face 값 사용: {face} */}
+          {participant?.characterInfo?.isCustomized && 
+           participant.characterInfo?.characterData?.selectedOptions && 
+           participant.characterInfo?.characterData?.selectedColors ? (
+            <div style={{ 
+              width: '100%', 
+              height: '100%', 
+              position: 'absolute',
+              top: '0',
+              left: '0',
+              transform: 'scale(1.2)',
+              transformOrigin: 'center top',
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'center',
+              overflow: 'hidden'
+            }}>
+              {renderCharacterLayers({
+                selectedOptions: participant.characterInfo.characterData.selectedOptions,
+                selectedColors: participant.characterInfo.characterData.selectedColors,
+                nickname: participant.characterInfo.characterData.nickname
+              }, face)}
+            </div>
+          ) : (
+            <div style={{
+              width: '100%',
+              height: '100%',
+              backgroundColor: '#808080',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              fontSize: '14px'
+            }}>
+              캐릭터 없음
+            </div>
+          )}
         </div>
         
         {/* 가운데 아래 자막 */}
@@ -356,7 +420,24 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   // 스타일 1: 캐릭터 원형 + 유저ID 네모 + 텍스트 (30% 작게)
   const renderStyle1Subtitle = (subtitle: SubtitleSegment) => {
     const speaker = speakers.find(s => s.id === subtitle.speaker)
-    const participant = participants?.find(p => p.guestUserId === speaker?.name) || participants?.[0]
+    // 스피커 이름과 정확히 매칭되는 참여자 찾기
+    let participant = participants?.find(p => p.guestUserId === speaker?.name)
+    
+    // guestUserId로 찾지 못했으면 nickname으로 시도
+    if (!participant && speaker?.name) {
+      participant = participants?.find(p => p.nickname === speaker.name)
+    }
+    
+    // 여전히 찾지 못했으면 speaker id로 시도 (숫자를 제거하고 매칭)
+    if (!participant && speaker?.id) {
+      const speakerIndex = parseInt(speaker.id.replace(/[^0-9]/g, '')) - 1
+      participant = participants?.[speakerIndex]
+    }
+    
+    // 마지막으로 fallback
+    if (!participant) {
+      participant = participants?.[0]
+    }
     const hairColor = participant?.characterInfo?.selectedColors?.hair || 'E0A'
     const borderColor = `#${hairColor}`
     // 실제 대화하는 유저의 ID를 speaker name에서 가져오기
@@ -380,8 +461,36 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          aspectRatio: '1/1'
+          aspectRatio: '1/1',
+          overflow: 'hidden',
+          position: 'relative'
         }}>
+          {participant?.characterInfo?.isCustomized && 
+           participant.characterInfo?.characterData?.selectedOptions && 
+           participant.characterInfo?.characterData?.selectedColors ? (
+            <div style={{ 
+              width: '70px', 
+              height: '70px', 
+              position: 'relative',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              {renderCharacterLayers({
+                selectedOptions: participant.characterInfo.characterData.selectedOptions,
+                selectedColors: participant.characterInfo.characterData.selectedColors,
+                nickname: participant.characterInfo.characterData.nickname
+              })}
+            </div>
+          ) : (
+            <div style={{
+              fontSize: '10px',
+              color: '#999',
+              textAlign: 'center'
+            }}>
+              캐릭터
+            </div>
+          )}
         </div>
         
         {/* 유저ID와 텍스트 */}
@@ -435,7 +544,24 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   // 스타일 2: 캐릭터 원형(위) + 유저ID 네모(아래) + 자막 텍스트(오른쪽)
   const renderStyle2Subtitle = (subtitle: SubtitleSegment) => {
     const speaker = speakers.find(s => s.id === subtitle.speaker)
-    const participant = participants?.find(p => p.guestUserId === speaker?.name) || participants?.[0]
+    // 스피커 이름과 정확히 매칭되는 참여자 찾기
+    let participant = participants?.find(p => p.guestUserId === speaker?.name)
+    
+    // guestUserId로 찾지 못했으면 nickname으로 시도
+    if (!participant && speaker?.name) {
+      participant = participants?.find(p => p.nickname === speaker.name)
+    }
+    
+    // 여전히 찾지 못했으면 speaker id로 시도 (숫자를 제거하고 매칭)
+    if (!participant && speaker?.id) {
+      const speakerIndex = parseInt(speaker.id.replace(/[^0-9]/g, '')) - 1
+      participant = participants?.[speakerIndex]
+    }
+    
+    // 마지막으로 fallback
+    if (!participant) {
+      participant = participants?.[0]
+    }
     const hairColor = participant?.characterInfo?.selectedColors?.hair || 'E0A'
     const borderColor = `#${hairColor}`
     // 실제 대화하는 유저의 ID를 speaker name에서 가져오기
@@ -455,11 +581,40 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           <div style={{
             width: '83.686px',
             height: '111.022px',
-            backgroundColor: '#808080',
+            backgroundColor: participant?.characterInfo?.isCustomized ? 'transparent' : '#808080',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center'
+            justifyContent: 'center',
+            borderRadius: '8px',
+            overflow: 'hidden',
+            position: 'relative'
           }}>
+            {participant?.characterInfo?.isCustomized && 
+             participant.characterInfo?.characterData?.selectedOptions && 
+             participant.characterInfo?.characterData?.selectedColors ? (
+              <div style={{ 
+                width: '75px', 
+                height: '100px', 
+                position: 'relative',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                {renderCharacterLayers({
+                  selectedOptions: participant.characterInfo.characterData.selectedOptions,
+                  selectedColors: participant.characterInfo.characterData.selectedColors,
+                  nickname: participant.characterInfo.characterData.nickname
+                })}
+              </div>
+            ) : (
+              <div style={{
+                fontSize: '10px',
+                color: 'white',
+                textAlign: 'center'
+              }}>
+                캐릭터
+              </div>
+            )}
           </div>
           
           {/* 유저ID 둥근 네모 */}
@@ -511,7 +666,24 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   // 스타일 3: 캐릭터(왼쪽 위) + 둥근 네모 안에 "유저id: 자막"
   const renderStyle3Subtitle = (subtitle: SubtitleSegment) => {
     const speaker = speakers.find(s => s.id === subtitle.speaker)
-    const participant = participants?.find(p => p.guestUserId === speaker?.name) || participants?.[0]
+    // 스피커 이름과 정확히 매칭되는 참여자 찾기
+    let participant = participants?.find(p => p.guestUserId === speaker?.name)
+    
+    // guestUserId로 찾지 못했으면 nickname으로 시도
+    if (!participant && speaker?.name) {
+      participant = participants?.find(p => p.nickname === speaker.name)
+    }
+    
+    // 여전히 찾지 못했으면 speaker id로 시도 (숫자를 제거하고 매칭)
+    if (!participant && speaker?.id) {
+      const speakerIndex = parseInt(speaker.id.replace(/[^0-9]/g, '')) - 1
+      participant = participants?.[speakerIndex]
+    }
+    
+    // 마지막으로 fallback
+    if (!participant) {
+      participant = participants?.[0]
+    }
     const hairColor = participant?.characterInfo?.selectedColors?.hair || 'E0A'
     const borderColor = `#${hairColor}`
     // 실제 대화하는 유저의 ID를 speaker name에서 가져오기
@@ -528,17 +700,44 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           {/* 캐릭터 회색 네모 - 왼쪽 위 (뒤쪽) */}
           <div style={{
             position: 'absolute',
-            top: '-40px',
+            top: '-70px',
             left: '20px',
             width: '110px',
             height: '110px',
             borderRadius: '25px',
-            backgroundColor: '#808080',
+            backgroundColor: participant?.characterInfo?.isCustomized ? 'transparent' : '#808080',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: -1
+            zIndex: -1,
+            overflow: 'hidden'
           }}>
+            {participant?.characterInfo?.isCustomized && 
+             participant.characterInfo?.characterData?.selectedOptions && 
+             participant.characterInfo?.characterData?.selectedColors ? (
+              <div style={{ 
+                width: '95px', 
+                height: '95px', 
+                position: 'relative',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                {renderCharacterLayers({
+                  selectedOptions: participant.characterInfo.characterData.selectedOptions,
+                  selectedColors: participant.characterInfo.characterData.selectedColors,
+                  nickname: participant.characterInfo.characterData.nickname
+                })}
+              </div>
+            ) : (
+              <div style={{
+                fontSize: '12px',
+                color: 'white',
+                textAlign: 'center'
+              }}>
+                캐릭터
+              </div>
+            )}
           </div>
           
           {/* 둥근 네모 박스 */}
