@@ -60,17 +60,27 @@ export const CharacterCustomizer: React.FC<CharacterCustomizerProps> = ({ onChar
   const tabsRef = useRef<(HTMLButtonElement | null)[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // 현재 카테고리의 에셋 메모이제이션
+  // 현재 카테고리의 에셋 메모이제이션 - 의존성을 안정화
   const currentAssets = useMemo((): CharacterAsset[] => {
-    return getAssetsByCategory(selectedCategory as 'hair' | 'top' | 'bottom' | 'accessory' | 'face');
+    try {
+      return getAssetsByCategory(selectedCategory as 'hair' | 'top' | 'bottom' | 'accessory' | 'face');
+    } catch (error) {
+      console.error('에셋 로딩 오류:', error);
+      return [];
+    }
   }, [selectedCategory]);
 
-  // 현재 선택된 에셋의 색상 옵션 메모이제이션
+  // 현재 선택된 에셋의 색상 옵션 메모이제이션 - 의존성을 안정화  
   const currentColors = useMemo(() => {
-    const selectedAssetId = selectedOptions[selectedCategory];
-    if (!selectedAssetId) return [];
-    return getAssetColors(selectedAssetId);
-  }, [selectedOptions, selectedCategory]);
+    try {
+      const selectedAssetId = selectedOptions[selectedCategory];
+      if (!selectedAssetId) return [];
+      return getAssetColors(selectedAssetId);
+    } catch (error) {
+      console.error('색상 로딩 오류:', error);
+      return [];
+    }
+  }, [selectedCategory, selectedOptions]);
 
   // 슬라이더 위치 업데이트 함수
   const updateSliderPosition = useCallback(() => {
@@ -118,27 +128,54 @@ export const CharacterCustomizer: React.FC<CharacterCustomizerProps> = ({ onChar
     if (!initialCharacterData && currentPlayer?.name) {
       setNickname(currentPlayer.name);
     }
-  }, [currentPlayer, initialCharacterData]);
+  }, [currentPlayer?.name, initialCharacterData]);
 
-  // 캐릭터 데이터 메모이제이션
-  const characterData = useMemo((): CharacterData => ({
-    selectedOptions,
-    selectedColors,
-    nickname
-  }), [selectedOptions, selectedColors, nickname]);
+  // 캐릭터 데이터 메모이제이션 - 깊은 비교로 불필요한 재생성 방지
+  const characterData = useMemo((): CharacterData => {
+    const data = {
+      selectedOptions: { ...selectedOptions },
+      selectedColors: { ...selectedColors },
+      nickname
+    };
+    return data;
+  }, [selectedOptions, selectedColors, nickname]);
 
-  // 캐릭터 데이터 변경 시 부모 컴포넌트에 전달 (onCharacterChange 의존성 제거)
+  // 캐릭터 데이터 변경 시 부모 컴포넌트에 전달 - 디바운스와 깊은 비교 적용
+  const onCharacterChangeRef = useRef(onCharacterChange);
+  const prevCharacterDataRef = useRef<CharacterData | null>(null);
+  
   useEffect(() => {
-    onCharacterChange?.(characterData);
-  }, [characterData]); // onCharacterChange 의존성 제거로 무한 리렌더링 방지
+    onCharacterChangeRef.current = onCharacterChange;
+  });
+
+  useEffect(() => {
+    // 첫 렌더링이거나 실제 데이터가 변경되었을 때만 콜백 호출
+    const prev = prevCharacterDataRef.current;
+    
+    if (!prev || 
+        JSON.stringify(prev.selectedOptions) !== JSON.stringify(characterData.selectedOptions) ||
+        JSON.stringify(prev.selectedColors) !== JSON.stringify(characterData.selectedColors) ||
+        prev.nickname !== characterData.nickname) {
+      
+      prevCharacterDataRef.current = { ...characterData };
+      
+      // 약간의 지연을 두어 연속된 상태 변경을 배치 처리
+      const timeoutId = setTimeout(() => {
+        onCharacterChangeRef.current?.(characterData);
+      }, 0);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [characterData]);
 
   const handleCategorySelect = useCallback((categoryId: string) => {
     setSelectedCategory(categoryId);
   }, []);
 
   const handleOptionSelect = useCallback((optionId: string) => {
-    // 얼굴(face) 카테고리는 해제 불가, 이미 선택된 옵션을 다시 클릭하면 선택 해제
+    // React 18의 자동 배치를 활용하여 상태 업데이트를 한번에 처리
     if (selectedOptions[selectedCategory] === optionId && selectedCategory !== 'face') {
+      // 얼굴(face) 카테고리는 해제 불가, 이미 선택된 옵션을 다시 클릭하면 선택 해제
       setSelectedOptions(prev => ({
         ...prev,
         [selectedCategory]: ''
@@ -148,12 +185,6 @@ export const CharacterCustomizer: React.FC<CharacterCustomizerProps> = ({ onChar
         [selectedCategory]: ''
       }));
     } else {
-      // 새로운 옵션 선택 시 default 색상 자동 선택
-      setSelectedOptions(prev => ({
-        ...prev,
-        [selectedCategory]: optionId
-      }));
-      
       // 카테고리별 기본 색상 설정
       let defaultColor = 'default';
       if (selectedCategory === 'hair' && (optionId === 'hair1' || optionId === 'hair3')) {
@@ -165,13 +196,18 @@ export const CharacterCustomizer: React.FC<CharacterCustomizerProps> = ({ onChar
       } else if (selectedCategory === 'accessory' && optionId === 'accessories3') {
         defaultColor = 'white';
       }
-      
+
+      // 새로운 옵션과 색상을 동시에 업데이트
+      setSelectedOptions(prev => ({
+        ...prev,
+        [selectedCategory]: optionId
+      }));
       setSelectedColors(prev => ({
         ...prev,
         [selectedCategory]: defaultColor
       }));
     }
-  }, [selectedOptions, selectedCategory]);
+  }, [selectedCategory, selectedOptions]);
 
   const handleColorSelect = useCallback((color: string) => {
     // 얼굴(face) 카테고리의 몸통 색상은 해제 불가, 이미 선택된 색상을 다시 클릭하면 선택 해제
