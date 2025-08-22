@@ -203,7 +203,7 @@ const SubtitleEditPage: React.FC = () => {
             <div className="flex flex-col" style={{ width: 80 }}>
               {/* 타임라인 헤더 높이만큼 여백 추가 (헤더: 32.578px + spacer: 12px) */}
               <div style={{ height: '44.578px' }} />
-{participants?.map((participant, idx) => {
+{participants?.slice(0, 3).map((participant, idx) => {
                 // 캐릭터 hair 색상을 border 색상으로 사용
                 const hairColor = participant?.characterInfo?.selectedColors?.hair;
                 let borderColor = `hsl(${idx * 72}, 60%, 60%)`; // 기본 색상

@@ -256,10 +256,10 @@ const TimelineEditor: React.FC<TimelineEditorProps> = ({
         <div style={{ height: '12px' }} />
         {/* 트랙들 */}
         <div className="space-y-0">
-          {[...Array(5)].map((_, idx) => {
+          {[...Array(3)].map((_, idx) => {
             const speaker = speakers[idx] || { id: `empty-${idx}`, name: `트랙 ${idx + 1}`, color: 'bg-gray-600', avatar: `${idx + 1}` };
             const isFirst = idx === 0;
-            const isLast = idx === 4;
+            const isLast = idx === 2;
             
             // 모든 트랙에 동일한 기본 스타일 적용
             let trackStyle: React.CSSProperties = {
