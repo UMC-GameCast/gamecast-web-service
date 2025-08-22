@@ -122,19 +122,172 @@ const SubtitleEditPage: React.FC = () => {
   // 비디오 URL에서 오디오 추출하여 자막 생성하는 함수
   const generateSubtitlesFromVideoURL = async (videoUrl: string) => {
     try {
-      console.log('🎵 [SubtitleEdit] 비디오에서 오디오 추출 시작:', videoUrl);
+      console.log('🎵 [SubtitleEdit] 비디오에서 자막 생성 시작:', videoUrl);
       
-      // 비디오에서 오디오 추출
-      const audioBlob = await extractAudioFromVideo(videoUrl);
-      console.log('🎵 [SubtitleEdit] 오디오 추출 완료, 크기:', audioBlob.size);
+      // 서버 응답에서 해당 비디오의 오디오 URL 찾기
+      const audioUrl = await findAudioUrlForVideo(videoUrl);
       
-      // 추출된 오디오로 자막 생성
-      await generateSubtitlesFromAudioBlob(audioBlob, 'main-video');
+      if (audioUrl) {
+        console.log('🎵 [SubtitleEdit] 서버 오디오 URL 사용:', audioUrl);
+        // 서버 오디오 파일로 자막 생성
+        await generateSubtitlesFromAudioURL(audioUrl, 'main-video');
+      } else {
+        console.log('🎵 [SubtitleEdit] 서버 오디오 URL이 없어서 비디오에서 오디오 추출');
+        // 비디오에서 오디오 추출
+        const audioBlob = await extractAudioFromVideo(videoUrl);
+        console.log('🎵 [SubtitleEdit] 오디오 추출 완료, 크기:', audioBlob.size);
+        
+        // 추출된 오디오로 자막 생성
+        await generateSubtitlesFromAudioBlob(audioBlob, 'main-video');
+      }
       
     } catch (error) {
       console.error('🎵 [SubtitleEdit] 비디오 오디오 추출 및 자막 생성 실패:', error);
       alert(`오디오 추출 및 자막 생성 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
       throw error;
+    }
+  };
+
+  // 서버 응답에서 비디오 URL에 대응하는 오디오 URL 찾기
+  const findAudioUrlForVideo = async (videoUrl: string): Promise<string | null> => {
+    try {
+      const response = await fetch('http://3.37.34.211:8889/api/highlights/debug/EHKCSY');
+      const data = await response.json();
+      
+      if (data.success && data.highlights) {
+        for (const highlight of data.highlights) {
+          const participants = highlight.clip_files?.clips_by_participant;
+          if (participants) {
+            for (const [participantId, participantClip] of Object.entries(participants) as [string, any][]) {
+              if (participantClip?.video?.s3_url === videoUrl) {
+                console.log(`🎵 [SubtitleEdit] 매칭된 참여자: ${participantId}, 오디오 URL:`, participantClip?.audio?.s3_url);
+                return participantClip?.audio?.s3_url || null;
+              }
+            }
+          }
+        }
+      }
+      
+      console.log('🎵 [SubtitleEdit] 매칭되는 오디오 URL을 찾을 수 없음');
+      return null;
+    } catch (error) {
+      console.error('🎵 [SubtitleEdit] 서버에서 오디오 URL 찾기 실패:', error);
+      return null;
+    }
+  };
+
+  // 서버 오디오 URL에서 직접 자막 생성하는 함수
+  const generateSubtitlesFromAudioURL = async (audioUrl: string, speakerId: string) => {
+    try {
+      console.log('🎵 [SubtitleEdit] 서버 오디오 URL에서 자막 생성 시작:', audioUrl);
+      
+      // 오디오 파일 다운로드
+      const response = await fetch(audioUrl);
+      if (!response.ok) {
+        throw new Error(`오디오 파일 다운로드 실패: ${response.status}`);
+      }
+      
+      const audioBlob = await response.blob();
+      console.log('🎵 [SubtitleEdit] 서버 오디오 다운로드 완료, 크기:', audioBlob.size);
+      console.log('🎵 [SubtitleEdit] 서버 오디오 MIME 타입:', audioBlob.type);
+      
+      // 다운로드된 오디오로 자막 생성
+      await generateSubtitlesFromAudioBlob(audioBlob, speakerId);
+      
+    } catch (error) {
+      console.error('🎵 [SubtitleEdit] 서버 오디오 URL 자막 생성 실패:', error);
+      throw error;
+    }
+  };
+
+  // 특정 트랙용 서버 오디오 URL에서 직접 자막 생성하는 함수
+  const generateSubtitlesFromAudioURLWithTrack = async (audioUrl: string, speakerId: string, targetSpeakerId: string) => {
+    try {
+      console.log('🎵 [SubtitleEdit] 특정 트랙용 서버 오디오 URL에서 자막 생성 시작:', audioUrl);
+      console.log('🎯 [SubtitleEdit] 타겟 speaker ID:', targetSpeakerId);
+      
+      // 오디오 파일 다운로드
+      const response = await fetch(audioUrl);
+      if (!response.ok) {
+        throw new Error(`오디오 파일 다운로드 실패: ${response.status}`);
+      }
+      
+      const audioBlob = await response.blob();
+      console.log('🎵 [SubtitleEdit] 서버 오디오 다운로드 완료, 크기:', audioBlob.size);
+      console.log('🎵 [SubtitleEdit] 서버 오디오 MIME 타입:', audioBlob.type);
+      
+      // 다운로드된 오디오로 자막 생성
+      await generateSubtitlesFromAudioBlobWithTrack(audioBlob, speakerId, targetSpeakerId);
+      
+    } catch (error) {
+      console.error('🎵 [SubtitleEdit] 특정 트랙용 서버 오디오 URL 자막 생성 실패:', error);
+      throw error;
+    }
+  };
+
+  // 같은 하이라이트의 모든 영상에서 자막 생성하는 함수
+  const generateSubtitlesFromAllVideos = async () => {
+    try {
+      console.log('🎬 [SubtitleEdit] 모든 영상에서 자막 생성 시작');
+      
+      // 메인 영상 (첫 번째 트랙)
+      if (videoUrl) {
+        console.log('🎵 [SubtitleEdit] 메인 영상 자막 생성 중...');
+        await generateSubtitlesFromVideoURL(videoUrl);
+      }
+
+      // 작은 영상들 중에서 처음 2개 영상 (2번째, 3번째 트랙)
+      const availableVideos = videos.filter((video, index) => 
+        index > 0 && video.url // 메인 영상(index 0) 제외, URL이 있는 것만
+      ).slice(0, 2); // 처음 2개만
+
+      console.log('🎬 [SubtitleEdit] 처리할 작은 영상들:', availableVideos.length);
+
+      for (let i = 0; i < availableVideos.length; i++) {
+        const video = availableVideos[i];
+        const trackIndex = i + 1; // 2번째 트랙부터 시작 (i=0 -> track=1, i=1 -> track=2)
+        
+        console.log(`🎵 [SubtitleEdit] ${trackIndex + 1}번째 트랙 영상 자막 생성 중...`);
+        
+        try {
+          if (!video.url) continue;
+          console.log(`🎵 [SubtitleEdit] ${trackIndex + 1}번째 트랙 비디오에서 자막 생성 시작:`, video.url);
+          
+          // 해당 트랙의 speaker ID 가져오기
+          const targetSpeakerId = speakers.length > trackIndex ? speakers[trackIndex].id : `empty-${trackIndex}`;
+          console.log(`� [SubtitleEdit] ${trackIndex + 1}번째 트랙 타겟 speaker ID:`, targetSpeakerId);
+          
+          // 서버 응답에서 해당 비디오의 오디오 URL 찾기
+          const audioUrl = await findAudioUrlForVideo(video.url);
+          
+          if (audioUrl) {
+            console.log(`🎵 [SubtitleEdit] ${trackIndex + 1}번째 트랙 서버 오디오 URL 사용:`, audioUrl);
+            // 서버 오디오 파일로 자막 생성
+            await generateSubtitlesFromAudioURLWithTrack(audioUrl, `video-${trackIndex}`, targetSpeakerId);
+          } else {
+            console.log(`� [SubtitleEdit] ${trackIndex + 1}번째 트랙 서버 오디오 URL이 없어서 비디오에서 오디오 추출`);
+            // 비디오에서 오디오 추출
+            const audioBlob = await extractAudioFromVideo(video.url);
+            console.log(`🎵 [SubtitleEdit] ${trackIndex + 1}번째 트랙 오디오 추출 완료, 크기:`, audioBlob.size);
+            
+            // 추출된 오디오로 자막 생성
+            await generateSubtitlesFromAudioBlobWithTrack(audioBlob, `video-${trackIndex}`, targetSpeakerId);
+          }
+          
+          console.log(`✅ [SubtitleEdit] ${trackIndex + 1}번째 트랙 자막 생성 완료`);
+          
+        } catch (error) {
+          console.error(`🎵 [SubtitleEdit] ${trackIndex + 1}번째 트랙 자막 생성 실패:`, error);
+          // 개별 영상 실패 시에도 다음 영상 계속 처리
+        }
+      }
+
+      console.log('✅ [SubtitleEdit] 모든 영상 자막 생성 완료');
+      alert('🎉 모든 영상의 자막 생성이 완료되었습니다!');
+      
+    } catch (error) {
+      console.error('🎬 [SubtitleEdit] 전체 자막 생성 실패:', error);
+      alert(`전체 자막 생성 중 오류가 발생했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
     }
   };
 
@@ -146,9 +299,6 @@ const SubtitleEditPage: React.FC = () => {
       video.src = videoUrl;
       
       video.onloadedmetadata = () => {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        
         // 오디오 컨텍스트 생성
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
         const source = audioContext.createMediaElementSource(video);
@@ -157,10 +307,24 @@ const SubtitleEditPage: React.FC = () => {
         // 오디오만 연결
         source.connect(destination);
         
-        // MediaRecorder로 오디오 녹음
-        const mediaRecorder = new MediaRecorder(destination.stream, {
-          mimeType: 'audio/webm;codecs=opus'
-        });
+        // MediaRecorder로 오디오 녹음 - audio/mp4 또는 audio/webm 시도
+        let mediaRecorder: MediaRecorder;
+        try {
+          // 먼저 audio/mp4 시도
+          mediaRecorder = new MediaRecorder(destination.stream, {
+            mimeType: 'audio/mp4'
+          });
+        } catch (e) {
+          try {
+            // audio/mp4가 안되면 audio/webm;codecs=opus 시도
+            mediaRecorder = new MediaRecorder(destination.stream, {
+              mimeType: 'audio/webm;codecs=opus'
+            });
+          } catch (e2) {
+            // 둘 다 안되면 기본값 사용
+            mediaRecorder = new MediaRecorder(destination.stream);
+          }
+        }
         
         const audioChunks: BlobPart[] = [];
         
@@ -171,7 +335,19 @@ const SubtitleEditPage: React.FC = () => {
         };
         
         mediaRecorder.onstop = () => {
-          const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+          // MIME 타입에 따라 적절한 Blob 생성
+          let mimeType = 'audio/webm';
+          
+          if (mediaRecorder.mimeType.includes('mp4')) {
+            mimeType = 'audio/mp4';
+          } else if (mediaRecorder.mimeType.includes('webm')) {
+            mimeType = 'audio/webm';
+          }
+          
+          console.log('🎵 [SubtitleEdit] 사용된 MediaRecorder MIME 타입:', mediaRecorder.mimeType);
+          console.log('🎵 [SubtitleEdit] 생성할 Blob MIME 타입:', mimeType);
+          
+          const audioBlob = new Blob(audioChunks, { type: mimeType });
           resolve(audioBlob);
         };
         
@@ -204,9 +380,26 @@ const SubtitleEditPage: React.FC = () => {
     try {
       console.log('🤖 [SubtitleEdit] Whisper AI 오디오 자막 생성 시작');
       console.log('🤖 [SubtitleEdit] 오디오 파일 크기:', audioBlob.size, 'bytes');
+      console.log('🤖 [SubtitleEdit] 오디오 파일 MIME 타입:', audioBlob.type);
+      
+      // MIME 타입에 따라 파일 확장자 결정
+      let fileName = 'extracted_audio.mp3'; // 기본값을 MP3로 설정
+      if (audioBlob.type.includes('mp4')) {
+        fileName = 'extracted_audio.mp4';
+      } else if (audioBlob.type.includes('webm')) {
+        fileName = 'extracted_audio.webm';
+      } else if (audioBlob.type.includes('mpeg') || audioBlob.type.includes('mp3')) {
+        fileName = 'extracted_audio.mp3';
+      } else if (audioBlob.type.includes('wav')) {
+        fileName = 'extracted_audio.wav';
+      } else if (audioBlob.type.includes('m4a')) {
+        fileName = 'extracted_audio.m4a';
+      }
+      
+      console.log('🤖 [SubtitleEdit] 사용할 파일명:', fileName);
       
       const formData = new FormData();
-      formData.append('file', audioBlob, 'extracted_audio.webm');
+      formData.append('file', audioBlob, fileName);
       formData.append('model', 'whisper-1');
       formData.append('language', 'ko');
       formData.append('response_format', 'verbose_json');
@@ -267,6 +460,88 @@ const SubtitleEditPage: React.FC = () => {
     }
   };
 
+  // 특정 트랙에 오디오 Blob에서 Whisper AI로 자막 생성하는 함수
+  const generateSubtitlesFromAudioBlobWithTrack = async (audioBlob: Blob, speakerId: string, targetSpeakerId: string) => {
+    try {
+      console.log('🤖 [SubtitleEdit] 특정 트랙용 Whisper AI 오디오 자막 생성 시작');
+      console.log('🤖 [SubtitleEdit] 오디오 파일 크기:', audioBlob.size, 'bytes');
+      console.log('🤖 [SubtitleEdit] 오디오 파일 MIME 타입:', audioBlob.type);
+      console.log('🤖 [SubtitleEdit] 타겟 speaker ID:', targetSpeakerId);
+      
+      // MIME 타입에 따라 파일 확장자 결정
+      let fileName = 'extracted_audio.mp3'; // 기본값을 MP3로 설정
+      if (audioBlob.type.includes('mp4')) {
+        fileName = 'extracted_audio.mp4';
+      } else if (audioBlob.type.includes('webm')) {
+        fileName = 'extracted_audio.webm';
+      } else if (audioBlob.type.includes('mpeg') || audioBlob.type.includes('mp3')) {
+        fileName = 'extracted_audio.mp3';
+      } else if (audioBlob.type.includes('wav')) {
+        fileName = 'extracted_audio.wav';
+      } else if (audioBlob.type.includes('m4a')) {
+        fileName = 'extracted_audio.m4a';
+      }
+      
+      console.log('🤖 [SubtitleEdit] 사용할 파일명:', fileName);
+      
+      const formData = new FormData();
+      formData.append('file', audioBlob, fileName);
+      formData.append('model', 'whisper-1');
+      formData.append('language', 'ko');
+      formData.append('response_format', 'verbose_json');
+      formData.append('timestamp_granularities', 'word');
+
+      const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
+      
+      if (!OPENAI_API_KEY) {
+        throw new Error('OpenAI API 키가 설정되지 않았습니다. .env 파일을 확인하세요.');
+      }
+      
+      console.log('🤖 [SubtitleEdit] OpenAI API 요청 시작...');
+      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENAI_API_KEY}`
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || '음성 변환에 실패했습니다.');
+      }
+
+      const data = await response.json();
+      console.log('🤖 [SubtitleEdit] Whisper AI 응답:', data);
+      
+      if (data.segments && data.segments.length > 0) {
+        console.log('🎯 [SubtitleEdit] 타겟 트랙 speaker ID:', targetSpeakerId);
+        console.log('🎯 [SubtitleEdit] 현재 speakers:', speakers);
+        
+        const segments = data.segments.map((segment: any, index: number) => ({
+          id: `whisper-${speakerId}-${index}`,
+          speaker: targetSpeakerId, // 지정된 트랙에 배치
+          text: segment.text.trim(),
+          startTime: segment.start,
+          endTime: segment.end,
+          emotion: 'normal'
+        }));
+        
+        console.log('🤖 [SubtitleEdit] 생성된 자막 세그먼트:', segments.length);
+        console.log('🤖 [SubtitleEdit] 자막 세그먼트 상세:', segments);
+        handleSubtitlesGenerated(segments);
+        return segments;
+      } else {
+        console.log('🤖 [SubtitleEdit] 응답에 자막 세그먼트가 없음');
+        return [];
+      }
+      
+    } catch (error) {
+      console.error('🤖 [SubtitleEdit] Whisper AI 자막 생성 실패:', error);
+      throw error;
+    }
+  };
+
   // 디버깅용 로그
   console.log('🔍 [SubtitleEdit] videoUrl:', videoUrl);
   console.log('🔍 [SubtitleEdit] videos:', videos);
@@ -308,22 +583,21 @@ const SubtitleEditPage: React.FC = () => {
               }, 1000);
             }
             
-            // 작은 영상들 (여러 하이라이트와 참여자들)
+            // 작은 영상들 (같은 하이라이트의 다른 참여자들)
             let videoIndex = 1;
-            highlights.forEach((highlight, highlightIdx) => {
-              const clips = highlight.clip_files?.clips_by_participant;
-              if (clips) {
-                // 각 참여자의 영상들을 작은 영상 슬롯에 배치
-                Object.entries(clips).forEach(([participantId, participantClip]) => {
-                  if (videoIndex < 15 && participantClip?.video?.s3_url) {
-                    console.log(`🧪 [SubtitleEdit] 작은 영상 ${videoIndex} 로드:`, participantClip.video.s3_url);
-                    const smallFile = new File([], `${participantId}_highlight${highlightIdx + 1}.mp4`, { type: 'video/mp4' });
-                    handleVideoUploaded(participantClip.video.s3_url, smallFile, videoIndex);
-                    videoIndex++;
-                  }
-                });
-              }
-            });
+            const firstHighlightParticipants = firstHighlight.clip_files?.clips_by_participant;
+            
+            if (firstHighlightParticipants) {
+              // 각 참여자의 영상들을 작은 영상 슬롯에 배치 (host 제외)
+              Object.entries(firstHighlightParticipants).forEach(([participantId, participantClip]: [string, any]) => {
+                if (videoIndex < 15 && participantId !== 'host' && participantClip?.video?.s3_url) {
+                  console.log(`🧪 [SubtitleEdit] 작은 영상 ${videoIndex} 로드:`, participantClip.video.s3_url);
+                  const smallFile = new File([], `${participantId}_highlight1.mp4`, { type: 'video/mp4' });
+                  handleVideoUploaded(participantClip.video.s3_url, smallFile, videoIndex);
+                  videoIndex++;
+                }
+              });
+            }
           }
         })
         .catch(error => {
@@ -497,8 +771,8 @@ const SubtitleEditPage: React.FC = () => {
                         overflow: 'hidden'
                       }}>
                         {participant?.characterInfo?.isCustomized && 
-                         participant.characterInfo?.characterData?.selectedOptions && 
-                         participant.characterInfo?.characterData?.selectedColors ? (
+                         participant.characterInfo?.selectedOptions && 
+                         participant.characterInfo?.selectedColors ? (
                           <div style={{ 
                             width: '100%', 
                             height: '100%', 
@@ -513,9 +787,9 @@ const SubtitleEditPage: React.FC = () => {
                             overflow: 'hidden'
                           }}>
                             {renderCharacterLayers({
-                              selectedOptions: participant.characterInfo.characterData.selectedOptions,
-                              selectedColors: participant.characterInfo.characterData.selectedColors,
-                              nickname: participant.characterInfo.characterData.nickname
+                              selectedOptions: participant.characterInfo.selectedOptions,
+                              selectedColors: participant.characterInfo.selectedColors,
+                              nickname: participant.nickname || ''
                             })}
                           </div>
                         ) : (
@@ -603,7 +877,8 @@ const SubtitleEditPage: React.FC = () => {
           
           {/* 자막 생성 버튼 */}
           {videoUrl && (
-            <div className="fixed bottom-20 right-5 z-50">
+            <div className="fixed bottom-20 right-5 z-50 flex flex-col space-y-3">
+              {/* 메인 영상만 자막 생성 */}
               <button
                 onClick={() => {
                   if (videoUrl) {
@@ -616,6 +891,17 @@ const SubtitleEditPage: React.FC = () => {
               >
                 <span>🤖</span>
                 <span>메인 영상 자막 생성</span>
+              </button>
+              
+              {/* 모든 영상 자막 생성 */}
+              <button
+                onClick={() => {
+                  generateSubtitlesFromAllVideos();
+                }}
+                className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition-colors duration-200 flex items-center space-x-2"
+              >
+                <span>🎬</span>
+                <span>모든 영상 자막 생성</span>
               </button>
             </div>
           )}
