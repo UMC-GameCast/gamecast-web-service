@@ -170,17 +170,27 @@ export const SourceSelectionPage: React.FC = () => {
 
     try {
       console.log('🚀 [SourceSelection] 편집 시작 - 선택된 소스:', selectedSources.length);
+      console.log('🚀 [SourceSelection] 선택된 소스들 상세:', selectedSources);
       
       // Context에 선택된 소스 저장
+      console.log('📂 [SourceSelection] Context에 소스 저장 중...');
       actions.setEditingSources(selectedSources);
       
       // 파일 다운로드 시작
+      console.log('🔽 [SourceSelection] 파일 다운로드 시작...');
       const downloadSuccess = await actions.downloadFiles(selectedSources);
+      
+      console.log('🔽 [SourceSelection] 다운로드 결과:', downloadSuccess);
       
       if (downloadSuccess) {
         console.log('✅ [SourceSelection] 파일 다운로드 완료, 편집 페이지로 이동');
+        console.log('✅ [SourceSelection] Context 상태 확인:', {
+          selectedSources: state.editing.selectedSources,
+          downloadedFiles: Object.keys(state.editing.downloadedFiles)
+        });
         navigate('/gamecast/subtitle-edit');
       } else {
+        console.error('❌ [SourceSelection] 다운로드 실패');
         alert('파일 다운로드에 실패했습니다. 다시 시도해주세요.');
       }
     } catch (error) {

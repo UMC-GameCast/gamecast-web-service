@@ -61,30 +61,12 @@ const SmallVideoList: React.FC<SmallVideoListProps> = ({
                             preload="metadata"
                             style={{ width: '100%', height: '100%' }}
                           />
-                          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button 
-                              className="bg-black bg-opacity-50 text-white p-1 rounded text-xs hover:bg-opacity-75"
-                              onClick={() => handleVideoUploadStart(videoIndex)}
-                              title="동영상 교체"
-                            >
-                              교체
-                            </button>
-                          </div>
                         </div>
                       ) : (
                         <div className="flex items-center justify-center h-full text-gray-400 text-xs">
                           <div className="text-center">
                             <div className="mb-2">📹</div>
-                            <div className="mb-2">동영상을 업로드하세요</div>
-                            <button 
-                              className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition-colors"
-                              onClick={() => {
-                                setPendingSmallVideoIndex(videoIndex)
-                                document.getElementById('small-video-file-input')?.click()
-                              }}
-                            >
-                              업로드
-                            </button>
+                            <div className="mb-2">동영상 없음</div>
                           </div>
                         </div>
                       )}
