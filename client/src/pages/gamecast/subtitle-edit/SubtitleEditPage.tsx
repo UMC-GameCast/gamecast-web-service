@@ -66,11 +66,42 @@ const SubtitleEditPage: React.FC = () => {
     handleClientSideRender
   } = useSubtitleEditor(timelineRef)
 
-  // 페이지 로드 시 자동으로 데모 모드 활성화
+  // 페이지 로드 시 자동으로 데모 모드 활성화 및 SourceSelectionPage에서 다운로드된 영상 로드
   useEffect(() => {
     console.log('🎭 [SubtitleEdit] 데모 모드 자동 활성화');
     actions.enableDemoMode();
-  }, [actions]);
+    
+    // SourceSelectionPage에서 선택된 소스와 다운로드된 파일들 확인
+    console.log('📂 [SubtitleEdit] 선택된 소스들:', state.editing.selectedSources);
+    console.log('🔽 [SubtitleEdit] 다운로드된 파일들:', Object.keys(state.editing.downloadedFiles));
+    
+    // 선택된 소스들을 동영상 슬롯에 자동 배치
+    if (state.editing.selectedSources.length > 0 && Object.keys(state.editing.downloadedFiles).length > 0) {
+      console.log('🎬 [SubtitleEdit] 다운로드된 영상들을 동영상 슬롯에 배치 시작...');
+      
+      state.editing.selectedSources.forEach((source, index) => {
+        const downloadedBlob = state.editing.downloadedFiles[source.videoUrl];
+        if (downloadedBlob) {
+          const videoUrl = URL.createObjectURL(downloadedBlob);
+          const fileName = `${source.participantName}_highlight${source.highlightIndex + 1}.mp4`;
+          
+          if (index === 0) {
+            // 첫 번째 선택된 영상은 메인 동영상(인덱스 0)에 배치
+            console.log(`🎥 [SubtitleEdit] 메인 동영상 배치: ${source.participantName} (${source.highlightIndex + 1}번째 하이라이트)`);
+            handleVideoUploaded(videoUrl, new File([downloadedBlob], fileName, { type: 'video/mp4' }), 0);
+          } else if (index < 15) {
+            // 나머지 영상들은 작은 동영상 슬롯(인덱스 1~15)에 배치
+            console.log(`📹 [SubtitleEdit] 작은 동영상 ${index} 배치: ${source.participantName} (${source.highlightIndex + 1}번째 하이라이트)`);
+            handleVideoUploaded(videoUrl, new File([downloadedBlob], fileName, { type: 'video/mp4' }), index);
+          }
+        }
+      });
+      
+      console.log('✅ [SubtitleEdit] 모든 다운로드된 영상 배치 완료');
+    } else {
+      console.log('ℹ️ [SubtitleEdit] 다운로드된 영상이 없어서 배치하지 않음');
+    }
+  }, [actions, state.editing.selectedSources, state.editing.downloadedFiles, handleVideoUploaded]);
 
   // 디버깅용 로그
   console.log('videoUrl:', videoUrl);
