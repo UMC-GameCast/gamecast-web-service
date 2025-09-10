@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useUnifiedGamecast } from '../../../contexts/UnifiedGamecastContext'
+import { useRoom } from '../../../hooks/useRoom'
 import { isDemoMode, isDemoRoomCode } from '../../../constants/demoData'
 import { renderCharacterLayers } from '../../../utils/characterRenderer'
 import { Navigation } from '../../../components/gamecast/common/Navigation'
@@ -23,10 +24,52 @@ export const SourceSelectionPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { state, actions } = useUnifiedGamecast();
+  const { currentRoom, currentPlayer, refreshRoomState } = useRoom();
   const [selectedVideos, setSelectedVideos] = useState<{[key: string]: string}>({});
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedSources, setSelectedSources] = useState<SelectedSource[]>([]);
   const [highlightData, setHighlightData] = useState<any>(null);
+
+  // 기본 캐릭터 데이터 (서버 데이터가 없을 때 사용)
+  const defaultCharacters = [
+    {
+      nickname: '게스트1',
+      characterData: {
+        selectedOptions: { face: 'face1', hair: 'hair1', top: 'top1' },
+        selectedColors: { face: '21', hair: 'black', top: 'blue' },
+        nickname: '게스트1'
+      }
+    },
+    {
+      nickname: '게스트2', 
+      characterData: {
+        selectedOptions: { face: 'face1', hair: 'hair2', top: 'top2' },
+        selectedColors: { face: '21', hair: 'yellow', top: 'red' },
+        nickname: '게스트2'
+      }
+    }
+  ];
+
+  // 페이지 로드 시 서버에서 최신 방 데이터 가져오기 (한 번만)
+  useEffect(() => {
+    const refreshData = async () => {
+      try {
+        // 이미 데이터가 있으면 추가 요청하지 않음 (429 에러 방지)
+        if (currentRoom && state.participants && state.participants.length > 0) {
+          console.log('✅ [SourceSelection] 기존 데이터 사용 (중복 요청 방지)');
+          return;
+        }
+        
+        await refreshRoomState();
+        console.log('✅ [SourceSelection] 서버에서 최신 방 데이터 조회 완료');
+      } catch (error) {
+        console.error('❌ [SourceSelection] 방 데이터 조회 실패:', error);
+        console.log('🔄 [SourceSelection] 기존 데이터로 계속 진행');
+      }
+    };
+    
+    refreshData();
+  }, []); // 의존성 배열을 비워서 컴포넌트 마운트 시 한 번만 실행
 
   // API에서 하이라이트 동영상 가져오기
   const fetchHighlightVideos = async () => {
@@ -210,9 +253,69 @@ export const SourceSelectionPage: React.FC = () => {
     }
   };
 
-  // 게스트 플레이어 가져오기 (호스트 제외)
+  // 게스트 플레이어 가져오기 (호스트 제외) - 서버 데이터와 기본값 조합
   const getGuestPlayers = () => {
-    return state.participants?.filter(p => !p.isHost) || [];
+    // UnifiedGamecastContext의 participants와 useRoom의 currentRoom 모두 확인
+    const contextParticipants = state.participants?.filter(p => !p.isHost) || [];
+    const roomParticipants = currentRoom?.participants?.filter(p => !p.isHost) || [];
+    
+    // 더 많은 데이터를 가진 것을 우선 사용
+    const serverGuests = contextParticipants.length > 0 ? contextParticipants : roomParticipants;
+    
+    console.log('🔍 [getGuestPlayers] 참여자 데이터 확인:', {
+      contextParticipants: contextParticipants.length,
+      roomParticipants: roomParticipants.length,
+      selectedGuests: serverGuests.length,
+      serverGuestsData: serverGuests.map(p => ({
+        nickname: p.nickname,
+        hasCharacterInfo: !!p.characterInfo,
+        isCustomized: p.characterInfo?.isCustomized
+      }))
+    });
+    
+    // 서버에서 가져온 참여자가 있으면 그것을 사용, 없으면 기본값으로 채움
+    const players = [];
+    
+    for (let i = 0; i < 2; i++) { // 최대 2명의 게스트 표시
+      if (serverGuests[i]) {
+        // 서버 데이터가 있으면 사용
+        const serverPlayer = serverGuests[i];
+        
+        console.log(`🔍 [getGuestPlayers] 게스트 ${i + 1} 데이터:`, {
+          nickname: serverPlayer.nickname,
+          hasCharacterInfo: !!serverPlayer.characterInfo,
+          isCustomized: serverPlayer.characterInfo?.isCustomized,
+          characterData: serverPlayer.characterInfo
+        });
+        
+        players.push({
+          ...serverPlayer,
+          // 캐릭터 데이터가 있으면 서버 데이터 사용, 없으면 기본값 사용
+          characterInfo: serverPlayer.characterInfo?.isCustomized ? 
+            serverPlayer.characterInfo : 
+            { 
+              isCustomized: true, 
+              characterData: defaultCharacters[i].characterData 
+            },
+          nickname: serverPlayer.nickname || defaultCharacters[i].nickname
+        });
+      } else {
+        // 서버 데이터가 없으면 기본값 사용
+        console.log(`🔍 [getGuestPlayers] 게스트 ${i + 1} 기본값 사용`);
+        players.push({
+          id: `guest${i + 1}`,
+          guestUserId: `guest${i + 1}`,
+          nickname: defaultCharacters[i].nickname,
+          isHost: false,
+          characterInfo: {
+            isCustomized: true,
+            characterData: defaultCharacters[i].characterData
+          }
+        });
+      }
+    }
+    
+    return players;
   };
 
   // 화면 컴포넌트
@@ -400,7 +503,7 @@ export const SourceSelectionPage: React.FC = () => {
             justifyContent: 'center'
           }}
         >
-          {renderCharacterLayers(player.characterInfo.characterData)}
+          {renderCharacterLayers((player.characterInfo as any).characterData)}
         </div>
       )}
       

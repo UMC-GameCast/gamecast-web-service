@@ -2315,9 +2315,9 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
             });
             
             if (isHost) {
-              // 호스트는 source-selection 페이지로 이동 (데모 모드 우선)
-              navigate('/gamecast/source-selection?demo=true');
-              console.log('👑 [Context] 호스트 -> source-selection 페이지 이동 (데모 모드)');
+              // 호스트는 source-selection 페이지로 이동
+              navigate('/gamecast/source-selection');
+              console.log('👑 [Context] 호스트 -> source-selection 페이지 이동');
             } else {
               // 게스트는 메인 페이지로 이동
               navigate('/');
@@ -2395,9 +2395,9 @@ export const UnifiedGamecastProvider: React.FC<{ children: ReactNode }> = ({ chi
             });
             
             if (isHost) {
-              // 호스트는 source-selection 페이지로 이동 (데모 모드 우선)
-              navigate('/gamecast/source-selection?demo=true');
-              console.log('👑 [Context] 호스트 -> source-selection 페이지 이동 (데모 모드)');
+              // 호스트는 source-selection 페이지로 이동
+              navigate('/gamecast/source-selection');
+              console.log('👑 [Context] 호스트 -> source-selection 페이지 이동');
             } else {
               // 게스트는 메인 페이지로 이동
               navigate('/');
