@@ -438,8 +438,25 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     if (!participant) {
       participant = participants?.[0]
     }
-    const hairColor = participant?.characterInfo?.selectedColors?.hair || 'E0A'
+    const rawHairColor = participant?.characterInfo?.characterData?.selectedColors?.hair || participant?.characterInfo?.selectedColors?.hair
+    console.log('🎨 Hair color debug:', { rawHairColor, participant: participant?.nickname })
+    
+    // 머리색 매핑 (문자열 색상명을 HEX로 변환)
+    let hairColor = '000000' // 기본값: 검은색
+    if (rawHairColor) {
+      if (rawHairColor === 'black') hairColor = '2C2C2C'
+      else if (rawHairColor === 'yellow') hairColor = 'F7D058'
+      else if (rawHairColor === 'red') hairColor = 'E74C3C'
+      else if (rawHairColor === 'blue') hairColor = '3498DB'
+      else if (rawHairColor === 'green') hairColor = '27AE60'
+      else if (rawHairColor === 'white') hairColor = 'ECF0F1'
+      else if (rawHairColor.startsWith('#')) hairColor = rawHairColor.substring(1)
+      else if (/^[0-9A-Fa-f]{6}$/.test(rawHairColor)) hairColor = rawHairColor
+      else hairColor = '000000' // 알 수 없는 색상은 검은색
+    }
+    
     const borderColor = `#${hairColor}`
+    console.log('🎨 Final border color:', borderColor)
     // 실제 대화하는 유저의 ID를 speaker name에서 가져오기
     const userId = speaker?.name || participant?.guestUserId || 'User1'
     // 감정에 따른 face 값 결정
@@ -469,12 +486,14 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
            participant.characterInfo?.characterData?.selectedOptions && 
            participant.characterInfo?.characterData?.selectedColors ? (
             <div style={{ 
-              width: '70px', 
-              height: '70px', 
+              width: '100px', 
+              height: '100px', 
               position: 'relative',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center'
+              justifyContent: 'center',
+              transform: 'scale(1.8) translate(3px, 1px)',
+              transformOrigin: 'center'
             }}>
               {renderCharacterLayers({
                 selectedOptions: participant.characterInfo.characterData.selectedOptions,
@@ -526,7 +545,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             maxWidth: '720.395px',
             color: '#FFF',
             WebkitTextStrokeWidth: '2px',
-            WebkitTextStrokeColor: '#E0A',
+            WebkitTextStrokeColor: borderColor,
             fontFamily: '"Esamanru", sans-serif',
             fontSize: '40px',
             fontStyle: 'normal',
@@ -562,8 +581,25 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     if (!participant) {
       participant = participants?.[0]
     }
-    const hairColor = participant?.characterInfo?.selectedColors?.hair || 'E0A'
+    const rawHairColor = participant?.characterInfo?.characterData?.selectedColors?.hair || participant?.characterInfo?.selectedColors?.hair
+    console.log('🎨 Style2 Hair color debug:', { rawHairColor, participant: participant?.nickname })
+    
+    // 머리색 매핑 (문자열 색상명을 HEX로 변환)
+    let hairColor = '000000' // 기본값: 검은색
+    if (rawHairColor) {
+      if (rawHairColor === 'black') hairColor = '2C2C2C'
+      else if (rawHairColor === 'yellow') hairColor = 'F7D058'
+      else if (rawHairColor === 'red') hairColor = 'E74C3C'
+      else if (rawHairColor === 'blue') hairColor = '3498DB'
+      else if (rawHairColor === 'green') hairColor = '27AE60'
+      else if (rawHairColor === 'white') hairColor = 'ECF0F1'
+      else if (rawHairColor.startsWith('#')) hairColor = rawHairColor.substring(1)
+      else if (/^[0-9A-Fa-f]{6}$/.test(rawHairColor)) hairColor = rawHairColor
+      else hairColor = '000000' // 알 수 없는 색상은 검은색
+    }
+    
     const borderColor = `#${hairColor}`
+    console.log('🎨 Style2 Final border color:', borderColor)
     // 실제 대화하는 유저의 ID를 speaker name에서 가져오기
     const userId = speaker?.name || participant?.guestUserId || 'User1'
     // 감정에 따른 face 값 결정
@@ -598,7 +634,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 position: 'relative',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                transform: 'translate(3px, 35px)'
               }}>
                 {renderCharacterLayers({
                   selectedOptions: participant.characterInfo.characterData.selectedOptions,
@@ -649,7 +686,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           maxWidth: '720.395px',
           color: '#FFF',
           WebkitTextStrokeWidth: '2px',
-          WebkitTextStrokeColor: '#E0A',
+          WebkitTextStrokeColor: borderColor,
           fontFamily: '"Esamanru", sans-serif',
           fontSize: '40px',
           fontStyle: 'normal',

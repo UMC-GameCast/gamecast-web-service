@@ -1,6 +1,0 @@
-numpy
-librosa
-pydub
-openai-whisper
-matplotlib
-pyannote.audio
