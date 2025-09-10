@@ -353,9 +353,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     return (
       <>
         {/* 오른쪽 아래 캐릭터 */}
-        <div className="absolute bottom-4 right-4 z-20" style={{
-          width: '300px',
-          height: '300px',
+        <div className="absolute bottom-2 z-20" style={{
+          right: '-20px',
+          width: '320px',
+          height: '320px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -401,7 +402,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         </div>
         
         {/* 가운데 아래 자막 */}
-        <div className="absolute bottom-8 left-1/2 z-30" style={{ 
+        <div className="absolute bottom-4 left-1/2 z-30" style={{ 
           transform: 'translateX(-50%)',
           transformOrigin: 'center bottom'
         }}>
@@ -463,7 +464,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const face = getEmotionFace(subtitle.emotionStyle || 'happy', subtitle.emphasis || 'normal')
     
     return (
-      <div className="absolute bottom-16 left-1/2 z-10 flex items-start" style={{ 
+      <div className="absolute bottom-8 left-1/2 z-10 flex items-start" style={{ 
         gap: '25px', 
         transform: 'translateX(-50%) scale(0.7)', 
         transformOrigin: 'center bottom'
@@ -606,7 +607,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const face = getEmotionFace(subtitle.emotionStyle || 'happy', subtitle.emphasis || 'normal')
     
     return (
-      <div className="absolute bottom-16 left-1/2 z-10 flex items-end" style={{ 
+      <div className="absolute bottom-8 left-1/2 z-10 flex items-end" style={{ 
         gap: '15px', 
         transform: 'translateX(-50%) scale(0.7)', 
         transformOrigin: 'center bottom'
@@ -746,7 +747,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const face = getEmotionFace(subtitle.emotionStyle || 'happy', subtitle.emphasis || 'normal')
     
     return (
-      <div className="absolute bottom-16 left-1/2 z-10" style={{ 
+      <div className="absolute bottom-8 left-1/2 z-10" style={{ 
         transform: 'translateX(-50%) scale(0.7)', 
         transformOrigin: 'center bottom'
       }}>
