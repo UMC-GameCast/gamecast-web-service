@@ -721,8 +721,25 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     if (!participant) {
       participant = participants?.[0]
     }
-    const hairColor = participant?.characterInfo?.selectedColors?.hair || 'E0A'
+    const rawHairColor = participant?.characterInfo?.characterData?.selectedColors?.hair || participant?.characterInfo?.selectedColors?.hair
+    console.log('🎨 Style3 Hair color debug:', { rawHairColor, participant: participant?.nickname })
+    
+    // 머리색 매핑 (문자열 색상명을 HEX로 변환)
+    let hairColor = '000000' // 기본값: 검은색
+    if (rawHairColor) {
+      if (rawHairColor === 'black') hairColor = '2C2C2C'
+      else if (rawHairColor === 'yellow') hairColor = 'F7D058'
+      else if (rawHairColor === 'red') hairColor = 'E74C3C'
+      else if (rawHairColor === 'blue') hairColor = '3498DB'
+      else if (rawHairColor === 'green') hairColor = '27AE60'
+      else if (rawHairColor === 'white') hairColor = 'ECF0F1'
+      else if (rawHairColor.startsWith('#')) hairColor = rawHairColor.substring(1)
+      else if (/^[0-9A-Fa-f]{6}$/.test(rawHairColor)) hairColor = rawHairColor
+      else hairColor = '000000' // 알 수 없는 색상은 검은색
+    }
+    
     const borderColor = `#${hairColor}`
+    console.log('🎨 Style3 Final border color:', borderColor)
     // 실제 대화하는 유저의 ID를 speaker name에서 가져오기
     const userId = speaker?.name || participant?.guestUserId || 'User1'
     // 감정에 따른 face 값 결정
@@ -737,10 +754,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           {/* 캐릭터 회색 네모 - 왼쪽 위 (뒤쪽) */}
           <div style={{
             position: 'absolute',
-            top: '-70px',
+            top: '-88px',
             left: '20px',
-            width: '110px',
-            height: '110px',
+            width: '130px',
+            height: '130px',
             borderRadius: '25px',
             backgroundColor: participant?.characterInfo?.isCustomized ? 'transparent' : '#808080',
             display: 'flex',
@@ -797,7 +814,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             <span style={{
               color: '#FFF',
               WebkitTextStrokeWidth: '1px',
-              WebkitTextStrokeColor: '#E0A',
+              WebkitTextStrokeColor: borderColor,
               fontFamily: '"GodoM", "Black Han Sans", "Noto Sans KR", sans-serif',
               fontSize: '40px',
               fontStyle: 'italic',
