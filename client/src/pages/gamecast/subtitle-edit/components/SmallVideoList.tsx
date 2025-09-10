@@ -57,7 +57,7 @@ const SmallVideoList: React.FC<SmallVideoListProps> = ({
                           <video 
                             className="w-full h-full object-cover rounded"
                             src={video.url}
-                            controls
+                            controls={false}
                             preload="metadata"
                             style={{ width: '100%', height: '100%' }}
                           />

@@ -1002,7 +1002,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 ref={videoRef}
                 className="rounded-lg relative"
                 style={{ width: '100%', height: '100%' }}
-                controls={true}
+                controls={false}
                 onTimeUpdate={() => {
                   onTimeUpdate(videoRef.current?.currentTime || 0)
                 }}
