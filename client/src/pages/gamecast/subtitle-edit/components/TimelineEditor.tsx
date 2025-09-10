@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import SubtitleBlock from './SubtitleBlock'
 
 interface SubtitleSegment {
@@ -36,6 +36,7 @@ interface TimelineEditorProps {
   onResizeStart: (e: React.MouseEvent, segmentId: string, resizeType: 'start' | 'end') => void
   onSegmentClick: (segmentId: string) => void
   onTextChange: (segmentId: string, newText: string) => void
+  onTimeSeek: (time: number) => void
   timelineRef: React.RefObject<HTMLDivElement | null>
 }
 
@@ -51,6 +52,7 @@ const TimelineEditor: React.FC<TimelineEditorProps> = ({
   onResizeStart,
   onSegmentClick,
   onTextChange,
+  onTimeSeek,
   timelineRef
 }) => {
   // 스마트한 타임라인 마커 생성 (TimelineHeader와 동일한 로직)
@@ -117,6 +119,50 @@ const TimelineEditor: React.FC<TimelineEditorProps> = ({
     return headerLeftPadding + pixelPosition // 0s는 왼쪽 패딩 시작점에 위치
   }
 
+  // playhead 드래그 상태
+  const [isDragging, setIsDragging] = useState(false)
+
+  // 픽셀 위치를 시간으로 변환하는 함수
+  const pixelToTime = (pixelX: number) => {
+    const headerLeftPadding = 15
+    const timelineWidth = 1182.55 - 41
+    const relativeX = pixelX - headerLeftPadding
+    const timeRatio = Math.max(0, Math.min(1, relativeX / timelineWidth))
+    return timeRatio * duration
+  }
+
+  // playhead 드래그 시작
+  const handlePlayheadMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }
+
+  // 전역 마우스 이벤트 처리
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging || !timelineRef.current) return
+
+      const rect = timelineRef.current.getBoundingClientRect()
+      const relativeX = e.clientX - rect.left
+      const newTime = pixelToTime(relativeX)
+      onTimeSeek(Math.max(0, Math.min(duration, newTime)))
+    }
+
+    const handleMouseUp = () => {
+      setIsDragging(false)
+    }
+
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isDragging, duration, onTimeSeek, timelineRef])
+
   return (
     <div className="col-span-12">
       <div className="relative overflow-x-auto" ref={timelineRef}>
@@ -128,10 +174,12 @@ const TimelineEditor: React.FC<TimelineEditorProps> = ({
             top: '0px',
             transform: 'translateX(-50%)',
             zIndex: 1000, // 모든 요소 위에 표시
-            pointerEvents: 'none',
-            width: '2px',
+            pointerEvents: 'auto',
+            width: '12px', // 클릭 영역을 넓게
             height: '100%',
+            cursor: isDragging ? 'grabbing' : 'grab',
           }}
+          onMouseDown={handlePlayheadMouseDown}
         >
           {/* 상단 삼각형 인디케이터 */}
           <div
@@ -146,6 +194,7 @@ const TimelineEditor: React.FC<TimelineEditorProps> = ({
               borderRight: '6px solid transparent',
               borderTop: '10px solid #ffffff',
               zIndex: 1001,
+              pointerEvents: 'none',
             }}
           />
           {/* 세로 라인 */}
@@ -160,6 +209,7 @@ const TimelineEditor: React.FC<TimelineEditorProps> = ({
               backgroundColor: '#ffffff',
               zIndex: 1001,
               boxShadow: '0 0 4px rgba(255, 255, 255, 0.5)', // 가시성을 위한 그림자
+              pointerEvents: 'none',
             }}
           />
         </div>

@@ -563,6 +563,7 @@ const SubtitleEditPage: React.FC = () => {
               handleResizeStart={handleResizeStart}
               setSelectedSegment={setSelectedSegment as (id: string | null) => void}
               handleTextChange={handleTextChange}
+              onTimeSeek={setCurrentTime}
             />
             </div>
           </div>

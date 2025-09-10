@@ -15,6 +15,7 @@ interface EditorSectionProps {
   onResizeStart: (e: React.MouseEvent, segmentId: string, resizeType: 'start' | 'end') => void
   onSegmentClick: (segmentId: string) => void
   onTextChange: (segmentId: string, newText: string) => void
+  onTimeSeek: (time: number) => void
 }
 
 const EditorSection: React.FC<EditorSectionProps> = ({
@@ -29,7 +30,8 @@ const EditorSection: React.FC<EditorSectionProps> = ({
   onDragStart,
   onResizeStart,
   onSegmentClick,
-  onTextChange
+  onTextChange,
+  onTimeSeek
 }) => {
 
   return (
@@ -49,6 +51,7 @@ const EditorSection: React.FC<EditorSectionProps> = ({
           onResizeStart={onResizeStart}
           onSegmentClick={onSegmentClick}
           onTextChange={onTextChange}
+          onTimeSeek={onTimeSeek}
           timelineRef={timelineRef}
         />
       </div>

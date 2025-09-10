@@ -14,6 +14,7 @@ interface SubtitleTimelinePanelProps {
   handleResizeStart: (...args: any[]) => void;
   setSelectedSegment: (id: string | null) => void;
   handleTextChange: (...args: any[]) => void;
+  onTimeSeek: (time: number) => void;
 }
 
 const SubtitleTimelinePanel: React.FC<SubtitleTimelinePanelProps> = ({
@@ -29,6 +30,7 @@ const SubtitleTimelinePanel: React.FC<SubtitleTimelinePanelProps> = ({
   handleResizeStart,
   setSelectedSegment,
   handleTextChange,
+  onTimeSeek,
 }) => {
   return (
     <div className="w-full">
@@ -45,6 +47,7 @@ const SubtitleTimelinePanel: React.FC<SubtitleTimelinePanelProps> = ({
         onResizeStart={handleResizeStart}
         onSegmentClick={setSelectedSegment}
         onTextChange={handleTextChange}
+        onTimeSeek={onTimeSeek}
       />
     </div>
   );
