@@ -302,7 +302,7 @@ const TimelineEditor: React.FC<TimelineEditorProps> = ({
             })}
           </div>
         </div>
-        {/* 헤더 spacer */}
+        {/* 헤더 spacesr */}
         <div style={{ height: '12px' }} />
         {/* 트랙들 */}
         <div className="space-y-0">
