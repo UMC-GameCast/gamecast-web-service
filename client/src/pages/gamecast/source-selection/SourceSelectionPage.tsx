@@ -5,6 +5,7 @@ import { useUnifiedGamecast } from '../../../contexts/UnifiedGamecastContext'
 import { useRoom } from '../../../hooks/useRoom'
 import { isDemoMode, isDemoRoomCode } from '../../../constants/demoData'
 import { renderCharacterLayers } from '../../../utils/characterRenderer'
+import { restoreCharacter, hasCharacterBackup } from '../../../utils/characterBackup'
 import { Navigation } from '../../../components/gamecast/common/Navigation'
 import { Footer } from '../../../components/gamecast/common/Footer'
 import { PageTransition } from '../../../components/gamecast/common/PageTransition'
@@ -253,7 +254,7 @@ export const SourceSelectionPage: React.FC = () => {
     }
   };
 
-  // 게스트 플레이어 가져오기 (호스트 제외) - 서버 데이터와 기본값 조합
+  // 게스트 플레이어 가져오기 (호스트 제외) - 로컬 백업과 기본값 조합
   const getGuestPlayers = () => {
     // UnifiedGamecastContext의 participants와 useRoom의 currentRoom 모두 확인
     const contextParticipants = state.participants?.filter(p => !p.isHost) || [];
@@ -283,25 +284,93 @@ export const SourceSelectionPage: React.FC = () => {
         
         console.log(`🔍 [getGuestPlayers] 게스트 ${i + 1} 데이터:`, {
           nickname: serverPlayer.nickname,
+          guestUserId: serverPlayer.guestUserId,
           hasCharacterInfo: !!serverPlayer.characterInfo,
-          isCustomized: serverPlayer.characterInfo?.isCustomized,
-          characterData: serverPlayer.characterInfo
+          isCustomized: serverPlayer.characterInfo?.isCustomized
         });
+
+        // 1. 캐릭터 데이터 결정 (i=0: 첫번째 유저, i=1: 내가 만든 캐릭터)
+        let characterInfo = null;
+        
+        if (i === 0) {
+          // 첫 번째 자리 ('소질이' 자리): 첫 번째 유저의 실제 캐릭터 또는 서버 데이터 사용
+          console.log(`👤 [getGuestPlayers] 첫 번째 유저 자리 - 서버 데이터 우선 사용`);
+          
+          // 1-1. 서버에서 첫 번째 유저 캐릭터 확인
+          if (serverPlayer.characterInfo?.isCustomized) {
+            console.log(`🌐 [getGuestPlayers] 첫 번째 유저 서버 데이터 사용`);
+            characterInfo = serverPlayer.characterInfo;
+          }
+          // 1-2. 서버 데이터가 없으면 정확한 guestUserId로 백업 확인
+          else if (serverPlayer.guestUserId && hasCharacterBackup(serverPlayer.guestUserId)) {
+            const backupData = restoreCharacter(serverPlayer.guestUserId);
+            if (backupData?.data) {
+              console.log(`💾 [getGuestPlayers] 첫 번째 유저 백업 데이터 사용:`, backupData.data);
+              characterInfo = {
+                isCustomized: true,
+                characterData: backupData.data
+              };
+            }
+          }
+        } else if (i === 1) {
+          // 두 번째 자리 ('톰쥬' 자리): 내가 만든 캐릭터 (로컬 백업 우선)
+          console.log(`🎨 [getGuestPlayers] 내가 만든 캐릭터 자리 - 로컬 백업 우선 사용`);
+          
+          // 1-1. 정확한 guestUserId로 백업 확인
+          if (serverPlayer.guestUserId && hasCharacterBackup(serverPlayer.guestUserId)) {
+            const backupData = restoreCharacter(serverPlayer.guestUserId);
+            if (backupData?.data) {
+              console.log(`💾 [getGuestPlayers] 내가 만든 캐릭터 정확한 ID 백업 사용:`, backupData.data);
+              characterInfo = {
+                isCustomized: true,
+                characterData: backupData.data
+              };
+            }
+          }
+          
+          // 1-2. 정확한 ID로 백업이 없으면 직접 로컬스토리지에서 최근 백업 찾기
+          if (!characterInfo) {
+            try {
+              const localBackup = localStorage.getItem('gamecast_character_backup');
+              if (localBackup) {
+                const backupData = JSON.parse(localBackup);
+                if (backupData?.data && backupData?.metadata) {
+                  console.log(`💾 [getGuestPlayers] 내가 만든 캐릭터 로컬스토리지 백업 사용:`, backupData.data);
+                  characterInfo = {
+                    isCustomized: true,
+                    characterData: backupData.data
+                  };
+                }
+              }
+            } catch (error) {
+              console.warn('⚠️ [getGuestPlayers] 로컬 백업 파싱 실패:', error);
+            }
+          }
+          
+          // 1-3. 로컬 백업도 없으면 서버 데이터 확인
+          if (!characterInfo && serverPlayer.characterInfo?.isCustomized) {
+            console.log(`🌐 [getGuestPlayers] 내가 만든 캐릭터 서버 데이터 사용`);
+            characterInfo = serverPlayer.characterInfo;
+          }
+        }
+
+        // 2. 마지막으로 기본값 사용
+        if (!characterInfo) {
+          console.log(`🎭 [getGuestPlayers] 게스트 ${i + 1} 기본값 사용`);
+          characterInfo = {
+            isCustomized: true,
+            characterData: defaultCharacters[i].characterData
+          };
+        }
         
         players.push({
           ...serverPlayer,
-          // 캐릭터 데이터가 있으면 서버 데이터 사용, 없으면 기본값 사용
-          characterInfo: serverPlayer.characterInfo?.isCustomized ? 
-            serverPlayer.characterInfo : 
-            { 
-              isCustomized: true, 
-              characterData: defaultCharacters[i].characterData 
-            },
+          characterInfo,
           nickname: serverPlayer.nickname || defaultCharacters[i].nickname
         });
       } else {
         // 서버 데이터가 없으면 기본값 사용
-        console.log(`🔍 [getGuestPlayers] 게스트 ${i + 1} 기본값 사용`);
+        console.log(`🔍 [getGuestPlayers] 게스트 ${i + 1} 기본값 사용 (서버 데이터 없음)`);
         players.push({
           id: `guest${i + 1}`,
           guestUserId: `guest${i + 1}`,
