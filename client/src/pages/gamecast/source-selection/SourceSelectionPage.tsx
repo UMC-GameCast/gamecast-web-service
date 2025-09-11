@@ -30,23 +30,40 @@ export const SourceSelectionPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedSources, setSelectedSources] = useState<SelectedSource[]>([]);
   const [highlightData, setHighlightData] = useState<any>(null);
+  const [roomData, setRoomData] = useState<any>(null);
 
   // 기본 캐릭터 데이터 (서버 데이터가 없을 때 사용)
   const defaultCharacters = [
     {
-      nickname: '게스트1',
+      nickname: '소질이',
       characterData: {
         selectedOptions: { face: 'face1', hair: 'hair1', top: 'top1' },
         selectedColors: { face: '21', hair: 'black', top: 'blue' },
-        nickname: '게스트1'
+        nickname: '소질이'
       }
     },
     {
-      nickname: '게스트2', 
+      nickname: '톰쥬', 
       characterData: {
         selectedOptions: { face: 'face1', hair: 'hair2', top: 'top2' },
         selectedColors: { face: '21', hair: 'yellow', top: 'red' },
-        nickname: '게스트2'
+        nickname: '톰쥬'
+      }
+    },
+    {
+      nickname: '쵸매', 
+      characterData: {
+        selectedOptions: { face: 'face2', hair: 'hair1', top: 'top1' },
+        selectedColors: { face: '21', hair: 'brown', top: 'green' },
+        nickname: '쵸매'
+      }
+    },
+    {
+      nickname: '닐', 
+      characterData: {
+        selectedOptions: { face: 'face2', hair: 'hair2', top: 'top2' },
+        selectedColors: { face: '21', hair: 'red', top: 'purple' },
+        nickname: '닐'
       }
     }
   ];
@@ -71,6 +88,34 @@ export const SourceSelectionPage: React.FC = () => {
     
     refreshData();
   }, []); // 의존성 배열을 비워서 컴포넌트 마운트 시 한 번만 실행
+
+  // API에서 room 정보 가져오기
+  const fetchRoomData = async (roomCode: string) => {
+    try {
+      console.log('🚀 [SourceSelection] 방 정보 조회 시작:', roomCode);
+      
+      const response = await fetch(`http://3.37.34.211:8889/api/rooms/${roomCode}`);
+      const data = await response.json();
+      
+      console.log('📡 [SourceSelection] Room API 응답:', data);
+      
+      if (data.resultType === 'SUCCESS' && data.success) {
+        setRoomData(data.success);
+        console.log('✅ [SourceSelection] 방 정보 저장 완료:', {
+          roomCode: data.success.roomCode,
+          participantsCount: data.success.participants?.length,
+          participants: data.success.participants
+        });
+        return data.success;
+      } else {
+        console.error('❌ [SourceSelection] 방 정보 조회 실패:', data);
+        return null;
+      }
+    } catch (error) {
+      console.error('❌ [SourceSelection] 방 정보 조회 중 오류:', error);
+      return null;
+    }
+  };
 
   // API에서 하이라이트 동영상 가져오기
   const fetchHighlightVideos = async () => {
@@ -115,44 +160,45 @@ export const SourceSelectionPage: React.FC = () => {
         const roomCode = searchParams.get('roomCode');
         const isDemo = isDemoMode(searchParams);
         
+        console.log('🔍 [SourceSelection] 초기화 시작:', {
+          roomCode,
+          isDemo,
+          currentRoom: currentRoom?.roomCode,
+          participantsCount: currentRoom?.participants?.length
+        });
+        
         if (isDemo || isDemoRoomCode(roomCode || '')) {
           console.log('🎭 [SourceSelection] 데모 모드 활성화');
-          // 데모 모드로 실행 (서버 로드 없이 바로 데모 데이터 사용)
-          actions.enableDemoMode();
           // 데모 모드에서도 하이라이트 동영상 로드
           await fetchHighlightVideos();
         } else if (roomCode) {
           console.log('📋 [SourceSelection] 실제 방 정보 조회 시작:', roomCode);
           
-          // 실제 서버에서 방 정보 조회
-          await actions.loadRoomDataForEditing(roomCode);
+          // API에서 방 정보 가져오기
+          const fetchedRoomData = await fetchRoomData(roomCode);
           
-          console.log('✅ [SourceSelection] 방 정보 조회 완료:', {
-            currentRoom: state.currentRoom,
-            participants: state.participants
-          });
+          if (fetchedRoomData) {
+            console.log('✅ [SourceSelection] 방 정보 조회 성공');
+          } else {
+            console.warn('⚠️ [SourceSelection] 방 정보 조회 실패, 기존 데이터 사용');
+          }
           
-          // 하이라이트 동영상 가져오기 (방 코드 기반으로)
+          // 하이라이트 동영상 가져오기
           await fetchHighlightVideos();
         } else {
-          console.warn('⚠️ [SourceSelection] roomCode 파라미터가 없습니다 - 데모 모드로 실행');
-          // 파라미터가 없는 경우 데모 모드로 실행 (서버 로드 없이)
-          actions.enableDemoMode();
-          // 기본 동영상도 로드
+          console.warn('⚠️ [SourceSelection] roomCode가 없습니다');
+          // roomCode가 없어도 기본 동영상은 로드
           await fetchHighlightVideos();
         }
       } catch (error) {
         console.error('❌ [SourceSelection] 초기화 실패:', error);
-        console.log('🎭 [SourceSelection] 오류 발생으로 데모 모드로 전환');
-        // 에러 발생 시 데모 모드로 fallback
-        actions.enableDemoMode();
         // 에러가 발생해도 기본 동영상은 로드
         await fetchHighlightVideos();
       }
     };
 
     initializePageData();
-  }, [searchParams, actions.loadRoomDataForEditing, actions.enableDemoMode]);
+  }, [searchParams, currentRoom, state.participants]);
 
 
   // 참여자 ID를 이름으로 변환
@@ -254,134 +300,90 @@ export const SourceSelectionPage: React.FC = () => {
     }
   };
 
-  // 게스트 플레이어 가져오기 (호스트 제외) - 로컬 백업과 기본값 조합
+  // 게스트 플레이어 가져오기 (호스트 제외) - API에서 가져온 실제 room 참여자만 표시
   const getGuestPlayers = () => {
-    // UnifiedGamecastContext의 participants와 useRoom의 currentRoom 모두 확인
+    // API에서 가져온 room 데이터 우선 사용 (호스트 제외 필터링)
+    const apiParticipants = (roomData?.participants || []).filter(p => 
+      p.role !== 'host' && 
+      p.guestUserId !== roomData?.hostGuestId
+    );
     const contextParticipants = state.participants?.filter(p => !p.isHost) || [];
     const roomParticipants = currentRoom?.participants?.filter(p => !p.isHost) || [];
     
-    // 더 많은 데이터를 가진 것을 우선 사용
-    const serverGuests = contextParticipants.length > 0 ? contextParticipants : roomParticipants;
+    // 우선순위: API 데이터 > Context 데이터 > Room 데이터
+    let serverGuests = apiParticipants;
+    if (serverGuests.length === 0) {
+      serverGuests = contextParticipants.length > 0 ? contextParticipants : roomParticipants;
+    }
     
-    console.log('🔍 [getGuestPlayers] 참여자 데이터 확인:', {
-      contextParticipants: contextParticipants.length,
-      roomParticipants: roomParticipants.length,
-      selectedGuests: serverGuests.length,
-      serverGuestsData: serverGuests.map(p => ({
-        nickname: p.nickname,
-        hasCharacterInfo: !!p.characterInfo,
-        isCustomized: p.characterInfo?.isCustomized
-      }))
+    console.log('🔍 [getGuestPlayers] 전체 데이터 상세 확인:', {
+      rawApiParticipants: roomData?.participants || [],
+      hostGuestId: roomData?.hostGuestId,
+      filteredApiParticipants: {
+        length: apiParticipants.length,
+        data: apiParticipants
+      },
+      contextParticipants: {
+        length: contextParticipants.length,
+        data: contextParticipants
+      },
+      roomParticipants: {
+        length: roomParticipants.length,
+        data: roomParticipants
+      },
+      finalSelectedGuests: {
+        length: serverGuests.length,
+        data: serverGuests
+      }
     });
     
-    // 서버에서 가져온 참여자가 있으면 그것을 사용, 없으면 기본값으로 채움
+    // 실제 서버에 있는 게스트만 표시 (기본값 채우지 않음)
     const players = [];
     
-    for (let i = 0; i < 2; i++) { // 최대 2명의 게스트 표시
-      if (serverGuests[i]) {
-        // 서버 데이터가 있으면 사용
-        const serverPlayer = serverGuests[i];
-        
-        console.log(`🔍 [getGuestPlayers] 게스트 ${i + 1} 데이터:`, {
-          nickname: serverPlayer.nickname,
-          guestUserId: serverPlayer.guestUserId,
-          hasCharacterInfo: !!serverPlayer.characterInfo,
-          isCustomized: serverPlayer.characterInfo?.isCustomized
-        });
+    for (let i = 0; i < serverGuests.length; i++) {
+      const serverPlayer = serverGuests[i];
+      
+      console.log(`🔍 [getGuestPlayers] 게스트 ${i + 1} 데이터:`, {
+        nickname: serverPlayer.nickname,
+        guestUserId: serverPlayer.guestUserId,
+        hasCharacterInfo: !!serverPlayer.characterInfo,
+        isCustomized: serverPlayer.characterInfo?.isCustomized
+      });
 
-        // 1. 캐릭터 데이터 결정 (i=0: 첫번째 유저, i=1: 내가 만든 캐릭터)
-        let characterInfo = null;
-        
-        if (i === 0) {
-          // 첫 번째 자리 ('소질이' 자리): 첫 번째 유저의 실제 캐릭터 또는 서버 데이터 사용
-          console.log(`👤 [getGuestPlayers] 첫 번째 유저 자리 - 서버 데이터 우선 사용`);
-          
-          // 1-1. 서버에서 첫 번째 유저 캐릭터 확인
-          if (serverPlayer.characterInfo?.isCustomized) {
-            console.log(`🌐 [getGuestPlayers] 첫 번째 유저 서버 데이터 사용`);
-            characterInfo = serverPlayer.characterInfo;
-          }
-          // 1-2. 서버 데이터가 없으면 정확한 guestUserId로 백업 확인
-          else if (serverPlayer.guestUserId && hasCharacterBackup(serverPlayer.guestUserId)) {
-            const backupData = restoreCharacter(serverPlayer.guestUserId);
-            if (backupData?.data) {
-              console.log(`💾 [getGuestPlayers] 첫 번째 유저 백업 데이터 사용:`, backupData.data);
-              characterInfo = {
-                isCustomized: true,
-                characterData: backupData.data
-              };
-            }
-          }
-        } else if (i === 1) {
-          // 두 번째 자리 ('톰쥬' 자리): 내가 만든 캐릭터 (로컬 백업 우선)
-          console.log(`🎨 [getGuestPlayers] 내가 만든 캐릭터 자리 - 로컬 백업 우선 사용`);
-          
-          // 1-1. 정확한 guestUserId로 백업 확인
-          if (serverPlayer.guestUserId && hasCharacterBackup(serverPlayer.guestUserId)) {
-            const backupData = restoreCharacter(serverPlayer.guestUserId);
-            if (backupData?.data) {
-              console.log(`💾 [getGuestPlayers] 내가 만든 캐릭터 정확한 ID 백업 사용:`, backupData.data);
-              characterInfo = {
-                isCustomized: true,
-                characterData: backupData.data
-              };
-            }
-          }
-          
-          // 1-2. 정확한 ID로 백업이 없으면 직접 로컬스토리지에서 최근 백업 찾기
-          if (!characterInfo) {
-            try {
-              const localBackup = localStorage.getItem('gamecast_character_backup');
-              if (localBackup) {
-                const backupData = JSON.parse(localBackup);
-                if (backupData?.data && backupData?.metadata) {
-                  console.log(`💾 [getGuestPlayers] 내가 만든 캐릭터 로컬스토리지 백업 사용:`, backupData.data);
-                  characterInfo = {
-                    isCustomized: true,
-                    characterData: backupData.data
-                  };
-                }
-              }
-            } catch (error) {
-              console.warn('⚠️ [getGuestPlayers] 로컬 백업 파싱 실패:', error);
-            }
-          }
-          
-          // 1-3. 로컬 백업도 없으면 서버 데이터 확인
-          if (!characterInfo && serverPlayer.characterInfo?.isCustomized) {
-            console.log(`🌐 [getGuestPlayers] 내가 만든 캐릭터 서버 데이터 사용`);
-            characterInfo = serverPlayer.characterInfo;
-          }
-        }
-
-        // 2. 마지막으로 기본값 사용
-        if (!characterInfo) {
-          console.log(`🎭 [getGuestPlayers] 게스트 ${i + 1} 기본값 사용`);
+      // 캐릭터 데이터 결정
+      let characterInfo = null;
+      
+      // 1. 서버에서 캐릭터 확인
+      if (serverPlayer.characterInfo?.isCustomized) {
+        console.log(`🌐 [getGuestPlayers] 게스트 ${i + 1} 서버 데이터 사용`);
+        characterInfo = serverPlayer.characterInfo;
+      }
+      // 2. 서버 데이터가 없으면 guestUserId로 백업 확인
+      else if (serverPlayer.guestUserId && hasCharacterBackup(serverPlayer.guestUserId)) {
+        const backupData = restoreCharacter(serverPlayer.guestUserId);
+        if (backupData?.data) {
+          console.log(`💾 [getGuestPlayers] 게스트 ${i + 1} 백업 데이터 사용:`, backupData.data);
           characterInfo = {
             isCustomized: true,
-            characterData: defaultCharacters[i].characterData
+            characterData: backupData.data
           };
         }
-        
-        players.push({
-          ...serverPlayer,
-          characterInfo,
-          nickname: serverPlayer.nickname || defaultCharacters[i].nickname
-        });
-      } else {
-        // 서버 데이터가 없으면 기본값 사용
-        console.log(`🔍 [getGuestPlayers] 게스트 ${i + 1} 기본값 사용 (서버 데이터 없음)`);
-        players.push({
-          id: `guest${i + 1}`,
-          guestUserId: `guest${i + 1}`,
-          nickname: defaultCharacters[i].nickname,
-          isHost: false,
-          characterInfo: {
-            isCustomized: true,
-            characterData: defaultCharacters[i].characterData
-          }
-        });
       }
+
+      // 3. 둘 다 없으면 기본값 사용
+      if (!characterInfo) {
+        console.log(`🎭 [getGuestPlayers] 게스트 ${i + 1} 기본값 사용`);
+        characterInfo = {
+          isCustomized: true,
+          characterData: defaultCharacters[i % defaultCharacters.length].characterData
+        };
+      }
+      
+      players.push({
+        ...serverPlayer,
+        characterInfo,
+        nickname: serverPlayer.nickname || `게스트${i + 1}`
+      });
     }
     
     return players;
@@ -560,7 +562,7 @@ export const SourceSelectionPage: React.FC = () => {
       </svg>
       
       {/* 플레이어 캐릭터 렌더링 */}
-      {player && player.characterInfo?.isCustomized && (
+      {player && player.characterInfo?.isCustomized && player.characterInfo?.characterData && (
         <div 
           style={{
             position: 'absolute',
@@ -572,7 +574,28 @@ export const SourceSelectionPage: React.FC = () => {
             justifyContent: 'center'
           }}
         >
-          {renderCharacterLayers((player.characterInfo as any).characterData)}
+          {renderCharacterLayers(player.characterInfo.characterData)}
+        </div>
+      )}
+      
+      {/* API 응답 구조에 맞는 캐릭터 렌더링 (characterInfo가 직접 selectedOptions, selectedColors를 가지는 경우) */}
+      {player && player.characterInfo?.isCustomized && player.characterInfo?.selectedOptions && !player.characterInfo?.characterData && (
+        <div 
+          style={{
+            position: 'absolute',
+            width: '50px',
+            height: '50px',
+            zIndex: 2,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
+          {renderCharacterLayers({
+            selectedOptions: player.characterInfo.selectedOptions,
+            selectedColors: player.characterInfo.selectedColors,
+            nickname: player.nickname
+          })}
         </div>
       )}
       
@@ -681,13 +704,12 @@ export const SourceSelectionPage: React.FC = () => {
         >
           {/* 전체 영상 div - 동적 렌더링 */}
           <div className="flex justify-center items-start gap-[45px] w-fit">
-            {highlightData && highlightData.highlights.map((_, index) => (
+            {highlightData && highlightData.highlights.map((_: any, index: number) => (
               <ScreenItem key={index} highlightIndex={index} />
             ))}
           </div>
         </motion.div>
           </main>
-
 
           {/* 다운로드 진행률 */}
           {state.editing.isDownloading && (
@@ -704,21 +726,23 @@ export const SourceSelectionPage: React.FC = () => {
             </div>
           )}
 
+
           {/* Button */}
           <div className="flex justify-center py-8">
-            <Button1 
-              onClick={handleComplete}
-              disabled={selectedSources.length === 0 || state.editing.isDownloading}
-              style={{
+            <div style={{
                 opacity: (selectedSources.length === 0 || state.editing.isDownloading) ? 0.5 : 1,
                 cursor: (selectedSources.length === 0 || state.editing.isDownloading) ? 'not-allowed' : 'pointer'
-              }}
-            >
-              {state.editing.isDownloading 
-                ? '다운로드 중...' 
-                : `완료 ${selectedSources.length > 0 ? `(${selectedSources.length}개 선택됨)` : ''}`
-              }
-            </Button1>
+              }}>
+              <Button1 
+                onClick={handleComplete}
+                disabled={selectedSources.length === 0 || state.editing.isDownloading}
+              >
+                {state.editing.isDownloading 
+                  ? '다운로드 중...' 
+                  : `완료 ${selectedSources.length > 0 ? `(${selectedSources.length}개 선택됨)` : ''}`
+                }
+              </Button1>
+            </div>
           </div>
         </div>
       </div>
