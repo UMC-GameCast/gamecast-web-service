@@ -212,19 +212,58 @@ export const SourceSelectionPage: React.FC = () => {
 
   // 소스 선택/해제 함수
   const toggleSourceSelection = (highlightIndex: number, participantId: string) => {
-    if (!highlightData) return;
+    console.log('🚀 [toggleSourceSelection] 호출됨:', { highlightIndex, participantId, highlightData: !!highlightData });
+    
+    if (!highlightData) {
+      console.warn('❌ [toggleSourceSelection] highlightData가 없습니다');
+      return;
+    }
 
     const sourceId = `${highlightIndex}_${participantId}`;
     const existingIndex = selectedSources.findIndex(source => source.id === sourceId);
 
+    console.log('🔍 [toggleSourceSelection] 선택 상태:', { sourceId, existingIndex, currentSelections: selectedSources });
+
     if (existingIndex >= 0) {
       // 이미 선택된 소스라면 제거
+      console.log('❌ [toggleSourceSelection] 소스 제거');
       setSelectedSources(prev => prev.filter(source => source.id !== sourceId));
     } else {
       // 새로운 소스 선택
       const highlight = highlightData.highlights[highlightIndex];
       const clips = highlight.clip_files.clips_by_participant;
-      const participantClip = clips[participantId as keyof typeof clips];
+      
+      console.log('📂 [toggleSourceSelection] 클립 데이터 구조:', { 
+        highlightIndex, 
+        participantId,
+        availableClips: Object.keys(clips),
+        clips 
+      });
+
+      // participantId를 clips의 키와 매칭 시도
+      let participantClip = clips[participantId as keyof typeof clips];
+      
+      // 직접 매칭이 안 되면 순서대로 매칭
+      if (!participantClip) {
+        const guestPlayers = getGuestPlayers();
+        const playerIndex = guestPlayers.findIndex(p => p.guestUserId === participantId);
+        
+        if (playerIndex >= 0) {
+          const clipKeys = Object.keys(clips);
+          console.log('🔄 [toggleSourceSelection] 순서 기반 매칭 시도:', { 
+            playerIndex, 
+            clipKeys,
+            targetKey: clipKeys[playerIndex + 1] // +1 because index 0 is usually 'host'
+          });
+          
+          // host 다음부터 게스트들의 클립
+          const guestClipKey = clipKeys[playerIndex + 1]; // host가 0번이므로 +1
+          if (guestClipKey && clips[guestClipKey]) {
+            participantClip = clips[guestClipKey];
+            console.log('✅ [toggleSourceSelection] 순서 기반 매칭 성공:', guestClipKey);
+          }
+        }
+      }
 
       if (participantClip) {
         const newSource: SelectedSource = {
@@ -235,7 +274,11 @@ export const SourceSelectionPage: React.FC = () => {
           videoUrl: participantClip.video.s3_url,
           audioUrl: participantClip.audio.s3_url
         };
+        console.log('✅ [toggleSourceSelection] 새 소스 추가:', newSource);
         setSelectedSources(prev => [...prev, newSource]);
+      } else {
+        console.warn('❌ [toggleSourceSelection] participantClip을 찾을 수 없습니다');
+        console.warn('사용 가능한 클립 키:', Object.keys(clips));
       }
     }
   };
@@ -518,6 +561,16 @@ export const SourceSelectionPage: React.FC = () => {
     const highlightIndex = parseInt(screenId.replace('screen', '')) - 1; // screen1 -> 0, screen2 -> 1, screen3 -> 2
     const participantId = player?.guestUserId || `user${itemIndex}`;
     const isSelected = isSourceSelected(highlightIndex, participantId);
+    
+    console.log(`🎯 [ProfileItem] 아이템 ${itemIndex} 클릭 정보:`, {
+      screenId,
+      itemIndex,
+      highlightIndex,
+      player,
+      participantId,
+      isSelected,
+      clickFunction: 'toggleSourceSelection(' + highlightIndex + ', ' + participantId + ')'
+    });
     
     return (
       <div 

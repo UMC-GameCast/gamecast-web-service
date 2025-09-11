@@ -604,19 +604,20 @@ export class GameRecorder {
         fps: this.videoMetadata.fps
       });
 
-      // FormData 생성
+      // FormData 생성 (서버 API 스펙에 맞춤)
       const formData = new FormData();
       
-      // WebM 파일을 그대로 전송 (서버에서 WebM 지원)
+      // WebM → MP4/WAV 변환하여 전송 (서버 API 요구사항)
       formData.append('video', videoBlob, `recording_${roomCode}_${userId}.webm`);
-      formData.append('audio', audioBlob, `audio_${roomCode}_${userId}.webm`);
+      if (audioBlob && audioBlob.size > 0) {
+        formData.append('audio', audioBlob, `audio_${roomCode}_${userId}.webm`);
+      }
       formData.append('roomCode', roomCode);
       formData.append('userId', userId);
       formData.append('gameTitle', gameTitle);
       formData.append('duration', this.state.duration.toString());
       formData.append('resolution', this.videoMetadata.resolution);
       formData.append('fps', this.videoMetadata.fps.toString());
-      formData.append('uploadTime', new Date().toISOString());
       formData.append('description', `${gameTitle} 게임 플레이 녹화 - ${new Date().toLocaleString()}`);
 
       console.log('📡 [GameRecorder] Uploading to server...', {
